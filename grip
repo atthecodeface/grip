@@ -16,11 +16,18 @@ else:
 
 import argparse
 import lib.command
-import lib.repo
 from cmds import *
-import grip_hooks
-lib.repo.GripRepo.add_hooks(grip_hooks.hooks)
-lib.command.GripCommandBase.add_hooks(grip_hooks.hooks)
+
+grip_hooks = None
+try:
+    import grip_hooks
+except ModuleNotFoundError:
+    pass
+
+if grip_hooks is not None:    
+    lib.repo.GripRepo.add_hooks(grip_hooks.hooks)
+    lib.command.GripCommandBase.add_hooks(grip_hooks.hooks)
+    pass
 
 def main(prog, globalargs):
     """
@@ -29,10 +36,7 @@ def main(prog, globalargs):
     cmd = lib.command.GripCommand()
     (prog, parser, options, args) = cmd.parse_command(prog, None, None, None, globalargs)
 
-    # Deal with 'rose'
-    if len(args) < 1:
-        args = ["help"]
-        pass
+    if len(args)==0: args=["help"]
 
     # Invoke command with options
     cmd.invoke(os.path.basename(prog), parser, args[0], options, args[1:])
