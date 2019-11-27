@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""
+Grip is a tool to manage the integration of git modules and submodules,
+where the submodules are used in a plethora of higher level modules
+"""
+import sys, os, re
+import inspect
+grip_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+sys.path.append(grip_dir) # So the hooks can use lib.* too
+if "GRIP_HOOKS" in os.environ:
+    sys.path.append(os.environ["GRIP_HOOKS"].split(":"))
+    pass
+else:
+    sys.path.append(os.path.dirname(grip_dir)) # Append ".." to the path if no explicit hooks path provided
+    pass
+
+import argparse
+import lib.command
+import lib.repo
+from cmds import *
+import grip_hooks
+lib.repo.GripRepo.add_hooks(grip_hooks.hooks)
+lib.command.GripCommandBase.add_hooks(grip_hooks.hooks)
+
+def main(prog, globalargs):
+    """
+    The primary API to the Grip toolset
+    """
+    cmd = lib.command.GripCommand()
+    (prog, parser, options, args) = cmd.parse_command(prog, None, None, None, globalargs)
+
+    # Deal with 'rose'
+    if len(args) < 1:
+        args = ["help"]
+        pass
+
+    # Invoke command with options
+    cmd.invoke(os.path.basename(prog), parser, args[0], options, args[1:])
+
+    # Done
+    pass
+
+if __name__ == "__main__":
+    main(sys.argv[0], sys.argv[1:])
+
