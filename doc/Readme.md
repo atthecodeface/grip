@@ -1,0 +1,76 @@
+# Grip
+
+Grip is a simple tool for managing collections of git modules and submodules,
+where the submodules are used in a plethora of higher level modules.
+
+It manages multiple configurations, an supports a test methodology to
+provide for continuous integration of multiple higher level modules as
+the submodules develop.
+
+## Purpose
+
+Grip is designed to solve the problem in hardware design repository
+systems where a class of hardware components (in essence a library)
+are developed in one git module and another class are developed in a
+second module, and so on. One hardware design may use three different
+such hardware libraries, and a different design may use two of these
+and a further two different libraries, for example. Both of the
+hardware designs are controlled through git, and so use git submodules
+for the hardware libraries; as improvements are made, both of the
+designs should use the updated libraries.
+
+Furthermore, hardware design tends to depend on tools, which may be in
+a further set of respositories. These may be upgraded (in a controlled
+fashion) such that hardware designs should be built with new tools,
+but it many checkouts of a hardware design a binary set of tools may
+be used (instead of requiring, for example, a full GNU toolchain
+builds for each hardware checkout).
+
+Hence grip has to manage configurations of git modules, and provide
+test mechanisms.
+
+# Grip design
+
+Grip is written in python3 on top of git.
+
+It is designed initially to support a hardware design methodology
+where a rust toolchain, gnu binutils, CDL hardware compiler, FPGA
+tools, and multiple hardware repositories are used as a top level grip
+repository.
+
+# Grip files
+
+Grip configuration is stored in a .grip directory at the root of the
+grip repository.
+
+In the .grip repository are the grip configuration file (grip.toml),
+the repository state file (state), and other files created and used
+during the use of grip (makefiles, environment shell files, etc).
+
+The grip configuration file is user created and edited; it describes
+all of the repositories that are part of the grip repository. It is
+read by grip, but never updated by it. It is in TOML format, and
+should be under version control.
+
+The grip repository state file is also in TOML format. This file
+contains the change sets and other changeable state relating to
+updates to the repositories. It must be under version control.
+
+Other files are not under version control; these are created and
+modified by grip during configuration and operation.
+
+# Grip toml description file
+
+The grip.toml file provides descriptions of the repositories that make
+up a grip repository, details on configurations of the grip
+repository, and install/build/execution stages that are required by
+the grip repository.
+
+A
+
+# Grip modules
+
+A grip modules is simply a git repository. It may have a grip_hooks.py
+file somewhere.
+
+

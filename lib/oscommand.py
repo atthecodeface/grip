@@ -1,9 +1,13 @@
 #a Imports
 import sys, os, re
 import subprocess
+from .verbose import info
 
 #a OSCommand
 class OSCommand:
+    class NullOptions:
+        verbose = False
+        pass
     #c Error
     class Error(Exception):
         """
@@ -15,19 +19,18 @@ class OSCommand:
         pass
         #f __str__
         def __str__(self):
-            return "Error in" + self.cmd.string_command_result()
+            return "Error in " + self.cmd.string_command_result()
         pass
     #f __init__
-    def __init__(cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None):
+    def __init__(self, cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None):
         """
         Run an OS command in a subprocess shell
         """
-        self.verbose = False
-        if (options is not None) and (options.verbose):
-            self.verbose = True
-            pass
+        if options is None: options=self.NullOptions()
+        self.options = options
         self.stderr_output_indicates_error = stderr_output_indicates_error
         self.cmd = cmd
+        self.cwd = cwd
         self.env = env
         self.process = None
         if run:
@@ -37,8 +40,7 @@ class OSCommand:
         pass
     #f start_process
     def start_process(self):
-        if self.verbose:
-            print("Executing command \"%s\":" % self.cmd)
+        info(self.options, "Executing command \"%s\":" % self.cmd)
         self.process = subprocess.Popen(args=self.cmd,
                                         shell=True, # So that args is a string not a list
                                         cwd=self.cwd,
@@ -51,7 +53,7 @@ class OSCommand:
                                         )
         pass
     #f output_string
-    def output_string(self, s, max_lines=3):
+    def output_string(self, s, max_lines=100):
         sl = s.rstrip("\n").split("\n")
         if len(sl)==1: return sl[0]
         append = ""
@@ -68,13 +70,16 @@ class OSCommand:
         r += "  Stdout: %s\n"     % (self.output_string(self.stdout))
         r += "  Stderr: %s\n"     % (self.output_string(self.stderr))
         return r
+    #f error_output
+    def error_output(self):
+        return self.stderr
     #f run
     def run(self, input_data=None):
         (self.stdout, self.stderr) = self.process.communicate(input_data)
         self.stdout = self.stdout.decode()
         self.stderr = self.stderr.decode()
         self.rc                    = self.process.wait()
-        if self.verbose: print(self.string_command_result())
+        info(self.options, self.string_command_result())
         pass
     #f result
     def result(self):
@@ -83,12 +88,15 @@ class OSCommand:
             had_error=True
             pass
         if had_error:
-            raise Error(self)
+            raise self.Error(self)
         return self.stdout
     #f All done
     pass
 
+#a Export some things
+OSCommandError = OSCommand.Error
+
 #a Toplevel
-def command(options, **kwargs):
-    cmd = OSCommand(run=True, options=options, **kwargs)
+def command(options, cmd, **kwargs):
+    cmd = OSCommand(options=options, cmd=cmd, run=True, **kwargs)
     return cmd.result()

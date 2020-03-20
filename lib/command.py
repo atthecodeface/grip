@@ -6,9 +6,11 @@ import lib.utils
 import lib.oscommand
 from .hookable import Hookable
 
+#a Classes
+#c GripCommandBase
 class GripCommandBase(Hookable):
     """
-    This is the base class for all rose commands
+    This is the base class for all grip commands
 
     The docstring (this bit) is used for the help
     """
@@ -102,7 +104,7 @@ class GripCommandBase(Hookable):
     #f All done
     pass
 
-#a GripCommand
+#c GripCommand
 class GripCommand(GripCommandBase):
     """
     grip [options] <command> [<command options>] [<command arguments>]
