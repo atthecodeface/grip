@@ -1,13 +1,47 @@
+#a Imports
 import os, shlex
 from .git import GitRepo
 from .repodesc import GripRepoDesc
 from .repostate import GripRepoState
 from .repoconfig import GripRepoConfig
+from .workflows import workflows
 
 def pp_stdout(acc, s, indent=0):
     print("  "*indent+acc+s)
     return ""
 
+#a Classes
+#c GripSubrepo class
+class GripSubrepo:
+    ws = workflows()
+    def __init__(self, grip_repo, repo_desc):
+        self.name = repo_desc.name
+        self.grip_repo = grip_repo
+        self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
+        self.workflow = repo_desc.workflow()
+        pass
+    def commit(self):
+        try:
+            print("Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name))
+            okay = self.workflow.commit(self.grip_repo, self.git_repo)
+            if not okay: raise(Exception("Commit for repo '%s' not permitted"%self.name))
+            pass
+        except Exception as e:
+            raise(e)
+        pass
+    def fetch(self):
+        try:
+            print("Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name))
+            okay = self.workflow.fetch(self.grip_repo, self.git_repo)
+            if not okay: raise(Exception("Fetch for repo '%s' not permitted"%self.name))
+            pass
+        except Exception as e:
+            raise(e)
+        pass
+    def get_cs(self):
+        return self.git_repo.get_cs()
+    pass
+#c GripRepo class
 class GripRepo:
     #v Static properties
     grip_dir_name = ".grip"
@@ -39,6 +73,7 @@ class GripRepo:
         self.repo_state       = None
         self.repo_desc_config = None
         self.config_state     = None
+        self.subrepos         = None
         self.read_desc()
         self.read_state()
         self.read_config()
@@ -66,6 +101,7 @@ class GripRepo:
     def read_desc(self):
         self.repo_desc = GripRepoDesc(git_repo=self.git_repo)
         self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename))
+        self.branch_name = "WIP_%s"%(self.repo_desc.name)
         pass
     #f read_state
     def read_state(self):
@@ -84,25 +120,55 @@ class GripRepo:
             self.config_state = self.repo_state.select_config(self.repo_desc_config.name)
             pass
         pass
+    #f update_state
     def update_state(self):
-        for r in self.repo_desc_config.iter_repos():
-            self.config_state.update_repo_state(r.name, changeset=r.git_repo.get_cs())
+        for r in self.subrepos:
+            self.config_state.update_repo_state(r.name, changeset=r.get_cs())
             pass
         pass
+    #f write_state
     def write_state(self):
         self.repo_state.write_toml_file(self.grip_path(self.state_toml_filename))
         pass
+    #f update_config
     def update_config(self):
         self.repo_config.config       = self.repo_desc_config.name
         self.repo_config.grip_git_url = self.grip_git_url.git_url()
         pass
+    #f write_config
     def write_config(self):
         self.repo_config.write_toml_file(self.grip_path(self.config_toml_filename))
         pass
+    #f debug_repodesc
     def debug_repodesc(self):
         def p(acc,s,indent=0):
             return acc+"\n"+("  "*indent)+s
         return self.repo_desc.prettyprint("",p)
+    #f get_name
+    def get_name(self):
+        return self.repo_desc.name
+    #f get_doc
+    def get_doc(self):
+        """
+        Return list of (name, documentation) strings
+        If configured, list should include current configuration and repos
+        If not configured, list should include all configurations
+        List should always start with (None, repo.doc) if there is repo doc
+        """
+        if self.is_configured():
+            return self.repo_desc_config.get_doc()
+        return self.repo_desc.get_doc()
+    #f get_configurations
+    def get_configurations(self):
+        return self.repo_desc.get_configs()
+    #f is_configured
+    def is_configured(self):
+        return self.repo_desc_config is not None
+    #f get_config_name
+    def get_config_name(self):
+        if self.is_configured(): return self.repo_desc_config.get_name()
+        raise Exception("Repo is not configured so has no config name")
+    #f configure
     def configure(self, options, config_name=None):
         if self.repo_desc_config is not None:
             raise Exception("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
@@ -120,6 +186,16 @@ class GripRepo:
         self.grip_env_write()
         self.create_grip_makefiles()
         pass
+    #f reconfigure
+    def reconfigure(self, options):
+        if self.repo_desc_config is None:
+            raise Exception("Grip repository is not properly configured - cannot reconfigure unless it has been")
+        self.update_config()
+        self.write_config()
+        self.grip_env_write()
+        self.create_grip_makefiles()
+        pass
+    #f check_clone_permitted
     def check_clone_permitted(self):
         for r in self.repo_desc_config.iter_repos():
             dest = self.git_repo.filename([r.path])
@@ -127,6 +203,7 @@ class GripRepo:
                 raise Exception("Not permitted to clone '%s' to  '%s"%(r.url, dest))
             pass
         pass
+    #f clone_subrepos
     def clone_subrepos(self, options, force_shallow=False):
         # Clone all subrepos to the correct paths from url / branch at correct changeset
         # Use shallow if required
@@ -140,15 +217,29 @@ class GripRepo:
             if r.is_shallow(): depth=1
             r.git_repo = GitRepo.clone(options,
                                        repo_url=r.get_git_url_string(),
+                                       new_branch_name=self.branch_name,
                                        branch=r_state.branch,
                                        dest=dest,
                                        depth = depth,
                                        changeset = r_state.changeset )
             pass
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.install_hooks()
+            pass
         pass
+    #f create_subrepos
+    def create_subrepos(self):
+        self.subrepos = []
+        for r in self.repo_desc_config.iter_repos():
+            self.subrepos.append(GripSubrepo(self, r))
+            pass
+        pass
+    #f xupdate_subrepos
     def xupdate_subrepos(self):
         # Maybe not do this at all for now?
         pass
+    #f xupdate_grip_env
     def xupdate_grip_env(self):
         # repos are up-to-date
         # recreate environment
@@ -241,13 +332,27 @@ class GripRepo:
             pass
         # clean out make targets
         pass
-    def commit(self):
-        # check subrepos are committed
-        # update self.repostate
-        # self.write_repostate()
-        # Check commit
-        # git commit
+    #f commit
+    def commit(self, options):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.commit()
+            pass
+        print("All subrepos commited")
+        self.update_state()
+        self.write_state()
+        print("Updated state")
+        print("**** Now run git commit if you wish to commit the GRIP repo itself ****")
         pass
+    #f fetch
+    def fetch(self, options):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.fetch()
+            pass
+        print("All subrepos fetched")
+        pass
+    #f get_root
     def get_root(self):
         """
         Get absolute path to grip repository
@@ -278,7 +383,7 @@ class GripRepo:
         """
         with open(self.grip_path(self.grip_env_filename), "w") as f:
             for (k,v) in self.grip_env_iter():
-                print('%s=%s'%(k,shlex.quote(v)), file=f)
+                print('%s=%s ; export %s'%(k,v,k), file=f)
                 pass
             pass
         pass
@@ -294,5 +399,5 @@ class GripRepo:
                 dest_path = path
                 pass
             pass
-        repo = GitRepo.clone(options, repo_url, branch, dest_path)
+        repo = GitRepo.clone(options, repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path)
         return cls(repo)

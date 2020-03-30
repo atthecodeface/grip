@@ -118,6 +118,9 @@ class GitRepo(object):
             pass
         self.git_url = git_url
         pass
+    #f get_name
+    def get_name(self):
+        return self.path
     #f get_git_url
     def get_git_url(self):
         return self.git_url
@@ -132,8 +135,7 @@ class GitRepo(object):
         """
         Return True if the git repo is modified since last commit
         """
-        git_command(options=options,
-                    cmd="update-index -q --refresh",
+        git_command(cmd="update-index -q --refresh",
                     cwd=self.path)
         output = git_command(cwd=self.path,
                              cmd="diff-index --name-only HEAD")
@@ -153,6 +155,30 @@ class GitRepo(object):
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to determine changeset for git repo '%s'"%(self.name))
+    #f get_cs_history
+    def get_cs_history(self, branch_name=""):
+        """
+        Get list of changesets of the git repo branch
+
+        This is more valuable to the user if git repo is_modified() is false.
+        """
+        output = git_command(cmd="rev-list %s"%branch_name,
+                                  cwd=self.path)
+        output = output.strip()
+        output = output.split("\n")
+        if len(output) > 0: return output
+        raise Exception("Failed to determine changeset history for git repo '%s'"%(self.name))
+    #f fetch
+    def fetch(self):
+        """
+        Fetch changes from upstream
+        """
+        output = git_command(cmd="fetch",
+                             cwd=self.path,
+                             stderr_output_indicates_error=False
+        )
+        output = output.strip()
+        return(output)
     #f checkout_cs
     def checkout_cs(self, options, changeset):
         """
@@ -173,7 +199,7 @@ class GitRepo(object):
         return True
     #f clone - clone from a Git URL (of a particular branch to a destination directory)
     @classmethod
-    def clone(cls, options, repo_url, branch=None, dest=None, bare=False, depth=None, changeset=None):
+    def clone(cls, options, repo_url, new_branch_name, branch=None, dest=None, bare=False, depth=None, changeset=None):
         """
         Clone a branch of a repo_url into a checkout directory
         bare checkouts are used in testing only
@@ -194,16 +220,21 @@ class GitRepo(object):
         except lib.oscommand.OSCommandError as e:
             raise Exception("Failed to perform git clone - %s"%(e.cmd.error_output()))
             pass
-        if changeset is not None:
+        git_command(options=options, cmd="branch --move upstream")
+        if changeset is None:
+            git_command(options=options, cmd="branch %s"%(new_branch_name))
+            pass
+        else:
             try:
-                git_output = git_command(options=options,
-                                         cwd = dest,
-                                         cmd = "checkout %s" % changeset,
-                                         stderr_output_indicates_error=False)
+                git_command(options=options, cmd="branch %s %s"%(new_branch_name, changeset))
                 pass
             except:
                 raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
             pass
+        git_output = git_command(options=options,
+                                 cwd = dest,
+                                 cmd = "checkout %s" % new_branch_name,
+                                 stderr_output_indicates_error=False)
         pass
         return cls(dest, git_url=repo_url)
     #f filename - get filename of full path relative to repo in file system

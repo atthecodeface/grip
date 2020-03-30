@@ -2,6 +2,16 @@
 """
 Grip is a tool to manage the integration of git modules and submodules,
 where the submodules are used in a plethora of higher level modules
+
+To do:
+
+update_upstream
+merge
+publish
+
+individual paths in fetch, update_upstream, merge
+
+Read grip.toml in subrepos
 """
 import sys, os, re
 import inspect

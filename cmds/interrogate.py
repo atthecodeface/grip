@@ -34,3 +34,28 @@ class env(lib.command.GripCommandBase):
             print('%s=%s; export %s'%(k,shlex.quote(v),k))
             pass
         pass
+
+class doc(lib.command.GripCommandBase):
+    """
+    Prints the documentation
+    """
+    names = ["doc"]
+    command_options = {
+    }
+    def execute(self, prog, parser, command_name, options, args):
+        grip_repo = lib.repo.GripRepo(ensure_configured=False)
+        grip_repo_doc = grip_repo.get_doc()
+        if grip_repo.is_configured():
+            print("This is a configured grip repository, with a name of '%s', using configuration '%s'"%(grip_repo.get_name(),grip_repo.get_config_name()))
+            pass
+        else:
+            print("This is an unconfigured grip repository, with a name of '%s'"%(grip_repo.get_name()))
+            print("It supports the following configurations: %s"%(" ".join(grip_repo.get_configurations())))
+            pass
+        for (n,v) in grip_repo_doc:
+            if n is not None:
+                print("\n%s"%n)
+                pass
+            print(v)
+            pass
+        pass

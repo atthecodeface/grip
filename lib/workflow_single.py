@@ -30,4 +30,8 @@ class Single(Workflow):
         if not git_repo.is_modified(): return True
         git_repo.commit()
         return True
+    def merge(self, grip_repo, git_repo):
+        return True
+    def push(self, grip_repo, git_repo):
+        return True
     pass

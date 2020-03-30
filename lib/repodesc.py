@@ -31,6 +31,7 @@ class RepoDescTomlDict(TomlDict):
     path      = TomlDictParser.from_dict_attr_value(str)
     shallow   = TomlDictParser.from_dict_attr_value(str)
     env       = TomlDictParser.from_dict_attr_dict(EnvTomlDict)
+    doc       = TomlDictParser.from_dict_attr_value(str)
     Wildcard  = TomlDictParser.from_dict_attr_dict(RepoStageTomlDict)
     pass
 class GripFileTomlDict(TomlDict):
@@ -43,6 +44,7 @@ class GripFileTomlDict(TomlDict):
             Wildcard     = TomlDictParser.from_dict_attr_dict(RepoDescTomlDict)
             repos        = TomlDictParser.from_dict_attr_list(str)
             env          = TomlDictParser.from_dict_attr_dict(EnvTomlDict)
+            doc          = TomlDictParser.from_dict_attr_value(str)
             pass
         Wildcard     = TomlDictParser.from_dict_attr_dict(SpecificConfigTomlDict)
         pass
@@ -58,32 +60,47 @@ class GripFileTomlDict(TomlDict):
     workflow       = TomlDictParser.from_dict_attr_value(str)
     name           = TomlDictParser.from_dict_attr_value(str)
     env            = TomlDictParser.from_dict_attr_dict(EnvTomlDict)
+    doc            = TomlDictParser.from_dict_attr_value(str)
     pass
 
 #a Classes
 #c GripEnv
 class GripEnv:
-    import re, os
+    #v regular expressions
     name_match_re = r"""(?P<name>([^%]*))%(?P<rest>.*)$"""
     name_match_re = re.compile(name_match_re)
+    #f __init__
     def __init__(self, parent=None, name=None, default_values={}):
         self.name = name
         self.parent = parent
         self.env = {}
         self.add_values(default_values)
         pass
+    #f add_values
     def add_values(self, values_d):
+        """
+        Add values from the dictionary 'values_d' to this environment
+        """
         for (k,v) in values_d.items():
             self.env[k] = v
             pass
         pass
+    #f build_from_values
     def build_from_values(self, values):
+        """
+        Add key/value pairs from a TomlDict.values 'other attributes'
+        """
         if values is None: return
         for k in values.Get_other_attrs():
              self.env[k] = values.Get(k)
              pass
         pass
+    #f resolve
     def resolve(self):
+        """
+        Resolve the values in the environment where the values include references
+        to other environment variables (with %KEY%)
+        """
         unresolved_env = list(self.env.keys())
         while unresolved_env != []:
             not_done_yet = []
@@ -112,19 +129,36 @@ class GripEnv:
         for k in self.env:
             self.env[k] = self.substitute(self.env[k], finalize=True)
         pass
+    #f full_name
     def full_name(self):
+        """
+        Return a string with the full hierarchial name of this environment
+        """
         r = ""
         if self.parent is not None:
             r = self.parent.full_name()+"."
             pass
         return r+self.name
-    def value_of_key(self, k, raise_exception=True):
-        # if k in os.environ:
-        #    return os.environ[k]
-        if k in self.env: return self.env[k]
-        if self.parent is not None: return self.parent.value_of_key(k,raise_exception=raise_exception)
+    #f value_of_key
+    def value_of_key(self, k, raise_exception=True, environment_overrides=True):
+        """
+        Find value of a key within the environment
+        If environment_overrides is True then first look in os.environ
+        Look in local environment
+        Return None if not found and raise_exception is False
+        Raise exception if not found and raise_exception is True
+        """
+        if environment_overrides and (k in os.environ):
+            return os.environ[k]
+        r = None
+        if k in self.env: r=self.env[k]
+        if (r is None) and (self.parent is not None):
+            r = self.parent.value_of_key(k, raise_exception=False, environment_overrides=environment_overrides)
+            pass
+        if r is not None: return r
         if not raise_exception: return None
         raise Exception("Configuration or environment value '%s' is not specified for %s"%(k,self.full_name()))
+    #f substitute
     def substitute(self, s, acc="", finalize=True):
         """
         Find any %ENV_VARIABLE% and replace - check ENV_VARIABLE exists, raise exception if it does not
@@ -142,7 +176,7 @@ class GripEnv:
         m = self.name_match_re.match(s,n+1)
         if m is None:
             if not finalize: return None
-            raise Exception("Could not parse '%s' (%d) as a grip environment substitution (%....%) using environment %s"%(s, n+1,self.full_name()))
+            raise Exception("Could not parse '%s' (%d) as a grip environment substitution (%%....%%) using environment %s"%(s, n+1,self.full_name()))
         k = m.group('name')
         if len(k)==0:
             v="%%"
@@ -154,7 +188,13 @@ class GripEnv:
             pass
         acc = acc + v
         return self.substitute(m.group('rest'), acc=acc, finalize=finalize)
+    #f as_dict
     def as_dict(self, include_parent=False):
+        """
+        Generate a dictionary of environment
+        Include parents if required, with children overriding parents if keys
+        are provided in both
+        """
         e = {}
         if include_parent and (self.parent is not None):
             e = self.parent.as_dict()
@@ -163,20 +203,34 @@ class GripEnv:
             e[k]=v
             pass
         return e
-    def as_str(self, include_parent=False):
-        d = self.as_dict(include_parent=include_parent)
-        for (k,v) in d.items():
-            r.append("%s:'%s'"%(k,v))
-            pass
-        return " ".join(r)
+    #f as_makefile_strings
     def as_makefile_strings(self, include_parent=False):
+        """
+        Generate a list of (key,value) pairs from the complete environment
+        Include parents (recursively) if desired
+        """
         r = []
         d = self.as_dict(include_parent=include_parent)
         for (k,v) in d.items():
             r.append((k,v))
             pass
         return r
+    #f as_str
+    def as_str(self, include_parent=False):
+        """
+        Generate a string representation of the environment, including parents if required
+        Used for pretty-printing
+        """
+        d = self.as_dict(include_parent=include_parent)
+        for (k,v) in d.items():
+            r.append("%s:'%s'"%(k,v))
+            pass
+        return " ".join(r)
+    #f show - print environment for humans for debug
     def show(self, msg, include_parent=False):
+        """
+        Print environment for debugging, including the parent environments if desired
+        """
         d = self.as_dict(include_parent=include_parent)
         if msg is not None: print("Environment for %s:%s"%(self.full_name(), msg))
         for (k,v) in d.items():
@@ -265,7 +319,8 @@ class GitRepoDesc(object):
     git_url  = None
     shallow  = None
     env      = None
-    inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env"]
+    doc      = None
+    inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env", "doc"]
     #f __init__
     def __init__(self, name, grip_repo_desc, values=None, parent=None):
         """
@@ -324,6 +379,13 @@ class GitRepoDesc(object):
         """
         """
         return self.git_url.git_url()
+    #f get_doc_string
+    def get_doc_string(self):
+        """
+        Get documentation string for this configuration
+        """
+        if self.doc is None: return "Undocumented"
+        return self.doc
     #f add_stages_to_set
     def add_stages_to_set(self, s):
         for k in self.stages:
@@ -416,6 +478,7 @@ class GripConfig(object):
     #f __init__
     def __init__(self, name, grip_repo_desc):
         self.name = name
+        self.doc = None
         self.grip_repo_desc = grip_repo_desc
         self.env = GripEnv(name="config '%s'"%self.name,
                            parent=grip_repo_desc.env )
@@ -429,8 +492,9 @@ class GripConfig(object):
         """
         values is a SpecificConfigTomlDict._values
 
-        Hence it has a .repos (possibly None) and other attributes that should be <reponame> of type RepoDescTomlDict._values
+        Hence it has a .doc, .repos (possibly None) and other attributes that should be <reponame> of type RepoDescTomlDict._values
         """
+        values.Set_obj_properties(self, {"doc"})
         self.env.build_from_values(values.env)
         if values.repos is None:values.repos={}
         for r in values.repos:
@@ -480,10 +544,36 @@ class GripConfig(object):
         pass
     #f get_env_dict
     def get_env(self):
-        return self.env.as_dict()
+        return self.env.as_dict(include_parent=True)
     #f get_env_as_makefile_strings
     def get_env_as_makefile_strings(self):
         return self.env.as_makefile_strings(include_parent=True)
+    #f get_name
+    def get_name(self):
+        """
+        Get name string for this configuration
+        """
+        return self.name
+    #f get_doc_string
+    def get_doc_string(self):
+        """
+        Get documentation string for this configuration
+        """
+        if self.doc is None: return "Undocumented"
+        return self.doc.strip()
+    #f get_doc
+    def get_doc(self):
+        """
+        Return list of (name, documentation) strings
+        List should include this configuration and all its repos
+        List should always start with (None, repo.doc) if there is repo doc
+        """
+        r = self.grip_repo_desc.get_doc(include_configs=False)
+        r.append(("Configuration '%s'"%self.name,self.get_doc_string()))
+        for (rn,repo) in self.repos.items():
+            r.append(("Repo '%s'"%rn,repo.get_doc_string()))
+            pass
+        return r
     #f get_stages
     def get_stages(self):
         stages = set()
@@ -541,6 +631,7 @@ class GripRepoDesc(object):
     stages     : list <stage names>
     workflow   : workflow to use for all repositories unless they override it
     name       : name of repo - used in branchnames
+    doc        : documentation
     """
     raw_toml_dict = None
     default_config = None
@@ -558,6 +649,7 @@ class GripRepoDesc(object):
         self.configs = {}
         self.stages = []
         self.base_repos = []
+        self.doc = None
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
         default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
@@ -617,11 +709,7 @@ class GripRepoDesc(object):
         return self.supported_workflows[workflow]
     #f build_from_values
     def build_from_values(self, values):
-        if values.name           is not None: self.name       = values.name
-        if values.workflow       is not None: self.workflow   = values.workflow
-        if values.base_repos     is not None: self.base_repos = values.base_repos
-        if values.default_config is not None: self.default_config = values.default_config
-        if values.stages         is not None: self.stages     = values.stages
+        values.Set_obj_properties(self, {"name", "workflow", "base_repos", "default_config", "stages", "doc"})
         if values.repo           is None: raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
         if values.configs        is None: raise GripTomlError("'configs' must be provided in grip configuration file")
         self.env.build_from_values(values.env)
@@ -660,6 +748,31 @@ class GripRepoDesc(object):
             acc = c.prettyprint(acc, ppr)
             pass
         return acc
+    #f get_configs
+    def get_configs(self):
+        return self.configs.keys()
+    #f get_doc_string
+    def get_doc_string(self):
+        """
+        Return documentation string
+        """
+        if self.doc is None: return "Undocumented"
+        return self.doc.strip()
+    #f get_doc
+    def get_doc(self, include_configs=True):
+        """
+        Return list of (name, documentation) strings
+        List should include all configurations
+        List should always start with (None, repo.doc) if there is repo doc
+        """
+        r = []
+        r.append((None, self.get_doc_string()))
+        if include_configs:
+            for (n,c) in self.configs.items():
+                r.append(("Configuration %s"%n,c.get_doc_string()))
+                pass
+            pass
+        return r
     #f select_config
     def select_config(self, config_name=None):
         """
