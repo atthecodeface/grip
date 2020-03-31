@@ -74,3 +74,33 @@ A grip modules is simply a git repository. It may have a grip_hooks.py
 file somewhere.
 
 
+
+# Workflows
+
+A workflow specifies to grip the method for dealing with upstream
+repositories, fetching, committing (and changes in general) and for
+pushing results.
+
+Currently two workflows are supported - although the aim of grip is to
+have a third that is under development.
+
+## "Readonly" workflow
+
+A readonly workflow is used for a git repository that is not meant to
+be updated within the grip repository. This may be used, for example,
+for a toolchain build setup, or for precompiled tools.
+
+### Cloning
+
+The appropriate branch of the upstream git repository is cloned
+locally, and the branch renamed to 'upstream'.
+
+The required commit hash (as specified by the grip state) is checked
+out, with a branch name of WIP_<grip_repo_name>
+
+A git repository with a workflow of readonly will never be pushed to.
+
+The changeset of the grip repository must be an ancestor of the head
+of the upstream branch; this must always be the case.
+
+If a fetch is performed for a readonly git repository that 

@@ -220,13 +220,13 @@ class GitRepo(object):
         except lib.oscommand.OSCommandError as e:
             raise Exception("Failed to perform git clone - %s"%(e.cmd.error_output()))
             pass
-        git_command(options=options, cmd="branch --move upstream")
+        git_command(options=options, cwd=dest, cmd="branch --move upstream")
         if changeset is None:
-            git_command(options=options, cmd="branch %s"%(new_branch_name))
+            git_command(options=options, cwd=dest, cmd="branch %s"%(new_branch_name))
             pass
         else:
             try:
-                git_command(options=options, cmd="branch %s %s"%(new_branch_name, changeset))
+                git_command(options=options, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
                 pass
             except:
                 raise Exception("Failed to checkout required changeset - maybe depth is not large enough")

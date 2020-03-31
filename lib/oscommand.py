@@ -66,6 +66,7 @@ class OSCommand:
     def string_command_result(self):
         r = ""
         r += "OS Command '%s' completed\n" % (self.cmd)
+        r += "  WD %s\n" % (self.cwd)
         r += "  Return code %d\n" % (self.rc)
         r += "  Stdout: %s\n"     % (self.output_string(self.stdout))
         r += "  Stderr: %s\n"     % (self.output_string(self.stderr))

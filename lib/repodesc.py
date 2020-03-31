@@ -640,6 +640,7 @@ class GripRepoDesc(object):
     repos = {}
     stages = []
     supported_workflows = workflows()
+    re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
     #f __init__
     def __init__(self, git_repo):
         self.name = None
@@ -681,6 +682,8 @@ class GripRepoDesc(object):
     def validate(self):
         if self.name is None:
             raise RepoDescError("Unnamed repo descriptors are not permitted - the .grip/grip.toml file should have a toplevel 'name' field")
+        if self.re_valid_name.match(self.name) is None:
+            raise RepoDescError("Names of grip repos must consist only of A-Z, a-z, 0-9 and _ characters (got '%s')"%(self.name))
         self.env.resolve()
         if self.default_config not in self.configs:
             raise RepoDescError("default_config of '%s' is undefined (defined configs are %s)" % (self.default_config, str_keys(self.configs)))

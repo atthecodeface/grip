@@ -12,6 +12,9 @@ publish
 individual paths in fetch, update_upstream, merge
 
 Read grip.toml in subrepos
+
+grip make
+
 """
 import sys, os, re
 import inspect

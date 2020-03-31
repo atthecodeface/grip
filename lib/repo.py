@@ -20,6 +20,8 @@ class GripSubrepo:
         self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
         self.workflow = repo_desc.workflow()
         pass
+    def install_hooks(self):
+        pass
     def commit(self):
         try:
             print("Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name))
