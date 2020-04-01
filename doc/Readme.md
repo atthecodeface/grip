@@ -82,7 +82,14 @@ repositories, fetching, committing (and changes in general) and for
 pushing results.
 
 Currently two workflows are supported - although the aim of grip is to
-have a third that is under development.
+have a third that is under development. These are readonly and single.
+
+Readonly workflows are for repositories that are not to be changed
+from within the grip repository.
+
+A single workflow is used where changes are performed in the git
+repository and can be committed, and publishing the grip repository
+requires pushing any committed changes back to the upstream branch. 
 
 ## "Readonly" workflow
 
@@ -90,17 +97,99 @@ A readonly workflow is used for a git repository that is not meant to
 be updated within the grip repository. This may be used, for example,
 for a toolchain build setup, or for precompiled tools.
 
+A readonly grip repository is only permitted to
+use a commit hash that is an ancestor of
+the head of the upstream branch.
+
 ### Cloning
 
 The appropriate branch of the upstream git repository is cloned
 locally, and the branch renamed to 'upstream'.
 
 The required commit hash (as specified by the grip state) is checked
-out, with a branch name of WIP_<grip_repo_name>
+out, with a branch name of WIP_<local_branch_name>.
+
+### Fetching
+
+A readonly git repository can be fetched by performing a 'git fetch
+origin remote'
+within the repository.
+
+### Committing
+
+No changes are permitted in a readonly git repository. If a 'git
+status' in the repository indicates any modifications or new files
+then the commit will abort.
+
+A readonly git repository may have its commit changed within a grip
+repository - i.e. the git repository may have a commit hash that does
+not match the current one in the grip repository state. As the grip
+repository must always contain only repostiories that are ancestors of
+the head of the upstream branch, a readonly repository has a check on commit
+to ensure that the commit hash of the repository is an ancestor of the
+head of the 'upstream' branch.
+
+If a fetch has been performed on the readonly git repository then a
+'git checkout <commit hash>' can be performed in the git repository,
+for example to update the version used in the grip repository.
+
+### Merging
+
+A readonly workflow repository is never merged.
+
+### Updating
+
+A readonly workflow repository can be updated to any commit hash that
+is an ancestor of the upstream head.
+
+### Publishing
 
 A git repository with a workflow of readonly will never be pushed to.
 
-The changeset of the grip repository must be an ancestor of the head
-of the upstream branch; this must always be the case.
+## "Single" workflow
 
-If a fetch is performed for a readonly git repository that 
+A single workflow is used for git repositories that are under full
+control of the developer and use a single main development branch.
+
+A single workflow grip repository starts with a commit hash that is an ancestor of
+the head of the upstream branch; development takes place on a separate
+branch; prior to pushing (or for merging in upstream changes during
+development) a 'git fetch' and 'git rebase' are used. When a push
+happens it must be to the tip of the upstream development branch.
+
+### Cloning
+
+The appropriate branch of the upstream git repository is cloned
+locally, and the branch renamed to 'upstream'.
+
+The required commit hash (as specified by the grip state) is checked
+out, with a branch name of WIP_<local_branch_name>.
+
+### Fetching
+
+Fetch is performed with a 'git fetch
+origin remote'
+within the repository.
+
+### Committing
+
+Commits are freely permitted within a 'single' workflow repository.
+
+### Merging
+
+A single workflow repository can be merged with the upstream branch
+head, and this is performed with a 'git rebase'. Prior to this being
+possible there must be no changes in the local repository (so a commit
+check must indicate the git repository is clean).
+
+### Updating
+
+A single workflow repository can be update to the upstream branch
+head through merging.
+
+### Publishing
+
+A single workflow repository can only be pushed to if the local commit
+hash is a descendant of the upstream branch head. Hence prior to being
+publishable a check must be made that this is the case.
+
