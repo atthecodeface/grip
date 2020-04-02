@@ -22,9 +22,11 @@ class OSCommand:
             return "Error in " + self.cmd.string_command_result()
         pass
     #f __init__
-    def __init__(self, cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None):
+    def __init__(self, cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None, log=None):
         """
         Run an OS command in a subprocess shell
+
+        log can be None or a logger with an 'add_entry' method
         """
         if options is None: options=self.NullOptions()
         self.options = options
@@ -33,6 +35,7 @@ class OSCommand:
         self.cwd = cwd
         self.env = env
         self.process = None
+        self.log = log
         if run:
             self.start_process()
             self.run(input_data=input_data)
@@ -41,6 +44,7 @@ class OSCommand:
     #f start_process
     def start_process(self):
         info(self.options, "Executing command \"%s\":" % self.cmd)
+        if self.log: self.log.add_entry(self.log_start)
         self.process = subprocess.Popen(args=self.cmd,
                                         shell=True, # So that args is a string not a list
                                         cwd=self.cwd,
@@ -80,6 +84,7 @@ class OSCommand:
         self.stdout = self.stdout.decode()
         self.stderr = self.stderr.decode()
         self.rc                    = self.process.wait()
+        if self.log: self.log.add_entry(self.log_result)
         info(self.options, self.string_command_result())
         pass
     #f result
@@ -91,6 +96,14 @@ class OSCommand:
         if had_error:
             raise self.Error(self)
         return self.stdout
+    #f log_start
+    def log_start(self, writer):
+        writer("OS command '%s' started in wd '%s' with env '%s'"%(self.cmd, self.cwd, self.env))
+        pass
+    #f log_result
+    def log_result(self, writer):
+        self.log.write_multiline( writer=writer, s=self.string_command_result())
+        pass
     #f All done
     pass
 

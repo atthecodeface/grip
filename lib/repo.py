@@ -1,10 +1,12 @@
 #a Imports
-import os, shlex
+import os, time
 from .git import GitRepo
 from .repodesc import GripRepoDesc
 from .repostate import GripRepoState
 from .repoconfig import GripRepoConfig
 from .workflows import workflows
+from .log import Log
+from .exceptions import *
 
 def pp_stdout(acc, s, indent=0):
     print("  "*indent+acc+s)
@@ -24,17 +26,22 @@ class GripSubrepo:
         pass
     def commit(self):
         try:
-            print("Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name))
+            s = "Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
+            self.grip_repo.add_log_string(s)
+            print(s)
             okay = self.workflow.commit(self.grip_repo, self.git_repo)
             if not okay: raise(Exception("Commit for repo '%s' not permitted"%self.name))
+            cs = self.get_cs()
+            self.grip_repo.add_log_string("Repo '%s' at commit hash '%s'"%(self.name, cs))
             pass
         except Exception as e:
             raise(e)
         pass
     def fetch(self):
         try:
-            print("Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name))
-            okay = self.workflow.fetch(self.grip_repo, self.git_repo)
+            s = "Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
+            self.grip_repo.add_log_string(s)
+            print(s)
             if not okay: raise(Exception("Fetch for repo '%s' not permitted"%self.name))
             pass
         except Exception as e:
@@ -51,42 +58,45 @@ class GripRepo:
     state_toml_filename  = "state.toml"
     config_toml_filename = "local.config.toml"
     grip_env_filename    = "local.env.sh"
+    grip_log_filename    = "local.log"
     makefile_targets_dirname = "local.makefile_targets"
     grip_makefile_filename = "local.grip_makefile"
     grip_makefile_env_filename = "local.grip_makefile.env"
     #f find_git_repo_of_grip_root
     @staticmethod
-    def find_git_repo_of_grip_root(path):
-        git_repo = GitRepo(path)
+    def find_git_repo_of_grip_root(path, log=None):
+        git_repo = GitRepo(path, permit_no_remote=True, log=log)
         path = git_repo.get_path()
         if not os.path.isdir(os.path.join(path,".grip")):
             path = os.path.dirname(path)
-            return GripRepo.find_git_repo_of_grip_root(path)
+            return GripRepo.find_git_repo_of_grip_root(path, log=log)
         return git_repo
     #f __init__
-    def __init__(self, git_repo=None, path=None, ensure_configured=False):
+    def __init__(self, git_repo=None, path=None, ensure_configured=False, invocation=""):
+        self.log=Log()
+        self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
+        self.log.add_entry_string(self.invocation)
         if git_repo is None:
-            git_repo = GripRepo.find_git_repo_of_grip_root(path)
+            git_repo = GripRepo.find_git_repo_of_grip_root(path, self.log)
             pass
         if git_repo is None:
             raise Exception("Not within a git repository, so not within a grip repository either")
         self.git_repo = git_repo
         self.repo_desc        = None
         self.repo_state       = None
+        self.repo_config      = None
         self.repo_desc_config = None
         self.config_state     = None
         self.subrepos         = None
-        self.read_desc()
-        self.read_state()
-        self.read_config()
+        self.read_desc_state_config(use_current_config=True)
         if ensure_configured:
             # self.repo_desc.prettyprint("",pp_stdout)
             # self.repo_state.prettyprint("",pp_stdout)
             # self.repo_config.prettyprint("",pp_stdout)
             if self.repo_desc_config is None:
-                raise Exception("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
+                raise ConfigurationError("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
             if self.config_state is None:
-                raise Exception("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
+                raise ConfigurationError("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
             pass
         self.grip_git_url = None
         # if self.repo_config is not None:   self.grip_git_url = self.repo_config.grip_git_url
@@ -96,28 +106,93 @@ class GripRepo:
             pass
         # self.repo_desc.prettyprint("",pp_stdout)        
         pass
+    #f log_to_logfile
+    def log_to_logfile(self):
+        """
+        Invoked to append the log to the local logfile
+        """
+        with open(self.grip_path(self.grip_log_filename),"a") as f:
+            print("",file=f)
+            print("*"*80,file=f)
+            self.log.dump(f)
+            pass
+        pass
+    #f add_log_string
+    def add_log_string(self, s):
+        if self.log: self.log.add_entry_string(s)
+        pass
     #f grip_path
     def grip_path(self, filename):
         return self.git_repo.filename([self.grip_dir_name, filename])
+    #f set_branch_name
+    def set_branch_name(self):
+        """
+        Set branch name; if not configured, then generate a new name
+        If configured then use the branch name in the local config state
+        """
+        self.branch_name = None
+        if self.repo_config is not None:
+            self.branch_name = self.repo_config.branch
+            pass
+        if self.branch_name is None:
+            time_str = time.strftime("%Y_%m_%d_%H_%M_%S")
+            base = self.repo_desc.name
+            if self.repo_config is not None and self.repo_config.config is not None: base+="_"+self.repo_config.config
+            self.branch_name = "WIP__%s_%s"%(base, time_str)
+            pass
+        pass
+    #f read_desc_state_config
+    def read_desc_state_config(self, use_current_config=False):
+        """
+        Read the .grip/grip.toml grip description file, the
+        .grip/state.toml grip state file, and any
+        .grip/local.config.toml file.
+
+        If use_current_config is True then first read the grip description solely from .grip/grip.toml
+        and then read the state and config.
+        Then restart reading the .grip/grip.toml and any <subrepo>/grip.toml files as the grip description,
+        then rebuild state and config
+        """
+        if use_current_config:
+            self.read_desc_state_config(use_current_config=False)
+            pass
+        subrepos = []
+        if use_current_config and (self.repo_desc_config is not None):
+            for r in self.repo_desc_config.iter_repos():
+                subrepos.append(r)
+                pass
+            pass
+        self.read_desc(subrepos=subrepos)
+        self.read_state()
+        self.read_config()
+        pass
     #f read_desc
-    def read_desc(self):
+    def read_desc(self, subrepos=[]):
+        self.add_log_string("Reading grip.toml file '%s'"%self.grip_path(self.grip_toml_filename))
         self.repo_desc = GripRepoDesc(git_repo=self.git_repo)
-        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename))
-        self.branch_name = "WIP_%s"%(self.repo_desc.name)
+        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos)
+        if self.repo_desc.is_logging_enabled() and self.log:
+            self.log.set_tidy(self.log_to_logfile)
+            pass
+        self.set_branch_name()
         pass
     #f read_state
     def read_state(self):
+        self.add_log_string("Reading state file '%s'"%self.grip_path(self.state_toml_filename))
         self.repo_state = GripRepoState()
         self.repo_state.read_toml_file(self.grip_path(self.state_toml_filename))
         pass
     #f read_config
     def read_config(self):
+        self.add_log_string("Reading local configuration state file '%s'"%self.grip_path(self.config_toml_filename))
+        self.repo_desc_config = None
+        self.config_state = None
         self.repo_config = GripRepoConfig()
         self.repo_config.read_toml_file(self.grip_path(self.config_toml_filename))
         if self.repo_config.config is not None:
             config_name = self.repo_config.config
             config = self.repo_desc.select_config(config_name)
-            if config is None: raise Exception("Read config.toml indicating grip configuration is '%s' but that is not in the grip.toml description"%config_name)
+            if config is None: raise ConfigurationError("Read config.toml indicating grip configuration is '%s' but that is not in the grip.toml description"%config_name)
             self.repo_desc_config = config
             self.config_state = self.repo_state.select_config(self.repo_desc_config.name)
             pass
@@ -130,15 +205,18 @@ class GripRepo:
         pass
     #f write_state
     def write_state(self):
+        self.add_log_string("Writing state file '%s'"%self.grip_path(self.state_toml_filename))
         self.repo_state.write_toml_file(self.grip_path(self.state_toml_filename))
         pass
     #f update_config
     def update_config(self):
         self.repo_config.config       = self.repo_desc_config.name
         self.repo_config.grip_git_url = self.grip_git_url.git_url()
+        self.repo_config.branch       = self.branch_name
         pass
     #f write_config
     def write_config(self):
+        self.add_log_string("Writing local configuration state file '%s'"%self.grip_path(self.config_toml_filename))
         self.repo_config.write_toml_file(self.grip_path(self.config_toml_filename))
         pass
     #f debug_repodesc
@@ -173,9 +251,9 @@ class GripRepo:
     #f configure
     def configure(self, options, config_name=None):
         if self.repo_desc_config is not None:
-            raise Exception("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
+            raise UserError("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
         config = self.repo_desc.select_config(config_name)
-        if config is None: raise Exception("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
+        if config is None: raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
         # print(config)
         self.repo_desc_config = config
         self.check_clone_permitted()
@@ -201,8 +279,8 @@ class GripRepo:
     def check_clone_permitted(self):
         for r in self.repo_desc_config.iter_repos():
             dest = self.git_repo.filename([r.path])
-            if not GitRepo.check_clone_permitted(r.url, branch=r.branch, dest=dest):
-                raise Exception("Not permitted to clone '%s' to  '%s"%(r.url, dest))
+            if not GitRepo.check_clone_permitted(r.url, branch=r.branch, dest=dest, log=self.log):
+                raise UserError("Not permitted to clone '%s' to  '%s"%(r.url, dest))
             pass
         pass
     #f clone_subrepos
@@ -258,6 +336,21 @@ class GripRepo:
             os.unlink(stgt)
             pass
         return stgt
+    #f get_makefile_target_of_dependency
+    def get_makefile_target_of_dependency(self, repo, r):
+        """
+        Get makefile target of a 'requires' or 'satisfies'
+        """
+        r = r.split(".")
+        r_stage = r[0]
+        r_repo = repo.name
+        if len(r)==2:
+            r_repo = r[0]
+            r_stage = r[1]
+            pass
+        if r_repo is None: return self.get_makefile_target(r_stage)
+        if r_repo=="":  return self.get_makefile_target(r_stage)
+        return self.get_makefile_target(r_stage,r_repo)
     #f create_grip_makefiles
     def create_grip_makefiles(self):
         """
@@ -266,12 +359,14 @@ class GripRepo:
         Create makefile.env and makefile
         Delete makefile targets
         """
+        self.add_log_string("Cleaning makefile targets directory '%s'"%self.grip_path(self.makefile_targets_dirname))
         makefile_targets = self.grip_path(self.makefile_targets_dirname)
         try:
             os.mkdir(makefile_targets)
             pass
         except FileExistsError:
             pass
+        self.add_log_string("Creating makefile environment file '%s'"%self.grip_path(self.grip_makefile_env_filename))
         with open(self.grip_path(self.grip_makefile_env_filename),"w") as f:
             for (n,v) in self.repo_desc_config.get_env_as_makefile_strings():
                 print("%s:=%s"%(n,v),file=f)
@@ -283,10 +378,12 @@ class GripRepo:
                 pass
             pass
         # create makefiles
+        self.add_log_string("Creating makefile '%s'"%self.grip_path(self.grip_makefile_filename))
         with open(self.grip_path(self.grip_makefile_filename),"w") as f:
             print("-include %s"%(self.grip_path(self.grip_makefile_env_filename)), file=f)
             stages = self.repo_desc_config.get_stages()
             for s in stages:
+                self.add_log_string("Adding stage '%s'"%s)
                 stgt = self.new_makefile_target(s)
                 print("\n.PHONY: %s"%(s), file=f)
                 print("%s: %s"%(s, stgt), file=f)
@@ -312,22 +409,13 @@ class GripRepo:
                 print("\ttouch %s"%(rstgt), file=f)
                 if stage.requires is not None:
                     for r in stage.requires:
-                        r = r.split(".")
-                        stage = r[0]
-                        repo = None
-                        if len(r)==2:
-                            repo = r[0]
-                            stage = r[1]
-                            pass
-                        if repo is None:
-                            ostgt = self.get_makefile_target(stage)
-                            print("%s: %s"%(rstgt,ostgt), file=f)
-                            pass
-                        else:
-                            ostgt = self.get_makefile_target(stage,repo)
-                            print("%s: %s"%(rstgt,ostgt), file=f)
-                            pass
+                        ostgt = self.get_makefile_target_of_dependency(repo, r)
+                        print("%s: %s"%(rstgt,ostgt), file=f)
                         pass
+                    pass
+                if stage.satisfies is not None:
+                    ostgt = self.get_makefile_target_of_dependency(repo, stage.satisfies)
+                    print("%s: %s"%(ostgt, rstgt), file=f)
                     pass
                 pass
             self.repo_desc_config.get_repo_stages(write_to_makefile)
@@ -344,7 +432,7 @@ class GripRepo:
         self.update_state()
         self.write_state()
         print("Updated state")
-        print("**** Now run git commit if you wish to commit the GRIP repo itself ****")
+        print("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
         pass
     #f fetch
     def fetch(self, options):

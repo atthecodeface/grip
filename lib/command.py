@@ -5,6 +5,8 @@ import traceback
 import lib.utils
 import lib.oscommand
 from .hookable import Hookable
+from .exceptions import *
+from .repo import GripRepo
 
 #a Classes
 #c GripCommandBase
@@ -16,14 +18,13 @@ class GripCommandBase(Hookable):
     """
     #v Class properties
     names = []
-    supports_dry_run = False
     base_options = {("-h", "--help")   :{"action":"store_true", "dest":"help",    "default":False, "help":"show the list of commands and options", },
-                    ("-n", "--dry-run"):{"action":"store_true", "dest":"dry_run", "default":False, "help":"do not perform actions, just print output"},
                     ("-v", "--verbose"):{"action":"store_true", "dest":"verbose", "default":False},
+                    ("--show-log",)    :{"action":"store_true", "dest":"show_log", "default":False},
                     ("-Q", "--quiet")  :{"action":"store_true", "dest":"quiet",   "default":False},
                     }
     command_options = {}
-    
+
     #f get_all
     @classmethod
     def get_all(cls):
@@ -42,6 +43,18 @@ class GripCommandBase(Hookable):
             pass
         return None
 
+    #f __init__
+    def __init__(self, prog, command_name, options, args):
+        if command_name is None:
+            command_name=""
+            pass
+        else:
+            command_name = command_name+" "
+            pass
+        self.loggers = []
+        self.invocation = prog+" "+command_name+(" ".join(args))
+        pass
+    
     #f parser_add_options
     def parser_add_options(self, parser, option_dict):
         """
@@ -70,7 +83,6 @@ class GripCommandBase(Hookable):
         cmd_parser = argparse.ArgumentParser(prog=prog, parents=[parser], add_help=False)
         self.parser_add_options(cmd_parser, self.command_options)
         options = cmd_parser.parse_args(args, namespace=options)
-        if options.dry_run and not self.supports_dry_run: cmd_parser.error("Command does not currently support dryrun")
         self.invoke_hooks("command_options", prog=prog, parser=cmd_parser, command_name=command_name, options=options, args=args)
         return (prog, parser, options, lib.utils.options_value(options,"args",default=[]))
 
@@ -80,26 +92,79 @@ class GripCommandBase(Hookable):
         print("Available grip commands are:\n%s" % "\n".join([k for k in commands.keys()]))
         pass
 
+    #f get_grip_repo
+    def get_grip_repo(self, **kwargs):
+        self.grip_repo = GripRepo(invocation=self.invocation, **kwargs)
+        self.add_logger(self.grip_repo.log)
+        pass
+    
+    #f add_logger
+    def add_logger(self, log):
+        """
+        Add a logger that is a log.Log class instance
+        """
+        self.loggers.append(log)
+        pass
+    
+    #f show_logs
+    def show_logs(self, file):
+        """
+        Write logs to file
+        """
+        for l in self.loggers:
+            l.dump(file)
+            pass
+        pass
+    
+    #f tidy_logs
+    def tidy_logs(self):
+        """
+        Tidy up logs
+        """
+        for l in self.loggers:
+            l.tidy()
+            pass
+        pass
+    
     #f invoke
     def invoke(self, prog, parser, command_name, options, args):
         command_cls = GripCommandBase.command_of_name(command_name)
         if command_cls is None: parser.error("Unknown command \"%s\"" % command_name)
 
+        command = None
         try:
-            command = command_cls()
+            command = command_cls(prog, command_name, options, args)
             (prog, parser, options, args) = command.parse_command(prog, parser, command_name, options, args)
             result = command.execute(prog, parser, command_name, options, args)
+            command.tidy_logs()
+            if options.show_log:
+                command.show_logs(sys.stdout)
+                pass
             if result:
                 sys.exit(result)
+                pass
             else:
                 sys.exit(0)
+                pass
+            pass
+        except GripException as e:
+            command.tidy_logs()
+            print("%s error: %s" % (e.grip_type, str(e)), file=sys.stderr)
+            if command is not None:
+                command.show_logs(sys.stderr)
+                pass
+            sys.exit(4)
         except lib.oscommand.OSCommand.Error as e:
+            command.tidy_logs()
             print("Error from shell command %s" % str(e), file=sys.stderr)
             if options.verbose:
                 traceback.print_exc()
                 pass
             sys.exit(127)
             pass
+        except Exception as e:
+            command.tidy_logs()
+            raise e
         pass
     #f All done
     pass

@@ -15,8 +15,8 @@ class root(lib.command.GripCommandBase):
             path = os.path.abspath(os.getcwd())
             pass
         if os.path.isfile(path): path=os.path.dirname(path)
-        grip_repo = lib.repo.GripRepo(path=path)
-        print(grip_repo.get_root(),end='')
+        self.get_grip_repo(path=path)
+        print(self.grip_repo.get_root(),end='')
         pass
 
 class env(lib.command.GripCommandBase):
@@ -29,8 +29,8 @@ class env(lib.command.GripCommandBase):
     command_options = {
     }
     def execute(self, prog, parser, command_name, options, args):
-        grip_repo = lib.repo.GripRepo(ensure_configured=True)
-        for (k,v) in grip_repo.grip_env_iter():
+        self.get_grip_repo(ensure_configured=True)
+        for (k,v) in self.grip_repo.grip_env_iter():
             print('%s=%s; export %s'%(k,shlex.quote(v),k))
             pass
         pass
@@ -43,14 +43,14 @@ class doc(lib.command.GripCommandBase):
     command_options = {
     }
     def execute(self, prog, parser, command_name, options, args):
-        grip_repo = lib.repo.GripRepo(ensure_configured=False)
-        grip_repo_doc = grip_repo.get_doc()
-        if grip_repo.is_configured():
-            print("This is a configured grip repository, with a name of '%s', using configuration '%s'"%(grip_repo.get_name(),grip_repo.get_config_name()))
+        self.get_grip_repo(ensure_configured=False)
+        grip_repo_doc = self.grip_repo.get_doc()
+        if self.grip_repo.is_configured():
+            print("This is a configured grip repository, with a name of '%s', using configuration '%s'"%(self.grip_repo.get_name(), self.grip_repo.get_config_name()))
             pass
         else:
-            print("This is an unconfigured grip repository, with a name of '%s'"%(grip_repo.get_name()))
-            print("It supports the following configurations: %s"%(" ".join(grip_repo.get_configurations())))
+            print("This is an unconfigured grip repository, with a name of '%s'"%(self.grip_repo.get_name()))
+            print("It supports the following configurations: %s"%(" ".join(self.grip_repo.get_configurations())))
             pass
         for (n,v) in grip_repo_doc:
             if n is not None:

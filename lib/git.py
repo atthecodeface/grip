@@ -1,12 +1,14 @@
 #a Imports
 import os, re, unittest
 import lib.oscommand, lib.verbose
+from .exceptions import *
 
 #a Useful functions
 #f git_command
 def git_command(options=None, cmd=None, **kwargs):
+    cmd="git %s"%(cmd)
     return lib.oscommand.command(options=options,
-                                     cmd="git %s"%(cmd),
+                                     cmd=cmd,
                                      **kwargs)
 
 #a Git url class
@@ -87,7 +89,7 @@ class GitRepo(object):
         x.parse_path()
         return x
     #f __init__
-    def __init__(self, path, git_url=None, permit_no_remote=False):
+    def __init__(self, path, git_url=None, permit_no_remote=False, log=None):
         """
         Create the object from a given path
 
@@ -97,12 +99,14 @@ class GitRepo(object):
         """
         if path is None: path="."
         git_output = git_command(cwd=os.path.abspath(path),
-                                 cmd="rev-parse --show-toplevel")
+                                 cmd="rev-parse --show-toplevel",
+                                 log=log)
         self.path = os.path.realpath(git_output.strip())
         if git_url is None:
             try:
                 git_output = git_command(cwd=self.path,
-                                         cmd="remote get-url origin")
+                                         cmd="remote get-url origin",
+                                         log=log)
                 pass
             except Exception as e:
                 if not permit_no_remote: raise e
@@ -139,6 +143,11 @@ class GitRepo(object):
                     cwd=self.path)
         output = git_command(cwd=self.path,
                              cmd="diff-index --name-only HEAD")
+        output = output.strip()
+        if len(output.strip()) > 0:
+            return True
+        output = git_command(cwd=self.path,
+                             cmd="ls-files -o --exclude-standard")
         output = output.strip()
         if len(output.strip()) > 0:
             return True
@@ -191,15 +200,15 @@ class GitRepo(object):
         pass
     #f check_clone_permitted - check if can clone url to path
     @classmethod
-    def check_clone_permitted(cls, repo_url, branch=None, dest=None):
-        print("%s : %s : %s"%(repo_url, branch, dest))
-        if os.path.exists(dest): raise Exception("Cannot clone to %s as it already exists"%(dest))
+    def check_clone_permitted(cls, repo_url, branch=None, dest=None, log=None):
+        if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, dest))
+        if os.path.exists(dest): raise UserError("Cannot clone to %s as it already exists"%(dest))
         dest_dir = os.path.dirname(dest)
-        if not os.path.exists(dest_dir): raise Exception("Cannot clone to %s as the parent directory does not exist"%(dest))
+        if not os.path.exists(dest_dir): raise UserError("Cannot clone to %s as the parent directory does not exist"%(dest))
         return True
     #f clone - clone from a Git URL (of a particular branch to a destination directory)
     @classmethod
-    def clone(cls, options, repo_url, new_branch_name, branch=None, dest=None, bare=False, depth=None, changeset=None):
+    def clone(cls, options, repo_url, new_branch_name, branch=None, dest=None, bare=False, depth=None, changeset=None, log=None):
         """
         Clone a branch of a repo_url into a checkout directory
         bare checkouts are used in testing only
@@ -214,29 +223,38 @@ class GitRepo(object):
         lib.verbose.info(options, "Git clone from '%s' to '%s' with options %s"%(repo_url, dest, " ".join(git_options)))
         try:
             git_output = git_command(options=options,
+                                     log=log,
                                      cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest),
                                      stderr_output_indicates_error=False)
             pass
         except lib.oscommand.OSCommandError as e:
             raise Exception("Failed to perform git clone - %s"%(e.cmd.error_output()))
             pass
-        git_command(options=options, cwd=dest, cmd="branch --move upstream")
+        try:
+            # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
+            git_command(options=options, log=log, cwd=dest, cmd="branch --move upstream")
+            pass
+        except:
+            # If the branch move failed then just create the branch at this head
+            git_command(options=options, log=log, cwd=dest, cmd="branch upstream HEAD")
+            pass
         if changeset is None:
-            git_command(options=options, cwd=dest, cmd="branch %s"%(new_branch_name))
+            git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%(new_branch_name))
             pass
         else:
             try:
-                git_command(options=options, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
+                git_command(options=options, log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
                 pass
             except:
                 raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
             pass
         git_output = git_command(options=options,
+                                 log=log,
                                  cwd = dest,
                                  cmd = "checkout %s" % new_branch_name,
                                  stderr_output_indicates_error=False)
         pass
-        return cls(dest, git_url=repo_url)
+        return cls(dest, git_url=repo_url, log=log)
     #f filename - get filename of full path relative to repo in file system
     def filename(self, paths):
         if type(paths)!=list: paths=[paths]

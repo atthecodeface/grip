@@ -10,6 +10,6 @@ class commit(lib.command.GripCommandBase):
     command_options = {
     }
     def execute(self, prog, parser, command_name, options, args):
-        grip_repo = lib.repo.GripRepo(path=os.path.abspath(os.getcwd()))
-        grip_repo.commit(options)
+        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.grip_repo.commit(options)
         pass

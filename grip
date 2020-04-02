@@ -10,10 +10,13 @@ merge
 publish
 
 individual paths in fetch, update_upstream, merge
+e.g. grip fetch <cdl>
 
-Read grip.toml in subrepos
+requires/satisfies to use local and global
 
 grip make
+
+satisfies in grip.toml
 
 """
 import sys, os, re
@@ -46,7 +49,7 @@ def main(prog, globalargs):
     """
     The primary API to the Grip toolset
     """
-    cmd = lib.command.GripCommand()
+    cmd = lib.command.GripCommand(prog, None, None, globalargs)
     (prog, parser, options, args) = cmd.parse_command(prog, None, None, None, globalargs)
 
     if len(args)==0: args=["help"]

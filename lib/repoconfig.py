@@ -7,6 +7,7 @@ from .tomldict import TomlDict, TomlDictParser
 class GripConfigTomlDict(TomlDict):
     grip_git_url = TomlDictParser.from_dict_attr_value(str)
     config       = TomlDictParser.from_dict_attr_value(str)
+    branch       = TomlDictParser.from_dict_attr_value(str)
     pass
 
 #a Classes
@@ -23,6 +24,7 @@ class GripRepoConfig(object):
     def __init__(self):
         self.config = None
         self.grip_git_url = None
+        self.branch = None
         pass
     #f read_toml_dict
     def read_toml_dict(self, toml_dict):
@@ -57,12 +59,11 @@ class GripRepoConfig(object):
         pass
     #f build_from_values
     def build_from_values(self, values):
-        self.config       = values.config
-        self.grip_git_url = values.grip_git_url
+        values.Set_obj_properties(self, {"config", "grip_git_url", "branch"})
         pass
     #f toml_dict
     def toml_dict(self):
-        toml_dict = {"config":self.config, "grip_git_url":self.grip_git_url}
+        toml_dict = {"config":self.config, "grip_git_url":self.grip_git_url, "branch":self.branch}
         return toml_dict
     #f prettyprint
     def prettyprint(self, acc, pp):

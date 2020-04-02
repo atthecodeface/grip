@@ -133,6 +133,18 @@ If a fetch has been performed on the readonly git repository then a
 'git checkout <commit hash>' can be performed in the git repository,
 for example to update the version used in the grip repository.
 
+In the case where a workflow is readonly but the user is competent to
+do an update and push it to the upstream, then the process is:
+
+```
+git commit
+git checkout upstream
+git pull
+git checkout WIP_cdl_tools_grip
+git rebase upstream
+git push origin HEAD:master
+```
+
 ### Merging
 
 A readonly workflow repository is never merged.

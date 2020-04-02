@@ -4,6 +4,7 @@ import toml
 from .tomldict import TomlDict, TomlDictParser
 from .git import GitRepo
 from .workflows import workflows
+from .exceptions import *
 
 #a Useful functions
 def str_keys(d):
@@ -20,7 +21,8 @@ class RepoDescTomlDict(TomlDict):
     """
     class RepoStageTomlDict(TomlDict):
         """For e.g. config.standalone.cdl"""
-        requires = TomlDictParser.from_dict_attr_list(str) # list of other repos stages completed correctly
+        requires  = TomlDictParser.from_dict_attr_list(str) # list of other repos dependencies completed correctly
+        satisfies = TomlDictParser.from_dict_attr_value(str) # repo dependency (local or global)
         wd       = TomlDictParser.from_dict_attr_value(str)
         env      = TomlDictParser.from_dict_attr_dict(EnvTomlDict)
         exec     = TomlDictParser.from_dict_attr_value(str)
@@ -55,6 +57,7 @@ class GripFileTomlDict(TomlDict):
     stages         = TomlDictParser.from_dict_attr_list(str)
     base_repos     = TomlDictParser.from_dict_attr_list(str)
     default_config = TomlDictParser.from_dict_attr_value(str)
+    logging        = TomlDictParser.from_dict_attr_value(str)
     repo           = TomlDictParser.from_dict_attr_dict(RepoTomlDict)
     config         = TomlDictParser.from_dict_attr_dict(ConfigTomlDict)
     workflow       = TomlDictParser.from_dict_attr_value(str)
@@ -251,6 +254,7 @@ class GitRepoStageDesc(object):
     exec = None # Shell script to execute to perform the stage
     env  = None # Environment to be exported in .grip/env
     requires = None
+    satisfies = None
     #f __init__
     def __init__(self, git_repo_desc, name, values=None):
         self.git_repo_desc = git_repo_desc
@@ -269,6 +273,7 @@ class GitRepoStageDesc(object):
         c.env = self.env
         c.exec = self.exec
         c.requires = self.requires
+        c.satisfies = self.satisfies
         return c
     #f resolve
     def resolve(self, env):
@@ -293,6 +298,7 @@ class GitRepoStageDesc(object):
             else: acc = pp(acc, "env:    %s" % ("<unresolved values>"), indent=1)
         if self.exec is not None: acc = pp(acc, "exec:   %s" % (self.exec), indent=1)
         if self.requires is not None:acc = pp(acc, "requires:   '%s'" % (" ".join(self.requires)), indent=1)
+        if self.satisfies is not None:acc = pp(acc, "satisfies:   '%s'" % (self.satisfies), indent=1)
         return acc
     #f All done
     pass
@@ -369,6 +375,9 @@ class GitRepoDesc(object):
             self.git_url.make_relative_to(grip_git_url)
             pass
         pass
+    #f get_path
+    def get_path(self):
+        return self.path
     #f get_git_url
     def get_git_url(self):
         """
@@ -410,9 +419,10 @@ class GitRepoDesc(object):
         self.workflow = self.grip_repo_desc.validate_workflow(self.workflow, self.name)
         for sn in self.stages:
             if sn not in self.grip_repo_desc.stages:
-                raise GripTomlError("Repo '%s' has stage '%s' which is not part of the grip stages list ('%s')"%(self.name,
-                                                                                                                 sn,
-                                                                                                                 " ".join(self.grip_repo_desc.stages)))
+                #raise GripTomlError("Repo '%s' has stage '%s' which is not part of the grip stages list ('%s')"%(self.name,
+                #                                                                                                 sn,
+                #                                                                                                 " ".join(self.grip_repo_desc.stages)))
+                pass
             pass
         pass
     #f resolve
@@ -608,7 +618,7 @@ class GripTomlError(Exception):
     pass
 
 #c RepoDescError - exception used when a repo description is invalid
-class RepoDescError(Exception):
+class RepoDescError(ConfigurationError):
     pass
 
 #c GripRepoDesc - complete description of a grip repo, from the grip toml file
@@ -641,6 +651,8 @@ class GripRepoDesc(object):
     stages = []
     supported_workflows = workflows()
     re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
+    #v static properties
+    logging_options = {"True":True, "False":False, "Yes":True, "No":False}
     #f __init__
     def __init__(self, git_repo):
         self.name = None
@@ -651,32 +663,76 @@ class GripRepoDesc(object):
         self.stages = []
         self.base_repos = []
         self.doc = None
+        self.git_repo = git_repo
+        self.logging = False
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
         default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
         self.env = GripEnv(name='grip.toml', default_values=default_env)
         pass
-    #f read_toml_file
-    def read_toml_file(self, grip_toml_filename):
+    #f read_toml_string
+    def read_toml_string(self, grip_toml_string, subrepo_toml_strings):
         """
-        Load the <root_dir>/.grip/grip.toml file
+        Create the description and validate it from the grip_toml_string contents
+
+        subrepo_toml_strings is a dictionary of repo -> repo_desc
+        
         """
-        self.raw_toml_dict = toml.load(grip_toml_filename)
+        self.raw_toml_dict = toml.loads(grip_toml_string)
+        if "repo" in self.raw_toml_dict:
+            for (rn,rs) in subrepo_toml_strings.items():
+                if rn not in self.raw_toml_dict["repo"]:
+                    raise Exception("grip.toml file does not include repo '%s' when that is a subrepo in the current configuration; grip is being abused"%rn)
+                cur_dict = self.raw_toml_dict["repo"][rn]
+                rtd = toml.loads(rs)
+                for (k,v) in rtd.items():
+                    if k in cur_dict:
+                        if type(cur_dict[k])!=type(v):
+                            raise(Exception("grip cannot merge TOML dictionary for repo '%s' key '%s' value '%s' as the types don't match"%(rn,k,v)))
+                        if type(v)==str:
+                            cur_dict[k]+=v
+                        elif type(v)==list:
+                            cur_dict[k].extend(v)
+                        elif type(v)==dict:
+                            for (dk,dv) in v:
+                                cur_dict[k][dk]=dv
+                                pass
+                            pass
+                        else:
+                            raise(Exception("grip cannot merge TOML dictionary for repo '%s' key '%s' value '%s' as the types don't merge"%(rn,k,v)))
+                        pass
+                    else:
+                        cur_dict[k] = v
+                        pass
+                    pass
+                pass
+            pass
         values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
         self.build_from_values(values)
         self.validate()
         self.resolve()
         pass
-    #f read_toml_string
-    def read_toml_string(self, grip_toml_string):
+    #f read_toml_file
+    def read_toml_file(self, grip_toml_filename, subrepos=[]):
         """
-        Really used in test only, read description from string
+        Load the <root_dir>/.grip/grip.toml file
+
+        subrepos is a list of GitRepoDesc instances which may have been checked
+        out which may have grip.toml files. Add these after the main file.
         """
-        self.raw_toml_dict = toml.loads(grip_toml_string)
-        values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
-        self.build_from_values(values)
-        self.validate()
-        self.resolve()
+        with open(grip_toml_filename) as f:
+            toml_string = f.read()
+            pass
+        subrepo_toml_strings = {}
+        for r in subrepos:
+            srfn = self.git_repo.filename([r.get_path(),"grip.toml"])
+            if os.path.isfile(srfn):
+                with open(srfn) as f:
+                    subrepo_toml_strings[r.name] = f.read()
+                    pass
+                pass
+            pass
+        self.read_toml_string(toml_string, subrepo_toml_strings)
         pass
     #f validate
     def validate(self):
@@ -692,6 +748,11 @@ class GripRepoDesc(object):
             pass
         for (n,c) in self.configs.items():
             c.validate()
+            pass
+        if self.logging is not None:
+            if self.logging not in self.logging_options.keys():
+                raise RepoDescError("logging of '%s' is not one of the permitted options %s"%(self.logging, str_keys(self.logging_options)))
+            self.logging = self.logging_options[self.logging]
             pass
         pass
     #f resolve
@@ -712,7 +773,7 @@ class GripRepoDesc(object):
         return self.supported_workflows[workflow]
     #f build_from_values
     def build_from_values(self, values):
-        values.Set_obj_properties(self, {"name", "workflow", "base_repos", "default_config", "stages", "doc"})
+        values.Set_obj_properties(self, {"name", "workflow", "base_repos", "default_config", "logging", "stages", "doc"})
         if values.repo           is None: raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
         if values.configs        is None: raise GripTomlError("'configs' must be provided in grip configuration file")
         self.env.build_from_values(values.env)
@@ -776,6 +837,9 @@ class GripRepoDesc(object):
                 pass
             pass
         return r
+    #f is_logging_enabled
+    def is_logging_enabled(self):
+        return self.logging
     #f select_config
     def select_config(self, config_name=None):
         """
