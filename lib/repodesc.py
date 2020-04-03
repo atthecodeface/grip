@@ -174,12 +174,12 @@ class GripEnv:
         if n<0: return acc+s
         if len(s)==n+1:
             if not finalize: return None
-            raise Exception("Unexpected '%' at end of string using environment %s",self.full_name())
+            raise GripTomlError("Unexpected '%' at end of string using environment %s",self.full_name())
         acc = acc + s[:n]
         m = self.name_match_re.match(s,n+1)
         if m is None:
             if not finalize: return None
-            raise Exception("Could not parse '%s' (%d) as a grip environment substitution (%%....%%) using environment %s"%(s, n+1,self.full_name()))
+            raise GripTomlError("Could not parse '%s' (%d) as a grip environment substitution (%%....%%) using environment %s"%(s, n+1,self.full_name()))
         k = m.group('name')
         if len(k)==0:
             v="%%"
@@ -241,6 +241,57 @@ class GripEnv:
             pass
         pass
     
+#c GitRepoStageDependency
+class GitRepoStageDependency:
+    def __init__(self, s, repo_name=None, must_be_global=True, force_local=False):
+        s_split = s.split(".")
+        s_stage_name = s_split[0]
+        s_repo_name = None
+        if len(s_split)==1:
+            if force_local: s_repo_name = repo_name
+            pass
+        elif len(s_split)==2:
+            s_repo_name  = s_split[0]
+            s_stage_name = s_split[1]
+            if must_be_global: raise GripTomlError("Bad repo dependency '%s' - must be global, no '.'s"%s)
+            if force_local: raise GripTomlError("Bad repo dependency '%s' - must be local, no '.'s"%s)
+            pass
+        else:
+            if force_local: raise GripTomlError("Bad repo dependency '%s' - must be local, no '.'s"%s)
+            raise GripTomlError("Bad repo dependency '%s' - must be <global stage>, .<local stage> or <repo>.<repo stage>"%s)
+        if s_repo_name=="": s_repo_name = repo_name
+        self.repo = None
+        self.stage = None
+        self.repo_name = s_repo_name
+        self.stage_name = s_stage_name
+        pass
+    #f validate
+    def validate(self, grip_config, reason):
+        if self.repo_name is not None:
+            self.repo = grip_config.get_repo(self.repo_name, error_on_not_found=False)
+            if self.repo is None:
+                raise GripTomlError("%s: repo not in configuration '%s'"%(reason, grip_config.get_name()))
+            self.stage = self.repo.get_repo_stage(self.stage_name, error_on_not_found=False)
+            if self.stage is None:
+                raise GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, stage_name, repo_name, grip_config.get_name()))
+            pass
+        else:
+            global_stages = grip_config.get_global_stage_names()
+            if self.stage_name not in global_stages:
+                raise GripTomlError("%s: not a global stage in configuration '%s'"%(grip_config.get_name()))
+            pass
+        pass
+    #f full_name
+    def full_name(self):
+        if self.repo_name is None: return self.stage_name
+        return "%s.%s"%(self.repo_name, self.stage_name)
+    #f target_name
+    def target_name(self):
+        if self.repo_name is None: return self.stage_name
+        return "repo.%s.%s"%(self.repo_name, self.stage_name)
+    #f All done
+    pass
+
 #c GitRepoStageDesc - What to do for a stage of a particular grip repo module
 class GitRepoStageDesc(object):
     """
@@ -253,12 +304,13 @@ class GitRepoStageDesc(object):
     wd   = None # Working directory to execute <exec> in (relative to repo desc path)
     exec = None # Shell script to execute to perform the stage
     env  = None # Environment to be exported in .grip/env
-    requires = None
+    requires = []
     satisfies = None
     #f __init__
     def __init__(self, git_repo_desc, name, values=None):
         self.git_repo_desc = git_repo_desc
         self.grip_repo_desc = git_repo_desc.grip_repo_desc
+        self.dependency = GitRepoStageDependency(name, repo_name=self.git_repo_desc.name, force_local=True)
         self.name = name
         if values is not None:
             values.Set_obj_properties(self, values.Get_fixed_attrs())
@@ -289,6 +341,24 @@ class GitRepoStageDesc(object):
         self.wd   = env.substitute(self.wd)
         self.exec = env.substitute(self.exec)
         pass
+    #f validate
+    def validate(self, grip_config):
+        repo_name = self.git_repo_desc.name
+        requires = []
+        for r in self.requires:
+            requires.append(GitRepoStageDependency(r, repo_name=repo_name, must_be_global=False))
+            pass
+        self.requires = requires
+        if self.satisfies is not None:
+            self.satisfies = GitRepoStageDependency(self.satisfies, repo_name=repo_name, must_be_global=False)
+            pass
+        for r in self.requires:
+            r.validate(grip_config, reason="Repo stage '%s.%s' requires of '%s'"%(repo_name, self.name, r.full_name()))
+            pass
+        if self.satisfies:
+            self.satisfies.validate(grip_config, reason="Repo stage '%s.%s' satisfies of '%s'"%(repo_name, self.name, self.satisfies.full_name()))
+            pass
+        pass
     #f prettyprint
     def prettyprint(self, acc, pp):
         acc = pp(acc, "%s:" % (self.name))
@@ -297,7 +367,7 @@ class GitRepoStageDesc(object):
             if isinstance(self.env, GripEnv): acc = pp(acc, "env:    %s" % (self.env.as_str()), indent=1)
             else: acc = pp(acc, "env:    %s" % ("<unresolved values>"), indent=1)
         if self.exec is not None: acc = pp(acc, "exec:   %s" % (self.exec), indent=1)
-        if self.requires is not None:acc = pp(acc, "requires:   '%s'" % (" ".join(self.requires)), indent=1)
+        if self.requires != []:acc = pp(acc, "requires:   '%s'" % (" ".join(self.requires)), indent=1)
         if self.satisfies is not None:acc = pp(acc, "satisfies:   '%s'" % (self.satisfies), indent=1)
         return acc
     #f All done
@@ -326,6 +396,7 @@ class GitRepoDesc(object):
     shallow  = None
     env      = None
     doc      = None
+    grip_config = None
     inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env", "doc"]
     #f __init__
     def __init__(self, name, grip_repo_desc, values=None, parent=None):
@@ -366,6 +437,13 @@ class GitRepoDesc(object):
         c = self.__class__(name=self.name, values=None, grip_repo_desc=self.grip_repo_desc, parent=self)
         c.parent = self.parent
         return c
+    #f set_grip_config
+    def set_grip_config(self, grip_config):
+        """
+        When instantiated in a grip config, this is invoked
+        """
+        self.grip_config = grip_config
+        pass
     #f resolve_git_url
     def resolve_git_url(self, grip_git_url):
         """
@@ -393,20 +471,33 @@ class GitRepoDesc(object):
         """
         Get documentation string for this configuration
         """
-        if self.doc is None: return "Undocumented"
-        return self.doc
-    #f add_stages_to_set
-    def add_stages_to_set(self, s):
+        r = "Undocumented"
+        if self.doc is not None: r = self.doc
+        r_stages = []
+        for (sn,s) in self.stages.items():
+            r_stages.append(sn)
+            pass
+        r_stages.sort()
+        r += "\nStages: %s"%(" ".join(r_stages))
+        return r
+    #f add_stage_names_to_set
+    def add_stage_names_to_set(self, s):
         for k in self.stages:
             s.add(k)
             pass
         pass
-    #f get_repo_stages
-    def get_repo_stages(self, callback_fn):
+    #f get_repo_stage
+    def get_repo_stage(self, stage_name, error_on_not_found=True):
+        if stage_name not in self.stages:
+            if not error_on_not_found: return None
+            raise GripTomlError("Stage '%s' not known in repository '%s'"%(stage_name, self.name))
+        return self.stages[stage_name]
+    #f fold_repo_stages
+    def fold_repo_stages(self, acc, callback_fn):
         for (sn,s) in self.stages.items():
-            callback_fn(self, s)
+            acc = callback_fn(acc, self, s)
             pass
-        pass
+        return acc
     #f is_shallow
     def is_shallow(self):
         if self.shallow is not None:
@@ -417,12 +508,8 @@ class GitRepoDesc(object):
     #f validate
     def validate(self):
         self.workflow = self.grip_repo_desc.validate_workflow(self.workflow, self.name)
-        for sn in self.stages:
-            if sn not in self.grip_repo_desc.stages:
-                #raise GripTomlError("Repo '%s' has stage '%s' which is not part of the grip stages list ('%s')"%(self.name,
-                #                                                                                                 sn,
-                #                                                                                                 " ".join(self.grip_repo_desc.stages)))
-                pass
+        for (n,s) in self.stages.items():
+            s.validate(self.grip_config)
             pass
         pass
     #f resolve
@@ -516,6 +603,9 @@ class GripConfig(object):
             repo_desc = values.Get(r)
             self.repos[r] = GitRepoDesc(r, values=repo_desc, parent=self.repos[r], grip_repo_desc=self.grip_repo_desc)
             pass
+        for r in self.iter_repos():
+            r.set_grip_config(self)
+            pass
         pass
     #f resolve_git_urls
     def resolve_git_urls(self, grip_git_url):
@@ -527,8 +617,10 @@ class GripConfig(object):
             pass
         pass
     #f get_repo
-    def get_repo(self, repo_name):
-        if repo_name not in self.repos: raise Exception("Repository '%s' not know in grip configuration '%s'"%(repo_name, self.name))
+    def get_repo(self, repo_name, error_on_not_found=True):
+        if repo_name not in self.repos:
+            if not error_on_not_found: return None
+            raise GripTomlError("Repository '%s' not know in grip configuration '%s'"%(repo_name, self.name))
         return self.repos[repo_name]
     #f iter_repos
     def iter_repos(self):
@@ -569,8 +661,15 @@ class GripConfig(object):
         """
         Get documentation string for this configuration
         """
-        if self.doc is None: return "Undocumented"
-        return self.doc.strip()
+        r = "Undocumented"
+        if self.doc is not None: r = self.doc.strip()
+        r_stages = []
+        for sn in self.get_global_stage_names():
+            r_stages.append(sn)
+            pass
+        r_stages.sort()
+        r += "\nStages: %s"%(" ".join(r_stages))
+        return r
     #f get_doc
     def get_doc(self):
         """
@@ -584,19 +683,18 @@ class GripConfig(object):
             r.append(("Repo '%s'"%rn,repo.get_doc_string()))
             pass
         return r
-    #f get_stages
-    def get_stages(self):
-        stages = set()
+    #f get_global_stage_names
+    def get_global_stage_names(self):
+        return self.grip_repo_desc.get_stages().keys()
+    #f get_global_stages
+    def get_global_stages(self):
+        return self.grip_repo_desc.get_stages()
+    #f fold_repo_stages
+    def fold_repo_stages(self, acc, callback_fn):
         for r in self.iter_repos():
-            r.add_stages_to_set(stages)
+            acc = r.fold_repo_stages(acc, callback_fn)
             pass
-        return list(stages)
-    #f get_repo_stages
-    def get_repo_stages(self, callback_fn):
-        for r in self.iter_repos():
-            r.get_repo_stages(callback_fn)
-            pass
-        pass
+        return acc
     #f prettyprint
     def prettyprint(self, acc, pp):
         acc = pp(acc, "config.%s:" % (self.name))
@@ -614,7 +712,7 @@ class GripConfig(object):
     pass
 
 #c GripTomlError - exception used when reading the grip toml file
-class GripTomlError(Exception):
+class GripTomlError(ConfigurationError):
     pass
 
 #c RepoDescError - exception used when a repo description is invalid
@@ -670,36 +768,47 @@ class GripRepoDesc(object):
         default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
         self.env = GripEnv(name='grip.toml', default_values=default_env)
         pass
+    #f toml_loads
+    def toml_loads(self, filename, s):
+        """
+        A wrapper around toml.loads to provide a suitable error on an exception
+        """
+        try:
+            r = toml.loads(s)
+            pass
+        except toml.decoder.TomlDecodeError as e:
+            raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
+        return r
     #f read_toml_string
-    def read_toml_string(self, grip_toml_string, subrepo_toml_strings):
+    def read_toml_string(self, grip_toml_string, subrepo_toml_strings, filename="<toml_file>"):
         """
         Create the description and validate it from the grip_toml_string contents
 
         subrepo_toml_strings is a dictionary of repo -> repo_desc
         
         """
-        self.raw_toml_dict = toml.loads(grip_toml_string)
+        self.raw_toml_dict = self.toml_loads(filename, grip_toml_string)
         if "repo" in self.raw_toml_dict:
             for (rn,rs) in subrepo_toml_strings.items():
                 if rn not in self.raw_toml_dict["repo"]:
                     raise Exception("grip.toml file does not include repo '%s' when that is a subrepo in the current configuration; grip is being abused"%rn)
                 cur_dict = self.raw_toml_dict["repo"][rn]
-                rtd = toml.loads(rs)
+                rtd = self.toml_loads(rn, rs)
                 for (k,v) in rtd.items():
                     if k in cur_dict:
                         if type(cur_dict[k])!=type(v):
-                            raise(Exception("grip cannot merge TOML dictionary for repo '%s' key '%s' value '%s' as the types don't match"%(rn,k,v)))
+                            raise(ConfigurationError("grip cannot merge TOML dictionary for repo '%s' key '%s' value '%s' as the types don't match"%(rn,k,v)))
                         if type(v)==str:
                             cur_dict[k]+=v
                         elif type(v)==list:
                             cur_dict[k].extend(v)
                         elif type(v)==dict:
-                            for (dk,dv) in v:
+                            for (dk,dv) in v.items():
                                 cur_dict[k][dk]=dv
                                 pass
                             pass
                         else:
-                            raise(Exception("grip cannot merge TOML dictionary for repo '%s' key '%s' value '%s' as the types don't merge"%(rn,k,v)))
+                            raise(ConfigurationError("grip cannot merge TOML dictionary for repo '%s' key '%s' value '%s' as the types don't merge"%(rn,k,v)))
                         pass
                     else:
                         cur_dict[k] = v
@@ -732,7 +841,7 @@ class GripRepoDesc(object):
                     pass
                 pass
             pass
-        self.read_toml_string(toml_string, subrepo_toml_strings)
+        self.read_toml_string(toml_string, subrepo_toml_strings, filename=grip_toml_filename)
         pass
     #f validate
     def validate(self):
@@ -796,6 +905,11 @@ class GripRepoDesc(object):
                 config.build_from_values(config_values)
                 pass
             pass
+        stages = {}
+        for s in self.stages:
+            stages[s] = GitRepoStageDependency(s, must_be_global=True)
+            pass
+        self.stages = stages
         pass
     #f prettyprint
     def prettyprint(self, acc, pp):
@@ -815,6 +929,12 @@ class GripRepoDesc(object):
     #f get_configs
     def get_configs(self):
         return self.configs.keys()
+    #f get_stages
+    def get_stages(self):
+        """
+        Get dictionary of stage name -> GitRepoStageDependency
+        """
+        return self.stages
     #f get_doc_string
     def get_doc_string(self):
         """

@@ -59,7 +59,7 @@ class GripRepo:
     config_toml_filename = "local.config.toml"
     grip_env_filename    = "local.env.sh"
     grip_log_filename    = "local.log"
-    makefile_targets_dirname = "local.makefile_targets"
+    makefile_stamps_dirname = "local.makefile_stamps"
     grip_makefile_filename = "local.grip_makefile"
     grip_makefile_env_filename = "local.grip_makefile.env"
     #f find_git_repo_of_grip_root
@@ -323,46 +323,45 @@ class GripRepo:
     def xupdate_grip_env(self):
         # repos are up-to-date
         # recreate environment
-        # clean out make targets
+        # clean out make stamps
         pass
-    #f get_makefile_target
-    def get_makefile_target(self,s,r=None):
-        if r is not None: s=s+"."+r
-        return os.path.join(self.grip_path(self.makefile_targets_dirname), s)
-    #f new_makefile_target
-    def new_makefile_target(self,s,r=None):
-        stgt = self.get_makefile_target(s,r)
-        if os.path.exists(stgt):
-            os.unlink(stgt)
-            pass
-        return stgt
-    #f get_makefile_target_of_dependency
-    def get_makefile_target_of_dependency(self, repo, r):
+    #f get_makefile_stamp_filename
+    def get_makefile_stamp_filename(self, rd):
         """
-        Get makefile target of a 'requires' or 'satisfies'
+        Get an absolute path to a makefile stamp filename
         """
-        r = r.split(".")
-        r_stage = r[0]
-        r_repo = repo.name
-        if len(r)==2:
-            r_repo = r[0]
-            r_stage = r[1]
-            pass
-        if r_repo is None: return self.get_makefile_target(r_stage)
-        if r_repo=="":  return self.get_makefile_target(r_stage)
-        return self.get_makefile_target(r_stage,r_repo)
+        rd_tgt = rd.target_name()
+        return os.path.join(self.grip_path(self.makefile_stamps_dirname), rd_tgt)
+    #f get_makefile_stamp
+    def get_makefile_stamp(self, rd):
+        """
+        Get makefile stamp of a 'stage', 'requires' or 'satisfies'
+        """
+        return rd.target_name()
+    #f new_makefile_stamp
+    def new_makefile_stamp(self,rd):
+        """
+        Get an absolute path to a makefile stamp filename
+        Clean the file if it exists
+
+        If repo is None then it is a global stage
+        """
+        rd_tgt = self.get_makefile_stamp(rd)
+        rd_tgt_filename = self.get_makefile_stamp_filename(rd)
+        if os.path.exists(rd_tgt_filename): os.unlink(rd_tgt_filename)
+        return (rd_tgt, rd_tgt_filename)
     #f create_grip_makefiles
     def create_grip_makefiles(self):
         """
         Repositories are all ready.
-        Create makefile target directory
+        Create makefile stamp directory
         Create makefile.env and makefile
-        Delete makefile targets
+        Delete makefile stamps
         """
-        self.add_log_string("Cleaning makefile targets directory '%s'"%self.grip_path(self.makefile_targets_dirname))
-        makefile_targets = self.grip_path(self.makefile_targets_dirname)
+        self.add_log_string("Cleaning makefile stamps directory '%s'"%self.grip_path(self.makefile_stamps_dirname))
+        makefile_stamps = self.grip_path(self.makefile_stamps_dirname)
         try:
-            os.mkdir(makefile_targets)
+            os.mkdir(makefile_stamps)
             pass
         except FileExistsError:
             pass
@@ -381,18 +380,16 @@ class GripRepo:
         self.add_log_string("Creating makefile '%s'"%self.grip_path(self.grip_makefile_filename))
         with open(self.grip_path(self.grip_makefile_filename),"w") as f:
             print("-include %s"%(self.grip_path(self.grip_makefile_env_filename)), file=f)
-            stages = self.repo_desc_config.get_stages()
-            for s in stages:
-                self.add_log_string("Adding stage '%s'"%s)
-                stgt = self.new_makefile_target(s)
-                print("\n.PHONY: %s"%(s), file=f)
-                print("%s: %s"%(s, stgt), file=f)
-                print("\n%s:"%(stgt), file=f)
-                print("\ttouch %s"%(stgt), file=f)
+            stages = self.repo_desc_config.get_global_stages()
+            for (sn,s) in stages.items():
+                self.add_log_string("Adding global stage '%s'"%sn)
+                (stgt, stgt_filename) = self.new_makefile_stamp(s)
+                print("\n.PHONY: %s"%(stgt), file=f)
+                print("%s: %s"%(stgt, stgt_filename), file=f)
                 pass
-            def write_to_makefile(repo, stage):
-                stgt = self.get_makefile_target(stage.name)
-                rstgt = self.new_makefile_target(stage.name,repo.name)
+            def write_to_makefile(acc, repo, stage):
+                (rstgt, rstgt_filename) = self.new_makefile_stamp(stage.dependency)
+                self.add_log_string("Adding target '%s'"%rstgt)
                 wd = stage.wd
                 if wd is None: wd = self.git_repo.filename(repo.path)
                 env = ""
@@ -403,24 +400,32 @@ class GripRepo:
                 exec = stage.exec
                 if exec is None: exec=""
                 print("\nGRIP_%s_%s_ENV := %s"%(repo.name, stage.name, env), file=f)
-                print("%s: %s"%(stgt, rstgt), file=f)
-                print("%s:"%(rstgt), file=f)
+                print("\n%s:"%(rstgt), file=f)
+                print("\ttouch %s"%(rstgt_filename), file=f)
+                print("%s:"%(rstgt_filename), file=f)
                 print("\t$(GRIP_%s_%s_ENV) cd %s && (%s)"%(repo.name, stage.name, wd, exec), file=f)
-                print("\ttouch %s"%(rstgt), file=f)
+                print("\ttouch %s"%(rstgt_filename), file=f)
                 if stage.requires is not None:
                     for r in stage.requires:
-                        ostgt = self.get_makefile_target_of_dependency(repo, r)
-                        print("%s: %s"%(rstgt,ostgt), file=f)
+                        self.add_log_string("Dependent on '%s'"%(r.target_name()))
+                        ostgt = self.get_makefile_stamp(r)
+                        print("%s: %s"%(rstgt_filename,ostgt), file=f)
                         pass
                     pass
                 if stage.satisfies is not None:
-                    ostgt = self.get_makefile_target_of_dependency(repo, stage.satisfies)
-                    print("%s: %s"%(ostgt, rstgt), file=f)
+                    self.add_log_string("Global stage '%s' dependends on repo '%s' stage '%s'"%(stage.satisfies.target_name(), repo.name, stage.name))
+                    ostgt_filename = self.get_makefile_stamp_filename(stage.satisfies)
+                    print("%s: %s"%(ostgt_filename, rstgt_filename), file=f)
+                    pass
+                if stage.name in stages:
+                    self.add_log_string("Global stage '%s' dependends on repo '%s'"%(stage.name, repo.name))
+                    stgt_filename = self.get_makefile_stamp_filename(stages[stage.name])
+                    print("%s: %s"%(stgt_filename, rstgt_filename), file=f)
                     pass
                 pass
-            self.repo_desc_config.get_repo_stages(write_to_makefile)
+            self.repo_desc_config.fold_repo_stages(None, write_to_makefile)
             pass
-        # clean out make targets
+        # clean out make stamps
         pass
     #f commit
     def commit(self, options):

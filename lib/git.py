@@ -221,6 +221,7 @@ class GitRepo(object):
         if changeset is not None: git_options.append( "--no-checkout")
         if depth is not None:   git_options.append( "--depth %s"%(depth))
         lib.verbose.info(options, "Git clone from '%s' to '%s' with options %s"%(repo_url, dest, " ".join(git_options)))
+        if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
         try:
             git_output = git_command(options=options,
                                      log=log,
@@ -228,7 +229,7 @@ class GitRepo(object):
                                      stderr_output_indicates_error=False)
             pass
         except lib.oscommand.OSCommandError as e:
-            raise Exception("Failed to perform git clone - %s"%(e.cmd.error_output()))
+            raise UserError("Failed to perform git clone - %s"%(e.cmd.error_output()))
             pass
         try:
             # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
