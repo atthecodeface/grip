@@ -5,6 +5,12 @@
 class Workflow(object):
     name = "Base workflow class - must be subclassed"
     permitted = False
+    #f __init__
+    def __init__(self, grip_repo, git_repo, log):
+        self.grip_repo = grip_repo
+        self.git_repo = git_repo
+        self.log = log
+        pass
     #f install_hooks
     def install_hooks(self):
         """
@@ -12,7 +18,7 @@ class Workflow(object):
         """
         raise Exception("install_hooks not implemented for workflow %s"%self.name)
     #f commit
-    def commit(self, grip_repo, git_repo):
+    def commit(self):
         """
         Commit a git_repo using the workflow
 
@@ -22,12 +28,12 @@ class Workflow(object):
         """
         raise Exception("commit not implemented for workflow %s"%self.name)
     #f fetch
-    def fetch(self, grip_repo, git_repo):
-        output = git_repo.fetch()
+    def fetch(self):
+        output = self.git_repo.fetch()
         if len(output)>0:print(output)
         return True
     #f merge
-    def merge(self, grip_repo, git_repo):
+    def merge(self):
         """
         Merge a git_repo with upstream using the workflow
 
@@ -37,7 +43,7 @@ class Workflow(object):
         """
         raise Exception("merge not implemented for workflow %s"%self.name)
     #f prepush
-    def prepush(self, grip_repo, git_repo):
+    def prepush(self):
         """
         Prepare to push a git_repo upstream using the workflow
         This may be a merge; it may be nothing
@@ -48,7 +54,7 @@ class Workflow(object):
         """
         raise Exception("prepush not implemented for workflow %s"%self.name)
     #f push
-    def push(self, grip_repo, git_repo):
+    def push(self):
         """
         Push a git_repo upstream using the workflow
 

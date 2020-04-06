@@ -3,4 +3,5 @@ __all__ = [
     "commit",
     "fetch",
     "interrogate",
+    "execute",
     ]

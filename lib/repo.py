@@ -20,7 +20,7 @@ class GripSubrepo:
         self.name = repo_desc.name
         self.grip_repo = grip_repo
         self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
-        self.workflow = repo_desc.workflow()
+        self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log)
         pass
     def install_hooks(self):
         pass
@@ -29,7 +29,7 @@ class GripSubrepo:
             s = "Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
             print(s)
-            okay = self.workflow.commit(self.grip_repo, self.git_repo)
+            okay = self.workflow.commit()
             if not okay: raise(Exception("Commit for repo '%s' not permitted"%self.name))
             cs = self.get_cs()
             self.grip_repo.add_log_string("Repo '%s' at commit hash '%s'"%(self.name, cs))
@@ -121,9 +121,15 @@ class GripRepo:
     def add_log_string(self, s):
         if self.log: self.log.add_entry_string(s)
         pass
+    #f path
+    def path(self, filenames=[]):
+        return self.git_repo.filename(filenames)
     #f grip_path
     def grip_path(self, filename):
-        return self.git_repo.filename([self.grip_dir_name, filename])
+        return self.path([self.grip_dir_name, filename])
+    #f grip_makefile_path
+    def grip_makefile_path(self):
+        return self.grip_path(self.grip_makefile_filename)
     #f set_branch_name
     def set_branch_name(self):
         """
@@ -400,8 +406,7 @@ class GripRepo:
                 exec = stage.exec
                 if exec is None: exec=""
                 print("\nGRIP_%s_%s_ENV := %s"%(repo.name, stage.name, env), file=f)
-                print("\n%s:"%(rstgt), file=f)
-                print("\ttouch %s"%(rstgt_filename), file=f)
+                print("\n%s: %s"%(rstgt, rstgt_filename), file=f)
                 print("%s:"%(rstgt_filename), file=f)
                 print("\t$(GRIP_%s_%s_ENV) cd %s && (%s)"%(repo.name, stage.name, wd, exec), file=f)
                 print("\ttouch %s"%(rstgt_filename), file=f)

@@ -1,5 +1,6 @@
 #a Imports
 from .workflow import Workflow
+from .exceptions  import *
 
 #a Classes
 #c Single workflow
@@ -26,12 +27,12 @@ class Single(Workflow):
     name = "single"
     def install_hooks(self):
         raise Exception("install_hooks not implemented for %s"%self.name)
-    def commit(self, grip_repo, git_repo):
-        if not git_repo.is_modified(): return True
-        git_repo.commit()
+    def commit(self):
+        if not self.git_repo.is_modified(): return True
+        self.git_repo.commit()
         return True
-    def merge(self, grip_repo, git_repo):
+    def merge(self):
         return True
-    def push(self, grip_repo, git_repo):
+    def push(self):
         return True
     pass

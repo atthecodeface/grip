@@ -135,43 +135,48 @@ class GitRepo(object):
     def get_path(self):
         return self.path
     #f is_modified
-    def is_modified(self):
+    def is_modified(self, log=None):
         """
         Return True if the git repo is modified since last commit
         """
         git_command(cmd="update-index -q --refresh",
+                    log=log,
                     cwd=self.path)
         output = git_command(cwd=self.path,
+                             log=log,
                              cmd="diff-index --name-only HEAD")
         output = output.strip()
         if len(output.strip()) > 0:
             return True
         output = git_command(cwd=self.path,
+                             log=log,
                              cmd="ls-files -o --exclude-standard")
         output = output.strip()
         if len(output.strip()) > 0:
             return True
         return False
     #f get_cs
-    def get_cs(self):
+    def get_cs(self, log=None):
         """
         Get changeset of the git repo
 
         This is more valuable to the user if git repo is_modified() is false.
         """
         output = git_command(cmd="rev-parse HEAD",
+                             log=log,
                                   cwd=self.path)
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to determine changeset for git repo '%s'"%(self.name))
     #f get_cs_history
-    def get_cs_history(self, branch_name=""):
+    def get_cs_history(self, branch_name="", log=None):
         """
         Get list of changesets of the git repo branch
 
         This is more valuable to the user if git repo is_modified() is false.
         """
         output = git_command(cmd="rev-list %s"%branch_name,
+                             log=log,
                                   cwd=self.path)
         output = output.strip()
         output = output.split("\n")

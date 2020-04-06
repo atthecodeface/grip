@@ -278,7 +278,7 @@ class GitRepoStageDependency:
         else:
             global_stages = grip_config.get_global_stage_names()
             if self.stage_name not in global_stages:
-                raise GripTomlError("%s: not a global stage in configuration '%s'"%(grip_config.get_name()))
+                raise GripTomlError("%s: not a global stage in configuration '%s'"%(self.stage_name, grip_config.get_name()))
             pass
         pass
     #f full_name
@@ -762,7 +762,7 @@ class GripRepoDesc(object):
         self.base_repos = []
         self.doc = None
         self.git_repo = git_repo
-        self.logging = False
+        self.logging = None
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
         default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
