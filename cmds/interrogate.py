@@ -1,6 +1,7 @@
 import os, sys, shlex
 import lib.command
 import lib.repo
+import lib.repodesc
 class root(lib.command.GripCommandBase):
     """
     Find the root of the grip repository
@@ -43,7 +44,11 @@ class doc(lib.command.GripCommandBase):
     command_options = {
     }
     def execute(self, prog, parser, command_name, options, args):
-        self.get_grip_repo(ensure_configured=False)
+        def f(e):
+            print("Warning: %s"%str(e))
+            e.grip_env.get_root().add_values({e.key:""})
+            return ("",)
+        self.get_grip_repo(ensure_configured=False, error_handler=lib.repodesc.GripEnvValueError.error_handler(f))
         grip_repo_doc = self.grip_repo.get_doc()
         if self.grip_repo.is_configured():
             print("This is a configured grip repository, with a name of '%s', using configuration '%s'"%(self.grip_repo.get_name(), self.grip_repo.get_config_name()))

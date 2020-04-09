@@ -12,11 +12,9 @@ publish
 individual paths in fetch, update_upstream, merge
 e.g. grip fetch <cdl>
 
-requires/satisfies to use local and global
+requirements
 
-grip make
-
-satisfies in grip.toml
+pip install toml
 
 """
 import sys, os, re

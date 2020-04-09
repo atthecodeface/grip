@@ -72,7 +72,7 @@ class GripRepo:
             return GripRepo.find_git_repo_of_grip_root(path, log=log)
         return git_repo
     #f __init__
-    def __init__(self, git_repo=None, path=None, ensure_configured=False, invocation=""):
+    def __init__(self, git_repo=None, path=None, ensure_configured=False, invocation="", error_handler=None):
         self.log=Log()
         self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
         self.log.add_entry_string(self.invocation)
@@ -88,23 +88,18 @@ class GripRepo:
         self.repo_desc_config = None
         self.config_state     = None
         self.subrepos         = None
-        self.read_desc_state_config(use_current_config=True)
+        self.read_desc_state_config(use_current_config=True, error_handler=error_handler)
         if ensure_configured:
-            # self.repo_desc.prettyprint("",pp_stdout)
-            # self.repo_state.prettyprint("",pp_stdout)
-            # self.repo_config.prettyprint("",pp_stdout)
             if self.repo_desc_config is None:
                 raise ConfigurationError("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
             if self.config_state is None:
                 raise ConfigurationError("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
             pass
         self.grip_git_url = None
-        # if self.repo_config is not None:   self.grip_git_url = self.repo_config.grip_git_url
         if self.grip_git_url is None:      self.grip_git_url = git_repo.get_git_url()
         if self.grip_git_url is not None: 
             self.repo_desc.resolve_git_urls(self.grip_git_url)
             pass
-        # self.repo_desc.prettyprint("",pp_stdout)        
         pass
     #f log_to_logfile
     def log_to_logfile(self):
@@ -148,7 +143,7 @@ class GripRepo:
             pass
         pass
     #f read_desc_state_config
-    def read_desc_state_config(self, use_current_config=False):
+    def read_desc_state_config(self, use_current_config=False, error_handler=None):
         """
         Read the .grip/grip.toml grip description file, the
         .grip/state.toml grip state file, and any
@@ -160,7 +155,7 @@ class GripRepo:
         then rebuild state and config
         """
         if use_current_config:
-            self.read_desc_state_config(use_current_config=False)
+            self.read_desc_state_config(use_current_config=False, error_handler=error_handler)
             pass
         subrepos = []
         if use_current_config and (self.repo_desc_config is not None):
@@ -168,28 +163,28 @@ class GripRepo:
                 subrepos.append(r)
                 pass
             pass
-        self.read_desc(subrepos=subrepos)
-        self.read_state()
-        self.read_config()
+        self.read_desc(subrepos=subrepos, error_handler=error_handler)
+        self.read_state(error_handler=error_handler)
+        self.read_config(error_handler=error_handler)
         pass
     #f read_desc
-    def read_desc(self, subrepos=[]):
+    def read_desc(self, subrepos=[], error_handler=None):
         self.add_log_string("Reading grip.toml file '%s'"%self.grip_path(self.grip_toml_filename))
         self.repo_desc = GripRepoDesc(git_repo=self.git_repo)
-        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos)
+        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos, error_handler=error_handler)
         if self.repo_desc.is_logging_enabled() and self.log:
             self.log.set_tidy(self.log_to_logfile)
             pass
         self.set_branch_name()
         pass
     #f read_state
-    def read_state(self):
+    def read_state(self, error_handler=None):
         self.add_log_string("Reading state file '%s'"%self.grip_path(self.state_toml_filename))
         self.repo_state = GripRepoState()
         self.repo_state.read_toml_file(self.grip_path(self.state_toml_filename))
         pass
     #f read_config
-    def read_config(self):
+    def read_config(self, error_handler=None):
         self.add_log_string("Reading local configuration state file '%s'"%self.grip_path(self.config_toml_filename))
         self.repo_desc_config = None
         self.config_state = None

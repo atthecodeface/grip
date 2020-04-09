@@ -9,7 +9,33 @@ from .exceptions import *
 #a Useful functions
 def str_keys(d):
     return ", ".join([k for k in d.keys()])
-              
+
+#a Exceptions
+#c GripEnvError - exception used when reading the grip toml file
+class GripEnvError(ConfigurationError):
+    grip_type = "Grip repository environment error"
+    def __init__(self, grip_env, key, reason):
+        s = "Environment error in '%s' for '%s': %s"%(grip_env.full_name(), key, reason)
+        self.grip_env = grip_env
+        self.key =key
+        self.reason = reason
+        GripException.__init__(self,s)
+        pass
+    pass
+class GripEnvValueError(GripEnvError):
+    """
+    Exception that may be handled to return "" if environment is not critical
+    """
+    pass
+
+#c GripTomlError - exception used when reading the grip toml file
+class GripTomlError(ConfigurationError):
+    pass
+
+#c RepoDescError - exception used when a repo description is invalid
+class RepoDescError(ConfigurationError):
+    pass
+
 #a Toml parser classes - description of a .grip/grip.toml file
 #c *..TomlDict subclasses to parse toml file contents
 class EnvTomlDict(TomlDict):
@@ -70,7 +96,7 @@ class GripFileTomlDict(TomlDict):
 #c GripEnv
 class GripEnv:
     #v regular expressions
-    name_match_re = r"""(?P<name>([^%]*))%(?P<rest>.*)$"""
+    name_match_re = r"""(?P<name>([^@]*))@(?P<rest>.*)$"""
     name_match_re = re.compile(name_match_re)
     #f __init__
     def __init__(self, parent=None, name=None, default_values={}):
@@ -79,6 +105,10 @@ class GripEnv:
         self.env = {}
         self.add_values(default_values)
         pass
+    #f get_root
+    def get_root(self):
+        if self.parent is not None: return self.parent.get_root()
+        return self
     #f add_values
     def add_values(self, values_d):
         """
@@ -99,10 +129,10 @@ class GripEnv:
              pass
         pass
     #f resolve
-    def resolve(self):
+    def resolve(self, error_handler=None):
         """
         Resolve the values in the environment where the values include references
-        to other environment variables (with %KEY%)
+        to other environment variables (with @KEY@)
         """
         unresolved_env = list(self.env.keys())
         while unresolved_env != []:
@@ -110,8 +140,7 @@ class GripEnv:
             work_done = False
             while len(unresolved_env)>0:
                 k = unresolved_env.pop(0)
-                v = self.substitute(self.env[k], finalize=False)
-                # print("env.substitute %s %s %s %s"%(self.full_name(),k,self.env[k],v))
+                v = self.substitute(self.env[k], finalize=False, error_handler=error_handler)
                 if v is None:
                     not_done_yet.append(k)
                     pass
@@ -126,11 +155,15 @@ class GripEnv:
                 pass
             if not work_done:
                 k = not_done_yet[0]
-                v = self.substitute(k, self.env[k], finalize=True)
-                raise Exception("Failed to resolve environment '%s' key %s value '%s'"%(self.full_name(),k,self.env[k]))
+                v = self.substitute(k, self.env[k], finalize=True, error_handler=error_handler)
+                GripEnvValueError(self,k,"Circular environment dependency (value '%s')"%(self.env[k])).invoke(error_handler)
+                break
             pass
-        for k in self.env:
-            self.env[k] = self.substitute(self.env[k], finalize=True)
+        # Capture the environment keys to resolve - self.env itself may change in our loop if error handlers add values
+        env_to_resolve = list(self.env.keys())
+        for k in env_to_resolve:
+            self.env[k] = self.substitute(self.env[k], finalize=True, error_handler=error_handler)
+            pass
         pass
     #f full_name
     def full_name(self):
@@ -143,7 +176,7 @@ class GripEnv:
             pass
         return r+self.name
     #f value_of_key
-    def value_of_key(self, k, raise_exception=True, environment_overrides=True):
+    def value_of_key(self, k, raise_exception=True, environment_overrides=True, error_handler=None):
         """
         Find value of a key within the environment
         If environment_overrides is True then first look in os.environ
@@ -160,37 +193,37 @@ class GripEnv:
             pass
         if r is not None: return r
         if not raise_exception: return None
-        raise Exception("Configuration or environment value '%s' is not specified for %s"%(k,self.full_name()))
+        return GripEnvValueError(self,k,"Configuration or environment value not specified").invoke(error_handler)
     #f substitute
-    def substitute(self, s, acc="", finalize=True):
+    def substitute(self, s, acc="", finalize=True, error_handler=None):
         """
-        Find any %ENV_VARIABLE% and replace - check ENV_VARIABLE exists, raise exception if it does not
-        Find any %% and replace
+        Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
+        Find any @@ and replace
 
-        if not finalizing, then leave %% as %%, and don't raise exceptions as another pass should do it
+        if not finalizing, then leave @@ as @@, and don't raise exceptions as another pass should do it
         """
         if s is None: return None
-        n = s.find("%")
+        n = s.find("@")
         if n<0: return acc+s
         if len(s)==n+1:
             if not finalize: return None
-            raise GripTomlError("Unexpected '%' at end of string using environment %s",self.full_name())
+            raise GripTomlError("Unexpected '@' at end of string using environment %s",self.full_name())
         acc = acc + s[:n]
         m = self.name_match_re.match(s,n+1)
         if m is None:
             if not finalize: return None
-            raise GripTomlError("Could not parse '%s' (%d) as a grip environment substitution (%%....%%) using environment %s"%(s, n+1,self.full_name()))
+            return GripEnvError(self, s, "Could not parse (char %d) as a grip environment substitution"%(n+1)).invoke(error_handler)
         k = m.group('name')
         if len(k)==0:
-            v="%%"
-            if finalize: v="%"
+            v="@"*2
+            if finalize: v="@"
             pass
         else:
-            v = self.value_of_key(k, raise_exception=finalize)
+            v = self.value_of_key(k, raise_exception=finalize, error_handler=error_handler)
             if v is None: return None
             pass
         acc = acc + v
-        return self.substitute(m.group('rest'), acc=acc, finalize=finalize)
+        return self.substitute(m.group('rest'), acc=acc, finalize=finalize, error_handler=error_handler)
     #f as_dict
     def as_dict(self, include_parent=False):
         """
@@ -266,19 +299,19 @@ class GitRepoStageDependency:
         self.stage_name = s_stage_name
         pass
     #f validate
-    def validate(self, grip_config, reason):
+    def validate(self, grip_config, reason, error_handler=None):
         if self.repo_name is not None:
             self.repo = grip_config.get_repo(self.repo_name, error_on_not_found=False)
             if self.repo is None:
-                raise GripTomlError("%s: repo not in configuration '%s'"%(reason, grip_config.get_name()))
+                return GripTomlError("%s: repo not in configuration '%s'"%(reason, grip_config.get_name())).invoke(error_handler)
             self.stage = self.repo.get_repo_stage(self.stage_name, error_on_not_found=False)
             if self.stage is None:
-                raise GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, stage_name, repo_name, grip_config.get_name()))
+                return GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, stage_name, repo_name, grip_config.get_name())).invoke(error_handler)
             pass
         else:
             global_stages = grip_config.get_global_stage_names()
             if self.stage_name not in global_stages:
-                raise GripTomlError("%s: not a global stage in configuration '%s'"%(self.stage_name, grip_config.get_name()))
+                return GripTomlError("%s: not a global stage in configuration '%s'"%(self.stage_name, grip_config.get_name())).invoke(error_handler)
             pass
         pass
     #f full_name
@@ -328,7 +361,7 @@ class GitRepoStageDesc(object):
         c.satisfies = self.satisfies
         return c
     #f resolve
-    def resolve(self, env):
+    def resolve(self, env, error_handler=None):
         """
         Resolve any environment substitutions using the repo desc's (within configuration) environment - but not in 'requires'
         This includes resolving the local environment
@@ -337,12 +370,12 @@ class GitRepoStageDesc(object):
                       parent=env)
         env.build_from_values(self.env)
         self.env = env
-        self.env.resolve()
-        self.wd   = env.substitute(self.wd)
-        self.exec = env.substitute(self.exec)
+        self.env.resolve(error_handler=error_handler)
+        self.wd   = env.substitute(self.wd,   error_handler=error_handler)
+        self.exec = env.substitute(self.exec, error_handler=error_handler)
         pass
     #f validate
-    def validate(self, grip_config):
+    def validate(self, grip_config, error_handler=None):
         repo_name = self.git_repo_desc.name
         requires = []
         for r in self.requires:
@@ -353,10 +386,10 @@ class GitRepoStageDesc(object):
             self.satisfies = GitRepoStageDependency(self.satisfies, repo_name=repo_name, must_be_global=False)
             pass
         for r in self.requires:
-            r.validate(grip_config, reason="Repo stage '%s.%s' requires of '%s'"%(repo_name, self.name, r.full_name()))
+            r.validate(grip_config, reason="Repo stage '%s.%s' requires of '%s'"%(repo_name, self.name, r.full_name()), error_handler=error_handler)
             pass
         if self.satisfies:
-            self.satisfies.validate(grip_config, reason="Repo stage '%s.%s' satisfies of '%s'"%(repo_name, self.name, self.satisfies.full_name()))
+            self.satisfies.validate(grip_config, reason="Repo stage '%s.%s' satisfies of '%s'"%(repo_name, self.name, self.satisfies.full_name()), error_handler=error_handler)
             pass
         pass
     #f prettyprint
@@ -506,14 +539,14 @@ class GitRepoDesc(object):
             pass
         return False
     #f validate
-    def validate(self):
+    def validate(self, error_handler=None):
         self.workflow = self.grip_repo_desc.validate_workflow(self.workflow, self.name)
         for (n,s) in self.stages.items():
-            s.validate(self.grip_config)
+            s.validate(self.grip_config, error_handler=error_handler)
             pass
         pass
     #f resolve
-    def resolve(self, env):
+    def resolve(self, env, error_handler=None):
         """
         Resolve the strings in the repo description and its stages, using the repo configuration's environment
         """
@@ -521,9 +554,9 @@ class GitRepoDesc(object):
                       parent=env)
         env.build_from_values(self.env)
         self.env = env
-        self.url    = self.env.substitute(self.url)
-        self.path   = self.env.substitute(self.path)        
-        self.branch = self.env.substitute(self.branch)
+        self.url    = self.env.substitute(self.url,     error_handler=error_handler)
+        self.path   = self.env.substitute(self.path,    error_handler=error_handler)        
+        self.branch = self.env.substitute(self.branch,  error_handler=error_handler)
         try:
             self.git_url = GitRepo.parse_git_url(self.url)
             pass
@@ -533,9 +566,9 @@ class GitRepoDesc(object):
             self.path = self.git_url.repo_name
             pass
         self.env.add_values({"GRIP_REPO_PATH":"%GRIP_ROOT_PATH%/"+self.path})
-        self.env.resolve()
+        self.env.resolve(error_handler=error_handler)
         for (n,s) in self.stages.items():
-            s.resolve(self.env)
+            s.resolve(self.env, error_handler=error_handler)
             pass
         # print("Resolve %s:%s:%s:%s"%(self,self.name,self.url,self.git_url))
         pass
@@ -629,19 +662,19 @@ class GripConfig(object):
             pass
         pass
     #f validate
-    def validate(self):
+    def validate(self, error_handler=None):
         for r in self.iter_repos():
-            r.validate()
+            r.validate(error_handler=error_handler)
             pass
         pass
     #f resolve
-    def resolve(self):
+    def resolve(self, error_handler=None):
         """
         Run through repo descriptions and replace grip environment as required
         """
-        self.env.resolve()
+        self.env.resolve(error_handler=error_handler)
         for r in self.iter_repos():
-            r.resolve(self.env)
+            r.resolve(self.env, error_handler=error_handler)
             pass
         pass
     #f get_env_dict
@@ -711,14 +744,6 @@ class GripConfig(object):
     #f All done
     pass
 
-#c GripTomlError - exception used when reading the grip toml file
-class GripTomlError(ConfigurationError):
-    pass
-
-#c RepoDescError - exception used when a repo description is invalid
-class RepoDescError(ConfigurationError):
-    pass
-
 #c GripRepoDesc - complete description of a grip repo, from the grip toml file
 class GripRepoDesc(object):
     """
@@ -780,7 +805,7 @@ class GripRepoDesc(object):
             raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
         return r
     #f read_toml_string
-    def read_toml_string(self, grip_toml_string, subrepo_toml_strings, filename="<toml_file>"):
+    def read_toml_string(self, grip_toml_string, subrepo_toml_strings, filename="<toml_file>", error_handler=None):
         """
         Create the description and validate it from the grip_toml_string contents
 
@@ -818,11 +843,11 @@ class GripRepoDesc(object):
             pass
         values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
         self.build_from_values(values)
-        self.validate()
-        self.resolve()
+        self.validate(error_handler=error_handler)
+        self.resolve(error_handler=error_handler)
         pass
     #f read_toml_file
-    def read_toml_file(self, grip_toml_filename, subrepos=[]):
+    def read_toml_file(self, grip_toml_filename, subrepos=[], error_handler=None):
         """
         Load the <root_dir>/.grip/grip.toml file
 
@@ -841,22 +866,22 @@ class GripRepoDesc(object):
                     pass
                 pass
             pass
-        self.read_toml_string(toml_string, subrepo_toml_strings, filename=grip_toml_filename)
+        self.read_toml_string(toml_string, subrepo_toml_strings, filename=grip_toml_filename, error_handler=error_handler)
         pass
     #f validate
-    def validate(self):
+    def validate(self, error_handler=None):
         if self.name is None:
             raise RepoDescError("Unnamed repo descriptors are not permitted - the .grip/grip.toml file should have a toplevel 'name' field")
         if self.re_valid_name.match(self.name) is None:
             raise RepoDescError("Names of grip repos must consist only of A-Z, a-z, 0-9 and _ characters (got '%s')"%(self.name))
-        self.env.resolve()
+        self.env.resolve(error_handler=error_handler)
         if self.default_config not in self.configs:
             raise RepoDescError("default_config of '%s' is undefined (defined configs are %s)" % (self.default_config, str_keys(self.configs)))
         if self.workflow is not None:
             self.workflow = self.validate_workflow(self.workflow, "grip repo description")
             pass
         for (n,c) in self.configs.items():
-            c.validate()
+            c.validate(error_handler=error_handler)
             pass
         if self.logging is not None:
             if self.logging not in self.logging_options.keys():
@@ -865,12 +890,12 @@ class GripRepoDesc(object):
             pass
         pass
     #f resolve
-    def resolve(self):
+    def resolve(self, error_handler=None):
         """
         Resolve any values using grip environment variables to config or default values
         """
         for (n,c) in self.configs.items():
-            c.resolve()
+            c.resolve(error_handler=error_handler)
             pass
         pass
     #f validate_workflow
