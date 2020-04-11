@@ -565,7 +565,7 @@ class GitRepoDesc(object):
         if self.path is None:
             self.path = self.git_url.repo_name
             pass
-        self.env.add_values({"GRIP_REPO_PATH":"%GRIP_ROOT_PATH%/"+self.path})
+        self.env.add_values({"GRIP_REPO_PATH":"@GRIP_ROOT_PATH@/"+self.path})
         self.env.resolve(error_handler=error_handler)
         for (n,s) in self.stages.items():
             s.resolve(self.env, error_handler=error_handler)
