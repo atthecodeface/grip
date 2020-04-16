@@ -1,5 +1,6 @@
 #a Imports
 from .workflow import Workflow
+from .git import *
 from .exceptions  import *
 
 #a Classes
@@ -28,8 +29,12 @@ class Single(Workflow):
     def install_hooks(self):
         raise Exception("install_hooks not implemented for %s"%self.name)
     def commit(self):
-        if not self.git_repo.is_modified(): return True
-        self.git_repo.commit()
+        reason = self.git_repo.is_modified(log=self.log)
+        if reason is None: return True
+        if reason.is_of(HowUntrackedFiles) and self.options.get("ignore_untracked",False): return True
+        if reason.is_of(HowFilesModified)  and self.options.get("ignore_unmodified",False): return True
+        self.verbose.info("Repo %s is modified (%s) - attempting a commit"%(self.git_repo.get_name(), reason.get_reason()))
+        self.git_repo.commit(log=self.log)
         return True
     def merge(self):
         return True

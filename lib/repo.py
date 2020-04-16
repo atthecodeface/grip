@@ -6,6 +6,7 @@ from .repostate import GripRepoState
 from .repoconfig import GripRepoConfig
 from .workflows import workflows
 from .log import Log
+from .verbose import Verbose
 from .exceptions import *
 
 def pp_stdout(acc, s, indent=0):
@@ -20,7 +21,7 @@ class GripSubrepo:
         self.name = repo_desc.name
         self.grip_repo = grip_repo
         self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
-        self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log)
+        self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
         pass
     def install_hooks(self):
         pass
@@ -72,8 +73,10 @@ class GripRepo:
             return GripRepo.find_git_repo_of_grip_root(path, log=log)
         return git_repo
     #f __init__
-    def __init__(self, git_repo=None, path=None, ensure_configured=False, invocation="", error_handler=None):
+    def __init__(self, git_repo=None, path=None, options=None, ensure_configured=False, invocation="", error_handler=None):
         self.log=Log()
+        self.options=options
+        self.verbose=options.verbose
         self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
         self.log.add_entry_string(self.invocation)
         if git_repo is None:
@@ -271,6 +274,11 @@ class GripRepo:
     def reconfigure(self, options):
         if self.repo_desc_config is None:
             raise Exception("Grip repository is not properly configured - cannot reconfigure unless it has been")
+        self.create_subrepos()
+        for r in self.repo_desc_config.iter_repos():
+            r_state = self.config_state.get_repo_state(self.repo_desc_config, r.name)
+        self.update_state()
+        self.write_state()
         self.update_config()
         self.write_config()
         self.grip_env_write()

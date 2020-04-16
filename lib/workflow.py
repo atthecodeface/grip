@@ -6,10 +6,12 @@ class Workflow(object):
     name = "Base workflow class - must be subclassed"
     permitted = False
     #f __init__
-    def __init__(self, grip_repo, git_repo, log):
+    def __init__(self, grip_repo, git_repo, log, verbose):
         self.grip_repo = grip_repo
         self.git_repo = git_repo
+        self.options = self.grip_repo.options
         self.log = log
+        self.verbose = verbose
         pass
     #f install_hooks
     def install_hooks(self):

@@ -57,6 +57,19 @@ class GitUrl:
         return "host %s user %s port %s path %s"%(self.host, self.user, self.port, self.path)
     pass
 
+#a Git reasons
+class GitReason(Exception):
+    reason = "<unknown reason>"
+    def get_reason(self): return self.reason
+    def is_of(self, cls): return isinstance(self,cls)
+    pass
+class HowUntrackedFiles(GitReason):
+    reason = "untracked files"
+    pass
+class HowFilesModified(GitReason):
+    reason = "modified files"
+    pass
+
 #a GitRepo class
 class GitRepo(object):
     """
@@ -137,7 +150,8 @@ class GitRepo(object):
     #f is_modified
     def is_modified(self, log=None):
         """
-        Return True if the git repo is modified since last commit
+        Return None if the git repo is unmodified since last commit
+        Return <how> if the git repo is modified since last commit
         """
         git_command(cmd="update-index -q --refresh",
                     log=log,
@@ -147,14 +161,14 @@ class GitRepo(object):
                              cmd="diff-index --name-only HEAD")
         output = output.strip()
         if len(output.strip()) > 0:
-            return True
+            return HowFilesModified(output)
         output = git_command(cwd=self.path,
                              log=log,
                              cmd="ls-files -o --exclude-standard")
         output = output.strip()
         if len(output.strip()) > 0:
-            return True
-        return False
+            return HowUntrackedFiles(output)
+        return None
     #f get_cs
     def get_cs(self, log=None):
         """

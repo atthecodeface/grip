@@ -6,9 +6,37 @@ import lib.utils
 import lib.oscommand
 from .hookable import Hookable
 from .exceptions import *
+from .verbose import Verbose
 from .repo import GripRepo
 
 #a Classes
+#c Options
+class UnknownOption(Exception):pass
+class Options(object):
+    verbose = False
+    help = False
+    show_log = False
+    quiet = False
+    def __init__(self):
+        pass
+    def has(self, n):
+        return hasattr(self,n)
+    def get(self, n, default=UnknownOption):
+        if self.has(n): return getattr(self,n)
+        if default is UnknownOption: raise UnknownOption("Option %s unknown"%n)
+        return default
+    def _validate(self):
+        if type(self.verbose)==bool:
+            verbose = Verbose()
+            if self.verbose:     verbose.set_level(Verbose.level_verbose)
+            if not self.verbose: verbose.set_level(Verbose.level_error)
+            self.verbose = verbose
+            pass
+        elif type(self.verbose)==int:
+            self.verbose = Verbose(level=self.verbose)
+            pass
+        pass
+    
 #c GripCommandBase
 class GripCommandBase(Hookable):
     """
@@ -18,10 +46,10 @@ class GripCommandBase(Hookable):
     """
     #v Class properties
     names = []
-    base_options = {("-h", "--help")   :{"action":"store_true", "dest":"help",    "default":False, "help":"show the list of commands and options", },
-                    ("-v", "--verbose"):{"action":"store_true", "dest":"verbose", "default":False},
+    base_options = {("-h", "--help")   :{"action":"store_true", "dest":"help",     "default":False, "help":"show the list of commands and options", },
+                    ("-v", "--verbose"):{"action":"store_true", "dest":"verbose",  "default":False},
                     ("--show-log",)    :{"action":"store_true", "dest":"show_log", "default":False},
-                    ("-Q", "--quiet")  :{"action":"store_true", "dest":"quiet",   "default":False},
+                    ("-Q", "--quiet")  :{"action":"store_true", "dest":"quiet",    "default":False},
                     }
     command_options = {}
 
@@ -53,12 +81,13 @@ class GripCommandBase(Hookable):
             pass
         self.loggers = []
         self.invocation = prog+" "+command_name+(" ".join(args))
+        self.options = options
         pass
     
     #f parser_add_options
     def parser_add_options(self, parser, option_dict):
         """
-        Invokes by a parse_command to add additional parser arguments base on an options dictionary
+        Invoked by a parse_command to add additional parser arguments base on an options dictionary
         """
         for (options, opt_args) in option_dict.items():
             if len(options)==2:
@@ -72,6 +101,15 @@ class GripCommandBase(Hookable):
 
     #f parse_command
     def parse_command(self, prog, parser, command_name, options, args):
+        """
+        Invoked for toplevel 'grip ...', and for subcommands
+
+        For toplevel, parser=command_name=options=None
+        For subcommands these come from the parent parser
+        """
+        if options is None:
+            options = Options()
+            pass
         if parser is None:
             parser = argparse.ArgumentParser(prog=prog, add_help=False) # add_help=False as parent has -h
             self.parser_add_options(parser, self.base_options)
@@ -83,6 +121,7 @@ class GripCommandBase(Hookable):
         cmd_parser = argparse.ArgumentParser(prog=prog, parents=[parser], add_help=False)
         self.parser_add_options(cmd_parser, self.command_options)
         options = cmd_parser.parse_args(args, namespace=options)
+        options._validate()
         self.invoke_hooks("command_options", prog=prog, parser=cmd_parser, command_name=command_name, options=options, args=args)
         return (prog, parser, options, lib.utils.options_value(options,"args",default=[]))
 
@@ -94,7 +133,7 @@ class GripCommandBase(Hookable):
 
     #f get_grip_repo
     def get_grip_repo(self, **kwargs):
-        self.grip_repo = GripRepo(invocation=self.invocation, **kwargs)
+        self.grip_repo = GripRepo(invocation=self.invocation, options=self.options, **kwargs)
         self.add_logger(self.grip_repo.log)
         pass
     
