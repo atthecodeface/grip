@@ -29,15 +29,34 @@ class Single(Workflow):
     def install_hooks(self):
         raise Exception("install_hooks not implemented for %s"%self.name)
     def commit(self):
-        reason = self.git_repo.is_modified(log=self.log)
-        if reason is None: return True
-        if reason.is_of(HowUntrackedFiles) and self.options.get("ignore_untracked",False): return True
-        if reason.is_of(HowFilesModified)  and self.options.get("ignore_unmodified",False): return True
-        self.verbose.info("Repo %s is modified (%s) - attempting a commit"%(self.git_repo.get_name(), reason.get_reason()))
-        self.git_repo.commit(log=self.log)
+        reason = self.git_repo.is_modified(self.options, log=self.log)
+        if reason is not None:
+            self.verbose.info("Repo %s is modified (%s) - attempting a commit"%(self.git_repo.get_name(), reason.get_reason()))
+            self.git_repo.commit(log=self.log)
+            pass
+        return self.check_git_repo_is_upstreamed()
+    def merge(self, force=False):
+        reason = self.git_repo.is_modified(self.options, log=self.log)
+        if reason is not None:
+            raise WorkflowError("Git repo '%s' is modified (%s)"%(self.git_repo.get_name(), reason.get_reason()))
+        reason = self.git_repo.rebase(self.options, other_branch="upstream", log=self.log)
+        if reason is not None:
+            raise WorkflowError("Git repo '%s' failed to merge (%s)"%(self.git_repo.get_name(), reason.get_reason()))
         return True
-    def merge(self):
+    def prepush(self):
+        """
+        Before a branch can be pushed it must be a descendant of upstream
+        Hence upstream hash must be an ancestor of WIP.
+
+        Then a git push --dry-run can be performed - if that is okay, we are set
+        """
+        self.check_git_repo_is_descendant()
+        self.git_repo.push(dry_run=True, log=self.log, repo=self.git_repo.upstream_origin, ref="HEAD:%s"%(self.git_repo.upstream_push_branch))
         return True
     def push(self):
+        """
+        prepush MUST have been run recently
+        """
+        self.git_repo.push(dry_run=False, log=self.log, repo=self.git_repo.upstream_origin, ref="HEAD:%s"%(self.git_repo.upstream_push_branch))
         return True
     pass

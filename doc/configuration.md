@@ -104,7 +104,8 @@ configuration descriptions or repository descriptions.
 The grip global environment has some implicit variables:
 
 * GRIP_ROOT_PATH - the absolute path of the grip repository
-* GRIP_ROOT_URL - the upstream URL that the grip repository was
+* GRIP_ROOT_DIR  - the last directory element of the path of the grip repository
+* GRIP_ROOT_URL  - the upstream URL that the grip repository was
   fetched from
 
 The global environment is part of the environment exported in .grip/local.env.sh.
@@ -226,6 +227,11 @@ repository stage descriptions.
 Because the environment is a global namespace, repository-specific
 environment files should be named appropriately.
 
+The grip repository-local environment has some implicit variables:
+
+* GRIP_REPO_PATH  - the absolute path of the git repository - this
+  will be a subdirectory of GRIP_ROOT_PATH
+
 The environment is part of the environment exported in .grip/local.env.sh.
 
 ## workflow - string
@@ -299,11 +305,11 @@ provide a dictionary of such values, e.g.:
 
 ```
 [repo.binutils.configure]
-env = {BUILD_DIR="%GRIP_ROOT_PATH%/build/binutils"}
+env = {BUILD_DIR="@GRIP_ROOT_PATH@/build/binutils"}
 exec = """ \
 mkdir -p ${BUILD_DIR} &&  \
 cd ${BUILD_DIR} &&        \
-%GRIP_REPO_PATH%/configure --prefix=%RISCV_TOOLS_DIR% --target=riscv64-unknown-elf \
+@GRIP_REPO_PATH@/configure --prefix=%RISCV_TOOLS_DIR% --target=riscv64-unknown-elf \
 """
 ```
 
@@ -339,7 +345,7 @@ env = {BINUTILS_BUILD_DIR="%GRIP_ROOT_PATH%/build/binutils"}
 exec = """ \
 mkdir -p ${BINUTILS_BUILD_DIR} &&  \
 cd ${BINUTILS_BUILD_DIR} &&        \
-%GRIP_REPO_PATH%/configure --prefix=%RISCV_TOOLS_DIR% --target=riscv64-unknown-elf \
+@GRIP_REPO_PATH@/configure --prefix=%RISCV_TOOLS_DIR% --target=riscv64-unknown-elf \
 """
 
 [repo.binutils.install]

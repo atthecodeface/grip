@@ -63,6 +63,9 @@ class GitReason(Exception):
     def get_reason(self): return self.reason
     def is_of(self, cls): return isinstance(self,cls)
     pass
+class HowUnknownBranch(GitReason):
+    reason = "untracked files"
+    pass
 class HowUntrackedFiles(GitReason):
     reason = "untracked files"
     pass
@@ -134,6 +137,16 @@ class GitRepo(object):
                 pass
             pass
         self.git_url = git_url
+        try:
+            self.upstream_origin = self.get_config(["branch","upstream","remote"])
+        except:
+            self.upstream_origin = None
+            pass
+        try:
+            self.upstream_push_branch = self.get_config(["branch","upstream","merge"])
+        except:
+            self.upstream_branch = None
+            pass
         pass
     #f get_name
     def get_name(self):
@@ -147,8 +160,16 @@ class GitRepo(object):
     #f get_path
     def get_path(self):
         return self.path
+    #f get_config
+    def get_config(self, config_path, log=None):
+        config=".".join(config_path)
+        output = git_command(cmd="config --get %s"%config,
+                             log=log,
+                             cwd=self.path)
+        output=output.strip()
+        return output
     #f is_modified
-    def is_modified(self, log=None):
+    def is_modified(self, options, log=None):
         """
         Return None if the git repo is unmodified since last commit
         Return <how> if the git repo is modified since last commit
@@ -156,32 +177,39 @@ class GitRepo(object):
         git_command(cmd="update-index -q --refresh",
                     log=log,
                     cwd=self.path)
-        output = git_command(cwd=self.path,
-                             log=log,
-                             cmd="diff-index --name-only HEAD")
-        output = output.strip()
-        if len(output.strip()) > 0:
-            return HowFilesModified(output)
-        output = git_command(cwd=self.path,
-                             log=log,
-                             cmd="ls-files -o --exclude-standard")
-        output = output.strip()
-        if len(output.strip()) > 0:
-            return HowUntrackedFiles(output)
+
+        if (options is None) or (not options.get("ignore_unmodified",False)):
+            output = git_command(cwd=self.path,
+                                 log=log,
+                                 cmd="diff-index --name-only HEAD")
+            output = output.strip()
+            if len(output.strip()) > 0:
+                return HowFilesModified(output)
+            pass
+
+        if (options is None) or (not options.get("ignore_untracked",False)):
+            output = git_command(cwd=self.path,
+                                 log=log,
+                                 cmd="ls-files -o --exclude-standard")
+            output = output.strip()
+            if len(output.strip()) > 0:
+                return HowUntrackedFiles(output)
+            pass
         return None
     #f get_cs
-    def get_cs(self, log=None):
+    def get_cs(self, branch_name=None, log=None):
         """
         Get changeset of the git repo
 
         This is more valuable to the user if git repo is_modified() is false.
         """
-        output = git_command(cmd="rev-parse HEAD",
+        if branch_name is None: branch_name="HEAD"
+        output = git_command(cmd="rev-parse '%s'"%branch_name,
                              log=log,
-                                  cwd=self.path)
+                             cwd=self.path)
         output = output.strip()
         if len(output.strip()) > 0: return output
-        raise Exception("Failed to determine changeset for git repo '%s'"%(self.name))
+        raise Exception("Failed to determine changeset for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
     #f get_cs_history
     def get_cs_history(self, branch_name="", log=None):
         """
@@ -189,24 +217,65 @@ class GitRepo(object):
 
         This is more valuable to the user if git repo is_modified() is false.
         """
-        output = git_command(cmd="rev-list %s"%branch_name,
-                             log=log,
-                                  cwd=self.path)
+        try:
+            output = git_command(cmd="rev-list '%s'"%branch_name,
+                                 log=log,
+                                 cwd=self.path)
+            pass
+        except:
+            raise HowUnknownBranch("Failed to determine changeset history of '%s' branch for git repo '%s' - is this a properly configured git repo"%(branch_name, self.get_name()))
         output = output.strip()
         output = output.split("\n")
         if len(output) > 0: return output
-        raise Exception("Failed to determine changeset history for git repo '%s'"%(self.name))
+        raise HowUnknownBranch("No CS histoty returned for '%s' branch for git repo '%s' - is this a properly configured git repo"%(branch_name, self.get_name()))
     #f fetch
-    def fetch(self):
+    def fetch(self, log=None):
         """
         Fetch changes from upstream
         """
         output = git_command(cmd="fetch",
                              cwd=self.path,
+                             log=log,
                              stderr_output_indicates_error=False
         )
         output = output.strip()
         return(output)
+    #f rebase
+    def rebase(self, options, other_branch, log):
+        """
+        Rebase branch with other_branch
+        """
+        cmd_options = ""
+        if options.get("interactive",False): cmd_options+=" --interactive"
+        try:
+            output = git_command(cmd="rebase %s %s"%(cmd_options,other_branch),
+                                 cwd=self.path,
+                                 log=log,
+                                 stderr_output_indicates_error=False
+            )
+            output = output.strip()
+            pass
+        except e:
+            raise GitReason("rebase failed : %s"%(str(e)))
+        return None
+    #f push
+    def push(self, repo, ref, dry_run=True, log=None ):
+        """
+        Push to 'repo ref', with optional dry_run
+        """
+        cmd_options = ""
+        if dry_run: cmd_options+=" --dry-run"
+        try:
+            output = git_command(cmd="push %s '%s' '%s'"%(cmd_options,repo,ref),
+                                 cwd=self.path,
+                                 log=log,
+                                 stderr_output_indicates_error=False
+            )
+            output = output.strip()
+            pass
+        except e:
+            raise GitReason("push failed : %s"%(str(e)))
+        return None
     #f checkout_cs
     def checkout_cs(self, options, changeset):
         """

@@ -36,6 +36,10 @@ class Options(object):
             self.verbose = Verbose(level=self.verbose)
             pass
         pass
+    def dump(self):
+        for k in dir(self):
+            print(k,self.get(k))
+            pass
     
 #c GripCommandBase
 class GripCommandBase(Hookable):
@@ -190,7 +194,7 @@ class GripCommandBase(Hookable):
             command.tidy_logs()
             print("%s error: %s" % (e.grip_type, str(e)), file=sys.stderr)
             if command is not None:
-                command.show_logs(sys.stderr)
+                if (command.options.get("show_log",False)): command.show_logs(sys.stderr)
                 pass
             sys.exit(4)
         except lib.oscommand.OSCommand.Error as e:

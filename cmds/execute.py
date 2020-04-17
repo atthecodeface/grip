@@ -34,6 +34,7 @@ class shell(lib.command.GripCommandBase):
         for (k,v) in self.grip_repo.grip_env_iter():
             env[k] = v
             pass
+        env["GRIP_SHELL"] = options.shell
         args = [options.shell]
         args.extend(options.args)
         os.execvpe(options.shell, args, env)

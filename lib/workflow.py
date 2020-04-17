@@ -1,4 +1,5 @@
 #a Imports
+from .git import *
 
 #a Classes
 #c Workflow - base class for workflows
@@ -65,6 +66,31 @@ class Workflow(object):
         If True is returned then git_repo.get_cs() will return a CS that can be used for the grip state.
         """
         raise Exception("push not implemented for workflow %s"%self.name)
+    #f check_git_repo_is_descendant
+    def check_git_repo_is_descendant(self):
+        cs_history = self.git_repo.get_cs_history(branch_name=self.grip_repo.branch_name, log=self.log)
+        try:
+            cs = self.git_repo.get_cs(branch_name="upstream")
+        except HowUnknownBranch as e:
+            raise WorkflowError("%s"%str(e))
+        if cs not in cs_history:
+            raise WorkflowError("%s git repo '%s' is not a descendant of upstream which is at cs '%s' - have they been merged?"%(self.name, self.git_repo.get_name(), cs))
+        self.verbose.verbose("%s repo '%s' is a descendant of 'upstream' branch (at cs %s)"%(self.name, self.git_repo.get_name(), cs))
+        return True
+    #f check_git_repo_is_upstreamed
+    def check_git_repo_is_upstreamed(self):
+        # Would like to test that the CS is in the remote/branch, but that is not possible
+        # We can check that it is in local branch upstream
+        cs = self.git_repo.get_cs()
+        try:
+            cs_history = self.git_repo.get_cs_history(branch_name="upstream", log=self.log)
+        except HowUnknownBranch as e:
+            raise WorkflowError("%s"%str(e))
+        if cs not in cs_history:
+            raise WorkflowError("%s git repo '%s' is at cs '%s' but that is not a changeset that is in the 'upstream' branch; perhaps pulling the upstream branch from upstream remote would help? The *must* be an ancestor of the remote branch head. If this repo really is a shiny new one to be pushed then do so, refresh the upstream branch locally, and retry the grip commit."%(self.name, self.git_repo.get_name(), cs))
+        self.verbose.verbose("%s repo '%s' at cs %s - which is an ancestor of 'upstream' branch"%(self.name, self.git_repo.get_name(), cs))
+        return True
+    #f get_subclasses
     @classmethod
     def get_subclasses(cls, so_far=set()):
         for subclass in cls.__subclasses__():

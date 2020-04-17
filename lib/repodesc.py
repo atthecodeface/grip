@@ -793,6 +793,7 @@ class GripRepoDesc(object):
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
         default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
+        default_env["GRIP_ROOT_DIR"]  = os.path.basename(git_repo.get_path())
         self.env = GripEnv(name='grip.toml', default_values=default_env)
         pass
     #f toml_loads

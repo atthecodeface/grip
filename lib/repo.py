@@ -42,8 +42,42 @@ class GripSubrepo:
         try:
             s = "Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
-            print(s)
+            self.grip_repo.verbose.info(s)
+            okay = self.workflow.fetch()
             if not okay: raise(Exception("Fetch for repo '%s' not permitted"%self.name))
+            pass
+        except Exception as e:
+            raise(e)
+        pass
+    def merge(self, force=False):
+        try:
+            s = "Merging repo '%s' with workflow '%s' (force %s)"%(self.name, self.workflow.name, str(force))
+            self.grip_repo.add_log_string(s)
+            self.grip_repo.verbose.info(s)
+            okay = self.workflow.merge(force=force)
+            if not okay: raise(Exception("Merge for repo '%s' failed"%self.name))
+            pass
+        except Exception as e:
+            raise(e)
+        pass
+    def prepush(self):
+        try:
+            s = "Prepushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
+            self.grip_repo.add_log_string(s)
+            self.grip_repo.verbose.info(s)
+            okay = self.workflow.prepush()
+            if not okay: raise(Exception("Prepush for repo '%s' failed"%self.name))
+            pass
+        except Exception as e:
+            raise(e)
+        pass
+    def push(self):
+        try:
+            s = "Pushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
+            self.grip_repo.add_log_string(s)
+            self.grip_repo.verbose.info(s)
+            okay = self.workflow.push()
+            if not okay: raise(Exception("Push for repo '%s' failed"%self.name))
             pass
         except Exception as e:
             raise(e)
@@ -393,8 +427,9 @@ class GripRepo:
             for (sn,s) in stages.items():
                 self.add_log_string("Adding global stage '%s'"%sn)
                 (stgt, stgt_filename) = self.new_makefile_stamp(s)
-                print("\n.PHONY: %s"%(stgt), file=f)
+                print("\n.PHONY: %s revoke.%s"%(stgt, stgt), file=f)
                 print("%s: %s"%(stgt, stgt_filename), file=f)
+                print("revoke.%s:\n\trm -f %s"%(stgt, stgt_filename), file=f)
                 pass
             def write_to_makefile(acc, repo, stage):
                 (rstgt, rstgt_filename) = self.new_makefile_stamp(stage.dependency)
@@ -409,14 +444,16 @@ class GripRepo:
                 exec = stage.exec
                 if exec is None: exec=""
                 print("\nGRIP_%s_%s_ENV := %s"%(repo.name, stage.name, env), file=f)
-                print("\n%s: %s"%(rstgt, rstgt_filename), file=f)
+                print("\n.PHONY: %s revoke.%s"%(rstgt, rstgt), file=f)
+                print("%s: %s"%(rstgt, rstgt_filename), file=f)
+                print("revoke.%s:\n\trm -f %s"%(rstgt, rstgt_filename), file=f)
                 print("%s:"%(rstgt_filename), file=f)
                 print("\t$(GRIP_%s_%s_ENV) cd %s && (%s)"%(repo.name, stage.name, wd, exec), file=f)
                 print("\ttouch %s"%(rstgt_filename), file=f)
                 if stage.requires is not None:
                     for r in stage.requires:
                         self.add_log_string("Dependent on '%s'"%(r.target_name()))
-                        ostgt = self.get_makefile_stamp(r)
+                        ostgt = self.get_makefile_stamp_filename(r)
                         print("%s: %s"%(rstgt_filename,ostgt), file=f)
                         pass
                     pass
@@ -436,7 +473,7 @@ class GripRepo:
         # clean out make stamps
         pass
     #f commit
-    def commit(self, options):
+    def commit(self):
         self.create_subrepos()
         for r in self.subrepos:
             r.commit()
@@ -454,6 +491,35 @@ class GripRepo:
             r.fetch()
             pass
         print("All subrepos fetched")
+        pass
+    #f merge
+    def merge(self):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.merge()
+            pass
+        print("All subrepos merged")
+        self.update_state()
+        self.write_state()
+        print("Updated state")
+        print("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
+        pass
+    #f publish
+    def publish(self, prepush_only=False):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.prepush()
+            pass
+        print("All subrepos prepushed")
+        if prepush_only: return
+        for r in self.subrepos:
+            r.push()
+            pass
+        print("All subrepos pushed")
+        self.update_state()
+        self.write_state()
+        print("Updated state")
+        print("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
         pass
     #f get_root
     def get_root(self):
