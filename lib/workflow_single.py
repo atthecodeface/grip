@@ -56,7 +56,9 @@ class Single(Workflow):
     def push(self):
         """
         prepush MUST have been run recently
+        If the push succeeds, then upstream must be at head
         """
         self.git_repo.push(dry_run=False, log=self.log, repo=self.git_repo.upstream_origin, ref="HEAD:%s"%(self.git_repo.upstream_push_branch))
+        self.git_repo.change_branch_ref(log=self.log, branch_name="upstream", ref=self.grip_repo.branch_name)
         return True
     pass
