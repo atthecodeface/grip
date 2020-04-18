@@ -211,8 +211,9 @@ class GripEnv:
         acc = acc + s[:n]
         m = self.name_match_re.match(s,n+1)
         if m is None:
+            return acc+s[n:]
             if not finalize: return None
-            return GripEnvError(self, s, "Could not parse (char %d) as a grip environment substitution"%(n+1)).invoke(error_handler)
+            return GripEnvError(self, s, "Could not parse (char %d) of %s as a grip environment substitution"%(n+1,s)).invoke(error_handler)
         k = m.group('name')
         if len(k)==0:
             v="@"*2

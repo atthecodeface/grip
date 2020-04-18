@@ -335,7 +335,7 @@ class GripRepo:
         for r in self.repo_desc_config.iter_repos():
             r_state = self.config_state.get_repo_state(self.repo_desc_config, r.name)
             dest = self.git_repo.filename([r.path])
-            print("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))
+            self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))
             depth = None
             if r.is_shallow(): depth=1
             r.git_repo = GitRepo.clone(options,

@@ -308,7 +308,6 @@ class GitRepo(object):
         if (bare is not None) and bare: git_options.append( "--bare")
         if changeset is not None: git_options.append( "--no-checkout")
         if depth is not None:   git_options.append( "--depth %s"%(depth))
-        lib.verbose.info(options, "Git clone from '%s' to '%s' with options %s"%(repo_url, dest, " ".join(git_options)))
         if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
         try:
             git_output = git_command(options=options,

@@ -43,7 +43,7 @@ class OSCommand:
         pass
     #f start_process
     def start_process(self):
-        info(self.options, "Executing command \"%s\":" % self.cmd)
+        # info(self.options, "Executing command \"%s\":" % self.cmd)
         if self.log: self.log.add_entry(self.log_start)
         self.process = subprocess.Popen(args=self.cmd,
                                         shell=True, # So that args is a string not a list
@@ -85,7 +85,7 @@ class OSCommand:
         self.stderr = self.stderr.decode()
         self.rc                    = self.process.wait()
         if self.log: self.log.add_entry(self.log_result)
-        info(self.options, self.string_command_result())
+        # info(self.options, self.string_command_result())
         pass
     #f result
     def result(self):
