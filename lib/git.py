@@ -145,7 +145,7 @@ class GitRepo(object):
         try:
             self.upstream_push_branch = self.get_config(["branch","upstream","merge"])
         except:
-            self.upstream_branch = None
+            self.upstream_push_branch = None
             pass
         pass
     #f get_name
@@ -210,6 +210,18 @@ class GitRepo(object):
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to determine changeset for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
+    #f change_branch_ref
+    def change_branch_ref(self, branch_name, ref, log=None):
+        """
+        Change a branch to point to a specific reference
+
+        Used, for example, to make upstream point to a newly fetched head
+        """
+        output = git_command(cmd="branch -f '%s' '%s'"%(branch_name, ref),
+                             log=log,
+                             cwd=self.path)
+        output = output.strip()
+        return output
     #f get_cs_history
     def get_cs_history(self, branch_name="", log=None):
         """

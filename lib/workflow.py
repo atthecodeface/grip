@@ -32,8 +32,13 @@ class Workflow(object):
         raise Exception("commit not implemented for workflow %s"%self.name)
     #f fetch
     def fetch(self):
-        output = self.git_repo.fetch()
+        self.verbose.verbose("Fetching repo '%s' in workflow %s"%(self.git_repo.get_name(), self.name))
+        output = self.git_repo.fetch(log=self.log)
         if len(output)>0:print(output)
+        current_cs = self.git_repo.get_cs(branch_name="upstream")
+        fetched_cs = self.git_repo.get_cs(branch_name="upstream@{upstream}")
+        self.git_repo.change_branch_ref(log=self.log, branch_name="upstream", ref=fetched_cs)
+        self.verbose.verbose("Upstream branch of repo '%s' now at %s (was at %s)"%(self.git_repo.get_name(), fetched_cs, current_cs))
         return True
     #f merge
     def merge(self):
