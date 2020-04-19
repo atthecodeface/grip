@@ -4,6 +4,17 @@ def info(options, msg):
     if options.verbose: print(msg)
     pass
 
+class TermColors:
+    plain      = "\033[0m"
+    bold       = "\033[1m"
+    underline  = "\033[4m"
+    red        = "\033[91m"
+    green      = "\033[92m"
+    yellow     = "\033[93m"
+    blue       = "\033[94m"
+    magenta    = "\033[95m"
+    cyan       = "\033[96m"
+    
 class Verbose:
     level_verbose = 0
     level_info = 1
@@ -11,15 +22,24 @@ class Verbose:
     level_warning = 3
     level_error = 4
     level_fatal = 5
-    def __init__(self, level=1, file=sys.stdout):
+    colors = {level_verbose :TermColors.plain,
+              level_info    :TermColors.cyan,
+              level_message :TermColors.green,
+              level_warning :TermColors.yellow,
+              level_error   :TermColors.red,
+              level_fatal   :(TermColors.bold + TermColors.red),
+              }
+    def __init__(self, level=1, file=sys.stdout, use_color=True):
         self.level = level
         self.file = file
+        self.use_color = use_color
         pass
     def set_level(self, level):
         self.level = level
         pass
     def write(self, level, s):
         if self.level>level: return
+        if self.use_color: s = self.colors[level] + s + TermColors.plain
         print(s, file=self.file)
         return
     def is_verbose(self): return self.level<=self.level_verbose

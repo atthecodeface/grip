@@ -37,10 +37,10 @@ class Single(Workflow):
                 self.verbose.message("%s matches 'upstream' (%s)"%(repo_string, cs))
                 pass
             elif cmp>0:
-                self.verbose.message("%s is unmodified and a descendant of 'upstream' - so pushable"%(repo_string))
+                self.verbose.info("%s is unmodified (%s) but a descendant of 'upstream' (%s) - so pushable"%(repo_string, cs, cs_upstream))
                 pass
             else:
-                self.verbose.message("%s is unmodified and an ancestor of 'upstream' - so needs a merge"%(repo_string))
+                self.verbose.warning("%s is unmodified (%s) but an ancestor of 'upstream' (%s) - so needs a merge"%(repo_string, cs, cs_upstream))
                 pass
             return
         self.verbose.message("%s has %s"%(repo_string, reason.get_reason()))
