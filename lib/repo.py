@@ -17,19 +17,33 @@ def pp_stdout(acc, s, indent=0):
 #c GripSubrepo class
 class GripSubrepo:
     ws = workflows()
+    #f __init__
     def __init__(self, grip_repo, repo_desc):
         self.name = repo_desc.name
         self.grip_repo = grip_repo
         self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
         self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
         pass
+    #f install_hooks
     def install_hooks(self):
         pass
+    #f status
+    def status(self):
+        try:
+            s = "Getting status of repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
+            self.grip_repo.add_log_string(s)
+            # self.grip_repo.verbose.info(s)
+            self.workflow.status()
+            pass
+        except Exception as e:
+            raise(e)
+        pass
+    #f commit
     def commit(self):
         try:
             s = "Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
-            print(s)
+            self.grip_repo.verbose.message(s)
             okay = self.workflow.commit()
             if not okay: raise(Exception("Commit for repo '%s' not permitted"%self.name))
             cs = self.get_cs()
@@ -38,6 +52,7 @@ class GripSubrepo:
         except Exception as e:
             raise(e)
         pass
+    #f fetch
     def fetch(self):
         try:
             s = "Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
@@ -49,6 +64,7 @@ class GripSubrepo:
         except Exception as e:
             raise(e)
         pass
+    #f merge
     def merge(self, force=False):
         try:
             s = "Merging repo '%s' with workflow '%s' (force %s)"%(self.name, self.workflow.name, str(force))
@@ -60,6 +76,7 @@ class GripSubrepo:
         except Exception as e:
             raise(e)
         pass
+    #f prepush
     def prepush(self):
         try:
             s = "Prepushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
@@ -71,6 +88,7 @@ class GripSubrepo:
         except Exception as e:
             raise(e)
         pass
+    #f push
     def push(self):
         try:
             s = "Pushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
@@ -82,9 +100,12 @@ class GripSubrepo:
         except Exception as e:
             raise(e)
         pass
+    #f get_cs
     def get_cs(self):
         return self.git_repo.get_cs()
+    #f All done
     pass
+
 #c GripRepo class
 class GripRepo:
     #v Static properties
@@ -472,55 +493,6 @@ class GripRepo:
             pass
         # clean out make stamps
         pass
-    #f commit
-    def commit(self):
-        self.create_subrepos()
-        for r in self.subrepos:
-            r.commit()
-            pass
-        print("All subrepos commited")
-        self.update_state()
-        self.write_state()
-        print("Updated state")
-        print("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
-        pass
-    #f fetch
-    def fetch(self, options):
-        self.create_subrepos()
-        for r in self.subrepos:
-            r.fetch()
-            pass
-        print("All subrepos fetched")
-        pass
-    #f merge
-    def merge(self):
-        self.create_subrepos()
-        for r in self.subrepos:
-            r.merge()
-            pass
-        print("All subrepos merged")
-        self.update_state()
-        self.write_state()
-        print("Updated state")
-        print("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
-        pass
-    #f publish
-    def publish(self, prepush_only=False):
-        self.create_subrepos()
-        for r in self.subrepos:
-            r.prepush()
-            pass
-        print("All subrepos prepushed")
-        if prepush_only: return
-        for r in self.subrepos:
-            r.push()
-            pass
-        print("All subrepos pushed")
-        self.update_state()
-        self.write_state()
-        print("Updated state")
-        print("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
-        pass
     #f get_root
     def get_root(self):
         """
@@ -570,3 +542,60 @@ class GripRepo:
             pass
         repo = GitRepo.clone(options, repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path)
         return cls(repo)
+    #f status
+    def status(self):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.status()
+            pass
+        pass
+    #f commit
+    def commit(self):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.commit()
+            pass
+        self.verbose.message("All subrepos commited")
+        self.update_state()
+        self.write_state()
+        self.verbose.message("Updated state")
+        self.verbose.message("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
+        pass
+    #f fetch
+    def fetch(self):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.fetch()
+            pass
+        self.verbose.message("All subrepos fetched")
+        pass
+    #f merge
+    def merge(self):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.merge()
+            pass
+        self.verbose.message("All subrepos merged")
+        self.update_state()
+        self.write_state()
+        self.verbose.message("Updated state")
+        self.verbose.message("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
+        pass
+    #f publish
+    def publish(self, prepush_only=False):
+        self.create_subrepos()
+        for r in self.subrepos:
+            r.prepush()
+            pass
+        self.verbose.message("All subrepos prepushed")
+        if prepush_only: return
+        for r in self.subrepos:
+            r.push()
+            pass
+        self.verbose.message("All subrepos pushed")
+        self.update_state()
+        self.write_state()
+        self.verbose.message("Updated state")
+        self.verbose.message("**** Now run 'git commit' and 'git push origin HEAD:master' if you wish to commit the GRIP repo itself and push in a 'single' workflow ****")
+        pass
+    #f All done

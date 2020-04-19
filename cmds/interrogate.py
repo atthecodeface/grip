@@ -64,3 +64,16 @@ class doc(lib.command.GripCommandBase):
             print(v)
             pass
         pass
+
+class status(lib.command.GripCommandBase):
+    """
+    Get status
+    """
+    names = ["status"]
+    command_options = {
+    }
+    def execute(self, prog, parser, command_name, options, args):
+        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.grip_repo.status()
+        pass
+    pass

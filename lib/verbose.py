@@ -7,9 +7,10 @@ def info(options, msg):
 class Verbose:
     level_verbose = 0
     level_info = 1
-    level_warning = 2
-    level_error = 3
-    level_fatal = 4
+    level_message = 2
+    level_warning = 3
+    level_error = 4
+    level_fatal = 5
     def __init__(self, level=1, file=sys.stdout):
         self.level = level
         self.file = file
@@ -18,13 +19,16 @@ class Verbose:
         self.level = level
         pass
     def write(self, level, s):
-        if level<self.level: return
+        if self.level>level: return
         print(s, file=self.file)
         return
+    def is_verbose(self): return self.level<=self.level_verbose
     def verbose(self, s):
         return self.write(self.level_verbose, s)
     def info(self, s):
         return self.write(self.level_info, s)
+    def message(self, s):
+        return self.write(self.level_message, s)
     def warning(self, s):
         return self.write(self.level_warning, s)
     def error(self, s):

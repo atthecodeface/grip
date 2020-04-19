@@ -11,5 +11,5 @@ class fetch(lib.command.GripCommandBase):
     }
     def execute(self, prog, parser, command_name, options, args):
         self.get_grip_repo(path=os.path.abspath(os.getcwd()))
-        self.grip_repo.fetch(options)
+        self.grip_repo.fetch()
         pass

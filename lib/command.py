@@ -29,7 +29,7 @@ class Options(object):
         if type(self.verbose)==bool:
             verbose = Verbose()
             if self.verbose:     verbose.set_level(Verbose.level_verbose)
-            if not self.verbose: verbose.set_level(Verbose.level_error)
+            if not self.verbose: verbose.set_level(Verbose.level_message)
             self.verbose = verbose
             pass
         elif type(self.verbose)==int:

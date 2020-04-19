@@ -28,20 +28,39 @@ class Single(Workflow):
     name = "single"
     def install_hooks(self):
         raise Exception("install_hooks not implemented for %s"%self.name)
+    def status(self):
+        repo_string = self.get_repo_workflow_string()
+        reason = self.git_repo.is_modified(self.options, log=self.log)
+        if reason is None:
+            (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
+            if cmp==0:
+                self.verbose.message("%s matches 'upstream' (%s)"%(repo_string, cs))
+                pass
+            elif cmp>0:
+                self.verbose.message("%s is unmodified and a descendant of 'upstream' - so pushable"%(repo_string))
+                pass
+            else:
+                self.verbose.message("%s is unmodified and an ancestor of 'upstream' - so needs a merge"%(repo_string))
+                pass
+            return
+        self.verbose.message("%s has %s"%(repo_string, reason.get_reason()))
+        if not self.verbose.is_verbose(): return
+        print(self.git_repo.status(self.options, log=self.log))
+        return 
     def commit(self):
         reason = self.git_repo.is_modified(self.options, log=self.log)
         if reason is not None:
-            self.verbose.info("Repo %s is modified (%s) - attempting a commit"%(self.git_repo.get_name(), reason.get_reason()))
+            self.verbose.info("%s is modified (%s) - attempting a commit"%(self.get_repo_workflow_string(), reason.get_reason()))
             self.git_repo.commit(log=self.log)
             pass
         return self.check_git_repo_is_upstreamed()
     def merge(self, force=False):
         reason = self.git_repo.is_modified(self.options, log=self.log)
         if reason is not None:
-            raise WorkflowError("Git repo '%s' is modified (%s)"%(self.git_repo.get_name(), reason.get_reason()))
+            raise WorkflowError("%s is modified (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
         reason = self.git_repo.rebase(self.options, other_branch="upstream", log=self.log)
         if reason is not None:
-            raise WorkflowError("Git repo '%s' failed to merge (%s)"%(self.git_repo.get_name(), reason.get_reason()))
+            raise WorkflowError("%s failed to merge (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
         return True
     def prepush(self):
         """

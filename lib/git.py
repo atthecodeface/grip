@@ -168,8 +168,22 @@ class GitRepo(object):
                              cwd=self.path)
         output=output.strip()
         return output
+    #f get_cs
+    def get_cs(self, branch_name=None, log=None):
+        """
+        Get changeset of the git repo
+
+        This is more valuable to the user if git repo is_modified() is false.
+        """
+        if branch_name is None: branch_name="HEAD"
+        output = git_command(cmd="rev-parse '%s'"%branch_name,
+                             log=log,
+                             cwd=self.path)
+        output = output.strip()
+        if len(output.strip()) > 0: return output
+        raise Exception("Failed to determine changeset for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
     #f is_modified
-    def is_modified(self, options, log=None):
+    def is_modified(self, options=None, log=None):
         """
         Return None if the git repo is unmodified since last commit
         Return <how> if the git repo is modified since last commit
@@ -196,20 +210,6 @@ class GitRepo(object):
                 return HowUntrackedFiles(output)
             pass
         return None
-    #f get_cs
-    def get_cs(self, branch_name=None, log=None):
-        """
-        Get changeset of the git repo
-
-        This is more valuable to the user if git repo is_modified() is false.
-        """
-        if branch_name is None: branch_name="HEAD"
-        output = git_command(cmd="rev-parse '%s'"%branch_name,
-                             log=log,
-                             cwd=self.path)
-        output = output.strip()
-        if len(output.strip()) > 0: return output
-        raise Exception("Failed to determine changeset for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
     #f change_branch_ref
     def change_branch_ref(self, branch_name, ref, log=None):
         """
@@ -240,6 +240,22 @@ class GitRepo(object):
         output = output.split("\n")
         if len(output) > 0: return output
         raise HowUnknownBranch("No CS histoty returned for '%s' branch for git repo '%s' - is this a properly configured git repo"%(branch_name, self.get_name()))
+    #f status
+    def status(self, options=None, log=None):
+        """
+        Get status
+        """
+        status_option = ""
+        if (options is not None) and (options.get("ignore_untracked",False)):
+            status_option = "--untracked-files=no"
+            pass
+        output = git_command(cmd="status --porcelain %s"%status_option,
+                             cwd=self.path,
+                             log=log,
+                             stderr_output_indicates_error=False
+        )
+        output = output.strip()
+        return(output)
     #f fetch
     def fetch(self, log=None):
         """

@@ -20,6 +20,15 @@ class Workflow(object):
         Install any hooks required in the subrepos?
         """
         raise Exception("install_hooks not implemented for workflow %s"%self.name)
+    #f get_repo_workflow_string
+    def get_repo_workflow_string(self):
+        return "Repo (%s) %s"%(self.name, self.git_repo.get_name())
+    #f status
+    def status(self):
+        """
+        Report status of a git repo given a workflow
+        """
+        raise Exception("status not implemented for workflow %s"%self.name)
     #f commit
     def commit(self):
         """
@@ -32,7 +41,7 @@ class Workflow(object):
         raise Exception("commit not implemented for workflow %s"%self.name)
     #f fetch
     def fetch(self):
-        self.verbose.verbose("Fetching repo '%s' in workflow %s"%(self.git_repo.get_name(), self.name))
+        self.verbose.verbose("Fetching %s"%(self.get_repo_workflow_string()))
         output = self.git_repo.fetch(log=self.log)
         if len(output)>0:print(output)
         current_cs = self.git_repo.get_cs(branch_name="upstream")
@@ -79,21 +88,31 @@ class Workflow(object):
         except HowUnknownBranch as e:
             raise WorkflowError("%s"%str(e))
         if cs not in cs_history:
-            raise WorkflowError("%s git repo '%s' is not a descendant of upstream which is at cs '%s' - have they been merged?"%(self.name, self.git_repo.get_name(), cs))
-        self.verbose.verbose("%s repo '%s' is a descendant of 'upstream' branch (at cs %s)"%(self.name, self.git_repo.get_name(), cs))
+            raise WorkflowError("%s is not a descendant of upstream which is at cs '%s' - have they been merged?"%(self.get_repo_workflow_string(), cs))
+        self.verbose.verbose("%s is a descendant of 'upstream' branch (at cs %s)"%(self.get_repo_workflow_string(), cs))
         return True
-    #f check_git_repo_is_upstreamed
-    def check_git_repo_is_upstreamed(self):
-        # Would like to test that the CS is in the remote/branch, but that is not possible
-        # We can check that it is in local branch upstream
-        cs = self.git_repo.get_cs()
+    #f how_git_repo_upstreamed
+    def how_git_repo_upstreamed(self):
+        """
+        Return 0 if git repo matches upstream
+        Return 1 if git repo is descendant of upstream
+        Return -1 if git repo is ancestor of upstream
+        """
+        cs = self.git_repo.get_cs(log=self.log)
+        cs_upstream = self.git_repo.get_cs(branch_name="upstream", log=self.log)
+        if cs==cs_upstream: return (cs, cs_upstream, 0)
         try:
             cs_history = self.git_repo.get_cs_history(branch_name="upstream", log=self.log)
         except HowUnknownBranch as e:
             raise WorkflowError("%s"%str(e))
-        if cs not in cs_history:
-            raise WorkflowError("%s git repo '%s' is at cs '%s' but that is not a changeset that is in the 'upstream' branch; perhaps pulling the upstream branch from upstream remote would help? The *must* be an ancestor of the remote branch head. If this repo really is a shiny new one to be pushed then do so, refresh the upstream branch locally, and retry the grip commit."%(self.name, self.git_repo.get_name(), cs))
-        self.verbose.verbose("%s repo '%s' at cs %s - which is an ancestor of 'upstream' branch"%(self.name, self.git_repo.get_name(), cs))
+        if cs in cs_history: return (cs, cs_upstream, -1)
+        return (cs, cs_upstream, 1)
+    #f check_git_repo_is_upstreamed
+    def check_git_repo_is_upstreamed(self):
+        (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
+        if cmp>0:
+            raise WorkflowError("%s is at cs '%s' but that is not a changeset that is in the 'upstream' branch; perhaps pulling the upstream branch from upstream remote would help? The *must* be an ancestor of the remote branch head. If this repo really is a shiny new one to be pushed then do so, refresh the upstream branch locally, and retry the grip commit."%(self.get_repo_workflow_string(), cs))
+        self.verbose.verbose("%s is at cs %s - which is an ancestor of 'upstream' branch"%(self.get_repo_workflow_string(), cs))
         return True
     #f get_subclasses
     @classmethod
