@@ -528,6 +528,16 @@ class GripRepo:
                 pass
             pass
         pass
+    #f invoke_shell
+    def invoke_shell(self, shell, args=None):
+        env = {}
+        for (k,v) in os.environ.items():
+            env[k] = v
+            pass
+        env["GRIP_SHELL"] = shell
+        cmd_line = ["grip_shell"]
+        cmd_line += ["-c", "source %s; %s %s"%(self.grip_path(self.grip_env_filename), shell, " ".join(args))]
+        os.execvpe("bash", cmd_line, env)
     #f clone
     @classmethod
     def clone(cls, options, repo_url, branch, path=None, dest=None):

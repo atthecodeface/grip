@@ -27,16 +27,6 @@ class shell(lib.command.GripCommandBase):
     }
     def execute(self, prog, parser, command_name, options, args):
         self.get_grip_repo(ensure_configured=True)
-        env = {}
-        for (k,v) in os.environ.items():
-            env[k] = v
-            pass
-        for (k,v) in self.grip_repo.grip_env_iter():
-            env[k] = v
-            pass
-        env["GRIP_SHELL"] = options.shell
-        args = [options.shell]
-        args.extend(options.args)
-        os.execvpe(options.shell, args, env)
+        self.grip_repo.invoke_shell(options.shell, options.args)
         pass
 
