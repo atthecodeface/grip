@@ -436,7 +436,7 @@ class GripRepo:
                 pass
             for r in self.repo_desc_config.iter_repos():
                 for (n,v) in r.get_env_as_makefile_strings():
-                    print("%s:=%s"%(n,v),file=f)
+                    print("# REPO %s wants %s:=%s"%(r.name, n,v),file=f)
                     pass
                 pass
             pass
@@ -474,14 +474,16 @@ class GripRepo:
                 if stage.requires is not None:
                     for r in stage.requires:
                         self.add_log_string("Dependent on '%s'"%(r.target_name()))
-                        ostgt = self.get_makefile_stamp_filename(r)
-                        print("%s: %s"%(rstgt_filename,ostgt), file=f)
+                        ostgt_filename = self.get_makefile_stamp_filename(r)
+                        print("%s: %s"%(rstgt_filename,ostgt_filename), file=f)
                         pass
                     pass
                 if stage.satisfies is not None:
-                    self.add_log_string("Global stage '%s' dependends on repo '%s' stage '%s'"%(stage.satisfies.target_name(), repo.name, stage.name))
+                    self.add_log_string("Global stage '%s' depends on repo '%s' stage '%s'"%(stage.satisfies.target_name(), repo.name, stage.name))
                     ostgt_filename = self.get_makefile_stamp_filename(stage.satisfies)
                     print("%s: %s"%(ostgt_filename, rstgt_filename), file=f)
+                    ostgt = self.get_makefile_stamp(stage.satisfies)
+                    print("revoke.%s: revoke.%s"%(ostgt, rstgt), file=f)
                     pass
                 if stage.name in stages:
                     self.add_log_string("Global stage '%s' dependends on repo '%s'"%(stage.name, repo.name))

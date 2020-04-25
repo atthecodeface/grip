@@ -658,7 +658,7 @@ class GripConfig(object):
             if not error_on_not_found: return None
             raise GripTomlError("Repository '%s' not know in grip configuration '%s'"%(repo_name, self.name))
         return self.repos[repo_name]
-    #f iter_repos
+    #f iter_repos - iterate over repos in config, each is GitRepoDesc instance
     def iter_repos(self):
         for n in self.repos:
             yield self.repos[n]
