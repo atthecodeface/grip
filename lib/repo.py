@@ -21,7 +21,11 @@ class GripSubrepo:
     def __init__(self, grip_repo, repo_desc):
         self.name = repo_desc.name
         self.grip_repo = grip_repo
-        self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
+        try:
+            self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
+            pass
+        except PathError as e:
+            raise SubrepoError("subrepo failed: %s"%(str(e)))
         self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
         pass
     #f install_hooks
@@ -376,7 +380,12 @@ class GripRepo:
     def create_subrepos(self):
         self.subrepos = []
         for r in self.repo_desc_config.iter_repos():
-            self.subrepos.append(GripSubrepo(self, r))
+            try:
+                self.subrepos.append(GripSubrepo(self, r))
+                pass
+            except SubrepoError as e:
+                self.verbose.warning("Subrepo '%s' could not be found - is this grip repo a full checkout?"%(r.name))
+                pass
             pass
         pass
     #f xupdate_subrepos

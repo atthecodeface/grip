@@ -19,6 +19,10 @@ class InternalError(GripException):
     grip_type = "Internal grip"
     pass
 
+class PathError(GripException):
+    grip_type = "Path error - e.g. file/directory does not exist"
+    pass
+
 class ConfigurationError(GripException):
     grip_type = "Grip repository configuration"
     pass
@@ -34,5 +38,11 @@ class WorkflowError(GripException):
     """
     """
     grip_type = "Workflow"
+    pass
+
+class SubrepoError(GripException):
+    """
+    """
+    grip_type = "Subrepo"
     pass
 

@@ -114,6 +114,8 @@ class GitRepo(object):
         Should find the git_url this was cloned from too
         """
         if path is None: path="."
+        if not os.path.exists(os.path.abspath(path)):
+            raise PathError("path '%s' does not exist"%os.path.abspath(path))
         git_output = git_command(cwd=os.path.abspath(path),
                                  cmd="rev-parse --show-toplevel",
                                  log=log)
