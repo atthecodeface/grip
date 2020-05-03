@@ -16,7 +16,7 @@ class Single(Workflow):
     The checkout of a git repository at a particular CS will put HEAD at that CS, and it
     is detached from any branch.
     PROBABLY WE SHOULD NAME THE BRANCH.
-    Any edits and then commits performed are on this new detached branch; a new commit 
+    Any edits and then commits performed are on this new detached branch; a new commit
     extends this branch, and moves HEAD along.
 
     Merging is required before pushing. Merging is performed using
@@ -34,10 +34,10 @@ class Single(Workflow):
         if reason is None:
             (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
             if cmp==0:
-                self.verbose.message("%s matches 'upstream' (%s)"%(repo_string, cs))
+                self.verbose.info("%s matches 'upstream' (%s)"%(repo_string, cs))
                 pass
             elif cmp>0:
-                self.verbose.info("%s is unmodified (%s) but a descendant of 'upstream' (%s) - so pushable"%(repo_string, cs, cs_upstream))
+                self.verbose.message("%s is unmodified (%s) but a descendant of 'upstream' (%s) - so pushable"%(repo_string, cs, cs_upstream))
                 pass
             else:
                 self.verbose.warning("%s is unmodified (%s) but an ancestor of 'upstream' (%s) - so needs a merge"%(repo_string, cs, cs_upstream))
@@ -46,11 +46,11 @@ class Single(Workflow):
         self.verbose.message("%s has %s"%(repo_string, reason.get_reason()))
         if not self.verbose.is_verbose(): return
         print(self.git_repo.status(self.options, log=self.log))
-        return 
+        return
     def commit(self):
         reason = self.git_repo.is_modified(self.options, log=self.log)
         if reason is not None:
-            self.verbose.info("%s is modified (%s) - attempting a commit"%(self.get_repo_workflow_string(), reason.get_reason()))
+            self.verbose.message("%s is modified (%s) - attempting a commit"%(self.get_repo_workflow_string(), reason.get_reason()))
             self.git_repo.commit(log=self.log)
             pass
         return self.check_git_repo_is_upstreamed()

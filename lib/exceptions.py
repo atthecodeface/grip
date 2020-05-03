@@ -19,6 +19,10 @@ class InternalError(GripException):
     grip_type = "Internal grip"
     pass
 
+class NotGripError(GripException):
+    grip_type = "Not within a grip repository"
+    pass
+
 class PathError(GripException):
     grip_type = "Path error - e.g. file/directory does not exist"
     pass

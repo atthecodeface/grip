@@ -13,6 +13,11 @@ from .repo import GripRepo
 #c Options
 class UnknownOption(Exception):pass
 class Options(object):
+    """
+    The argparse options must be a namespace, that is all
+
+    Hence this class is used for 'options'
+    """
     verbose = False
     help = False
     show_log = False
@@ -26,10 +31,11 @@ class Options(object):
         if default is UnknownOption: raise UnknownOption("Option %s unknown"%n)
         return default
     def _validate(self):
-        if type(self.verbose)==bool:
-            verbose = Verbose()
-            if self.verbose:     verbose.set_level(Verbose.level_verbose)
-            if not self.verbose: verbose.set_level(Verbose.level_message)
+        if (type(self.verbose)==bool) or (type(self.quiet)==bool):
+            verbose = Verbose(level=Verbose.level_info)
+            if (type(self.verbose)==bool) and self.verbose:   verbose.set_level(Verbose.level_verbose)
+            elif (type(self.quiet)==bool) and self.quiet:   verbose.set_level(Verbose.level_warning)
+            else:              verbose.set_level(Verbose.level_info)
             self.verbose = verbose
             pass
         elif type(self.verbose)==int:
@@ -40,7 +46,7 @@ class Options(object):
         for k in dir(self):
             print(k,self.get(k))
             pass
-    
+
 #c GripCommandBase
 class GripCommandBase(Hookable):
     """
@@ -87,7 +93,7 @@ class GripCommandBase(Hookable):
         self.invocation = prog+" "+command_name+(" ".join(args))
         self.options = options
         pass
-    
+
     #f parser_add_options
     def parser_add_options(self, parser, option_dict):
         """
@@ -140,7 +146,7 @@ class GripCommandBase(Hookable):
         self.grip_repo = GripRepo(invocation=self.invocation, options=self.options, **kwargs)
         self.add_logger(self.grip_repo.log)
         pass
-    
+
     #f add_logger
     def add_logger(self, log):
         """
@@ -148,7 +154,7 @@ class GripCommandBase(Hookable):
         """
         self.loggers.append(log)
         pass
-    
+
     #f show_logs
     def show_logs(self, file):
         """
@@ -158,7 +164,7 @@ class GripCommandBase(Hookable):
             l.dump(file)
             pass
         pass
-    
+
     #f tidy_logs
     def tidy_logs(self):
         """
@@ -168,7 +174,7 @@ class GripCommandBase(Hookable):
             l.tidy()
             pass
         pass
-    
+
     #f invoke
     def invoke(self, prog, parser, command_name, options, args):
         command_cls = GripCommandBase.command_of_name(command_name)

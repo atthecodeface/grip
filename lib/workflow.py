@@ -41,13 +41,13 @@ class Workflow(object):
         raise Exception("commit not implemented for workflow %s"%self.name)
     #f fetch
     def fetch(self):
-        self.verbose.verbose("Fetching %s"%(self.get_repo_workflow_string()))
+        self.verbose.info("Fetching %s"%(self.get_repo_workflow_string()))
         output = self.git_repo.fetch(log=self.log)
         if len(output)>0:print(output)
         current_cs = self.git_repo.get_cs(branch_name="upstream")
         fetched_cs = self.git_repo.get_cs(branch_name="upstream@{upstream}")
         self.git_repo.change_branch_ref(log=self.log, branch_name="upstream", ref=fetched_cs)
-        self.verbose.verbose("Upstream branch of repo '%s' now at %s (was at %s)"%(self.git_repo.get_name(), fetched_cs, current_cs))
+        self.verbose.message("Upstream branch of repo '%s' now at %s (was at %s)"%(self.git_repo.get_name(), fetched_cs, current_cs))
         return True
     #f merge
     def merge(self):
@@ -89,7 +89,7 @@ class Workflow(object):
             raise WorkflowError("%s"%str(e))
         if cs not in cs_history:
             raise WorkflowError("%s is not a descendant of upstream which is at cs '%s' - have they been merged?"%(self.get_repo_workflow_string(), cs))
-        self.verbose.verbose("%s is a descendant of 'upstream' branch (at cs %s)"%(self.get_repo_workflow_string(), cs))
+        self.verbose.info("%s is a descendant of 'upstream' branch (at cs %s)"%(self.get_repo_workflow_string(), cs))
         return True
     #f how_git_repo_upstreamed
     def how_git_repo_upstreamed(self):
@@ -112,7 +112,7 @@ class Workflow(object):
         (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
         if cmp>0:
             raise WorkflowError("%s is at cs '%s' but that is not a changeset that is in the 'upstream' branch; perhaps pulling the upstream branch from upstream remote would help? The *must* be an ancestor of the remote branch head. If this repo really is a shiny new one to be pushed then do so, refresh the upstream branch locally, and retry the grip commit."%(self.get_repo_workflow_string(), cs))
-        self.verbose.verbose("%s is at cs %s - which is an ancestor of 'upstream' branch"%(self.get_repo_workflow_string(), cs))
+        self.verbose.info("%s is at cs %s - which is an ancestor of 'upstream' branch"%(self.get_repo_workflow_string(), cs))
         return True
     #f get_subclasses
     @classmethod

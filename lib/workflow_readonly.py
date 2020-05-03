@@ -23,10 +23,10 @@ class ReadOnly(Workflow):
             return
         (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
         if cmp==0:
-            self.verbose.message("%s matches 'upstream' (%s)"%(repo_string, cs))
+            self.verbose.info("%s matches 'upstream' (%s)"%(repo_string, cs))
             pass
         elif cmp>0:
-            self.verbose.warning("%s is unmodified (%s) but a descendant of 'upstream' (%s) - maybe a 'fetch' is required?"%(repo_string, cs, cs_upstream))
+            self.verbose.message("%s is unmodified (%s) but a descendant of 'upstream' (%s) - maybe a 'fetch' is required?"%(repo_string, cs, cs_upstream))
             pass
         else:
             self.verbose.warning("%s is unmodified (%s) and an ancestor of 'upstream' (%s) - (if desired, 'git merge upstream' by hand in the repo brings it up to tip)"%(repo_string, cs, cs_upstream))
@@ -48,6 +48,6 @@ class ReadOnly(Workflow):
         reason = self.git_repo.is_modified(options=None, log=self.log)
         if reason is not None:
             raise WorkflowError("%s is modified (%s), but the workflow for the repo is read-only."%(self.get_repo_workflow_string(), reason.get_reason()))
-        self.verbose.verbose("Readonly repo '%s' checked and is not modified"%(self.git_repo.get_name()))
+        self.verbose.info("Readonly repo '%s' checked and is not modified"%(self.git_repo.get_name()))
         return self.check_git_repo_is_upstreamed()
-    
+

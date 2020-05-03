@@ -139,10 +139,13 @@ class GripRepo:
         self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
         self.log.add_entry_string(self.invocation)
         if git_repo is None:
-            git_repo = GripRepo.find_git_repo_of_grip_root(path, self.log)
+            try:
+                git_repo = GripRepo.find_git_repo_of_grip_root(path, self.log)
+            except:
+                pass
             pass
         if git_repo is None:
-            raise Exception("Not within a git repository, so not within a grip repository either")
+            raise NotGripError("Not within a git repository, so not within a grip repository either")
         self.git_repo = git_repo
         self.repo_desc        = None
         self.repo_state       = None
@@ -159,7 +162,7 @@ class GripRepo:
             pass
         self.grip_git_url = None
         if self.grip_git_url is None:      self.grip_git_url = git_repo.get_git_url()
-        if self.grip_git_url is not None: 
+        if self.grip_git_url is not None:
             self.repo_desc.resolve_git_urls(self.grip_git_url)
             pass
         pass
