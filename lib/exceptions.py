@@ -50,3 +50,12 @@ class SubrepoError(GripException):
     grip_type = "Subrepo"
     pass
 
+#a Exceptions
+#c GripTomlError - exception used when reading the grip toml file
+class GripTomlError(ConfigurationError):
+    pass
+
+#c RepoDescError - exception used when a repo description is invalid
+class RepoDescError(ConfigurationError):
+    pass
+
