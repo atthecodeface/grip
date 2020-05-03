@@ -261,15 +261,15 @@ class GripRepoDesc(object):
     #f get_doc
     def get_doc(self, include_configs=True):
         """
-        Return list of (name, documentation) strings
+        Return documentation = list of <string> | (name * documentation)
         List should include all configurations
         List should always start with (None, repo.doc) if there is repo doc
         """
         r = []
-        r.append((None, self.get_doc_string()))
+        r.append(self.get_doc_string())
         if include_configs:
             for (n,c) in self.configs.items():
-                r.append(("Configuration %s"%n,c.get_doc_string()))
+                #r.append(("Configuration %s"%n,c.get_doc_string()))
                 pass
             pass
         return r

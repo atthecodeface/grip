@@ -122,12 +122,28 @@ class GitRepoDesc(object):
         """
         r = "Undocumented"
         if self.doc is not None: r = self.doc
+        return r
+    #f get_doc
+    def get_doc(self):
+        """
+        Return documentation = list of <string> | (name * documentation)
+        Get documentation
+        """
+        r = [self.get_doc_string()]
+        r_src = ""
+        if self.path    is not None: r_src += "locally at '%s'" % (self.path)
+        if self.git_url is not None: r_src += " remote url '%s'" % (self.git_url.git_url())
+        elif self.url is not None:   r_src += " remote url(orig) '%s'" % (self.url)
+        if self.branch  is not None: r_src += " branch '%s'" % (self.branch)
+        r.append(r_src)
         r_stages = []
         for (sn,s) in self.stages.items():
             r_stages.append(sn)
             pass
         r_stages.sort()
-        r += "\nStages: %s"%(" ".join(r_stages))
+        if len(r_stages)>0:
+            r.append("Stages: %s"%(" ".join(r_stages)))
+            pass
         return r
     #f add_stage_names_to_set
     def add_stage_names_to_set(self, s):

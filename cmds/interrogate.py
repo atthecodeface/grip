@@ -36,6 +36,26 @@ class env(lib.command.GripCommandBase):
             pass
         pass
 
+from lib.verbose import TermColors
+def show_doc(doc, indent=0):
+    nl = False
+    for d in doc:
+        if nl: print()
+        if type(d)==tuple:
+            (n,v)=d
+            pre_heading  = "\n"+(" "*indent)+TermColors.bold+TermColors.underline
+            post_heading = TermColors.plain
+            print("%s%s%s"%(pre_heading,n,post_heading))
+            show_doc(v, indent+1)
+            nl = False
+            pass
+        else:
+            print(d)
+            nl = False
+            pass
+        pass
+    pass
+
 class doc(lib.command.GripCommandBase):
     """
     Prints the documentation
@@ -57,12 +77,7 @@ class doc(lib.command.GripCommandBase):
             print("This is an unconfigured grip repository, with a name of '%s'"%(self.grip_repo.get_name()))
             print("It supports the following configurations: %s"%(" ".join(self.grip_repo.get_configurations())))
             pass
-        for (n,v) in grip_repo_doc:
-            if n is not None:
-                print("\n%s"%n)
-                pass
-            print(v)
-            pass
+        show_doc(grip_repo_doc)
         pass
 
 class status(lib.command.GripCommandBase):

@@ -6,6 +6,10 @@ from .env import GripEnv, EnvTomlDict
 from .git_repo_desc import RepoDescTomlDict, GitRepoDesc
 from .stage import StageTomlDict, GitRepoStageDependency, GitRepoStageDesc
 
+#a Useful functions
+def str_keys(d):
+    return ", ".join([k for k in d.keys()])
+
 class StageConfigTomlDict(TomlDict):
     Wildcard     = TomlDictParser.from_dict_attr_dict(StageTomlDict)
     pass
@@ -69,7 +73,7 @@ class GripConfig(object):
         if values.stage is not None:
             for stage in values.stage.Get_other_attrs():
                 stage_values = values.stage.Get(stage)
-                self.stages[stage] = GitRepoStageDesc(self.grip_repo_desc, stage, stage_values)
+                self.stages[stage] = GitRepoStageDesc(grip_repo_desc=self.grip_repo_desc, name=stage, values=stage_values)
                 pass
             pass
         for r in values.repos:
@@ -147,30 +151,37 @@ class GripConfig(object):
         """
         r = "Undocumented"
         if self.doc is not None: r = self.doc.strip()
-        r_stages = []
-        for sn in self.get_global_stage_names():
-            r_stages.append(sn)
-            pass
-        for (sn,s) in self.stages.items():
-            if sn not in r_stages:
-                r_stages.append(sn)
-                pass
-            pass
-        r_stages.sort()
-        r += "\nStages: %s"%(" ".join(r_stages))
         return r
     #f get_doc
     def get_doc(self):
         """
-        Return list of (name, documentation) strings
+        Return documentation = list of <string> | (name * documentation)
         List should include this configuration and all its repos
         List should always start with (None, repo.doc) if there is repo doc
         """
         r = self.grip_repo_desc.get_doc(include_configs=False)
-        r.append(("Configuration '%s'"%self.name,self.get_doc_string()))
-        for (rn,repo) in self.repos.items():
-            r.append(("Repo '%s'"%rn,repo.get_doc_string()))
+        blah = [self.get_doc_string()]
+        r_stages = {}
+        for sn in self.get_global_stage_names():
+            r_stages[sn] = None
             pass
+        for (sn,s) in self.stages.items():
+            r_stages[sn] = s
+            pass
+        r_stage_names = list(r_stages.keys())
+        r_stage_names.sort()
+        if len(r_stage_names)>0:
+            blah.append("Stages: %s"%(" ".join(r_stage_names)))
+            for sn in r_stage_names:
+                if r_stages[sn] is None: continue
+                stage_doc = r_stages[sn].get_doc_string()
+                if stage_doc is not None: blah.append(("Stage %s"%sn,[stage_doc]))
+                pass
+            pass
+        for (rn,repo) in self.repos.items():
+            blah.append(("Repo '%s'"%rn,repo.get_doc()))
+            pass
+        r.append(("Configuration '%s'"%self.name,blah))
         return r
     #f get_global_stage_names
     def get_global_stage_names(self):

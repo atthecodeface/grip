@@ -10,6 +10,7 @@ class StageTomlDict(TomlDict):
     requires  = TomlDictParser.from_dict_attr_list(str) # list of other repos dependencies completed correctly
     satisfies = TomlDictParser.from_dict_attr_value(str) # repo dependency (local or global)
     wd       = TomlDictParser.from_dict_attr_value(str)
+    doc      = TomlDictParser.from_dict_attr_value(str)
     env      = TomlDictParser.from_dict_attr_dict(EnvTomlDict)
     exec     = TomlDictParser.from_dict_attr_value(str)
     pass
@@ -85,6 +86,7 @@ class GitRepoStageDesc(object):
     wd   = None # Working directory to execute <exec> in (relative to repo desc path)
     exec = None # Shell script to execute to perform the stage
     env  = None # Environment to be exported in .grip/env
+    doc = None
     requires = []
     satisfies = None
     #f __init__
@@ -141,6 +143,13 @@ class GitRepoStageDesc(object):
             self.satisfies.validate(grip_config, reason="Repo stage '%s.%s' satisfies of '%s'"%(repo_name, self.name, self.satisfies.full_name()), error_handler=error_handler)
             pass
         pass
+    #f get_doc_string
+    def get_doc_string(self):
+        """
+        Get documentation string for this configuration
+        """
+        if self.doc is None: return None
+        return self.doc.strip()
     #f prettyprint
     def prettyprint(self, acc, pp):
         acc = pp(acc, "%s:" % (self.name))
