@@ -56,8 +56,7 @@ class GitRepoStageDependency:
                 return GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, stage_name, repo_name, grip_config.get_name())).invoke(error_handler)
             pass
         else:
-            global_stages = grip_config.get_global_stage_names()
-            if self.stage_name not in global_stages:
+            if not grip_config.has_stage(self.stage_name):
                 return GripTomlError("%s: not a global stage in configuration '%s'"%(self.stage_name, grip_config.get_name())).invoke(error_handler)
             pass
         pass
@@ -99,14 +98,18 @@ class GitRepoStageDesc(object):
             values.Set_obj_properties(self, values.Get_fixed_attrs())
             pass
         pass
+    #f get_name
+    def get_name(self):
+        return self.name
     #f clone
-    def clone(self):
-        c = self.__class__(grip_repo_desc=self.grip_repo_desc, git_repo_desc=self.git_repo_desc, name=self.name, values=None)
+    def clone(self, values=None):
+        c = self.__class__(grip_repo_desc=self.grip_repo_desc, git_repo_desc=self.git_repo_desc, name=self.name, values=values)
         c.wd = self.wd
         c.env = self.env
         c.exec = self.exec
         c.requires = self.requires
         c.satisfies = self.satisfies
+        c.doc = self.doc
         return c
     #f resolve
     def resolve(self, env, error_handler=None):

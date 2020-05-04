@@ -73,7 +73,7 @@ class GripRepoDesc(object):
         self.default_config = None
         self.repos = {}
         self.configs = {}
-        self.stages = []
+        self.stages = {}
         self.base_repos = []
         self.doc = None
         self.git_repo = git_repo
@@ -198,7 +198,7 @@ class GripRepoDesc(object):
         return self.supported_workflows[workflow]
     #f build_from_values
     def build_from_values(self, values):
-        values.Set_obj_properties(self, {"name", "workflow", "base_repos", "default_config", "logging", "stages", "doc"})
+        values.Set_obj_properties(self, {"name", "workflow", "base_repos", "default_config", "logging", "doc"})
         if values.repo           is None: raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
         if values.configs        is None: raise GripTomlError("'configs' must be provided in grip configuration file")
         self.env.build_from_values(values.env)
@@ -208,6 +208,14 @@ class GripRepoDesc(object):
         # Must validate the base_repos here so users can assume self.repos[x] is valid for x in self.base_repos
         for r in self.base_repos:
             if r not in self.repos: raise RepoDescError("repo '%s', one of the base_repos, is not one of the repos described (which are %s)"%(r, str_keys(self.repos)))
+            pass
+        # Build stages before configs
+        self.stages = {}
+        if values.stages is not None:
+            for s in values.stages:
+                self.stages[s] = GitRepoStageDesc(grip_repo_desc=self, name=s, values=None)
+                # stages[s] = GitRepoStageDependency(s, must_be_global=True)
+                pass
             pass
         for config_name in values.configs:
             self.configs[config_name] = GripConfig(config_name, self)
@@ -221,11 +229,6 @@ class GripRepoDesc(object):
                 config.build_from_values(config_values)
                 pass
             pass
-        stages = {}
-        for s in self.stages:
-            stages[s] = GitRepoStageDependency(s, must_be_global=True)
-            pass
-        self.stages = stages
         pass
     #f prettyprint
     def prettyprint(self, acc, pp):
@@ -242,15 +245,28 @@ class GripRepoDesc(object):
             acc = c.prettyprint(acc, ppr)
             pass
         return acc
+    #f iter_repos - iterate over repos in config, each is GitRepoDesc instance
+    def iter_repos(self):
+        for n in self.repos:
+            yield self.repos[n]
+            pass
+        pass
+    #f iter_stages - iterate over stages in config, each is Stage instance
+    def iter_stages(self):
+        for n in self.stages:
+            yield self.stages[n]
+            pass
+        pass
     #f get_configs
     def get_configs(self):
         return self.configs.keys()
-    #f get_stages
-    def get_stages(self):
+    #f get_stage - used by Config
+    def get_stage(self, stage_name):
         """
-        Get dictionary of stage name -> GitRepoStageDependency
+        Get dictionary of stage name -> Stage
         """
-        return self.stages
+        if stage_name in self.stages: return self.stages[stage_name]
+        return None
     #f get_doc_string
     def get_doc_string(self):
         """

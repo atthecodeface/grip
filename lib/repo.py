@@ -456,56 +456,81 @@ class GripRepo:
         self.add_log_string("Creating makefile '%s'"%self.grip_path(self.grip_makefile_filename))
         with open(self.grip_path(self.grip_makefile_filename),"w") as f:
             print("-include %s"%(self.grip_path(self.grip_makefile_env_filename)), file=f)
-            stages = self.repo_desc_config.get_global_stages()
-            for (sn,s) in stages.items():
-                self.add_log_string("Adding global stage '%s'"%sn)
-                (stgt, stgt_filename) = self.new_makefile_stamp(s)
-                print("\n.PHONY: %s revoke.%s"%(stgt, stgt), file=f)
-                print("%s: %s"%(stgt, stgt_filename), file=f)
-                print("revoke.%s:\n\trm -f %s"%(stgt, stgt_filename), file=f)
+            for stage in self.repo_desc_config.iter_stages():
+                self.write_stage_to_makefile(f, None, stage)
                 pass
             def write_to_makefile(acc, repo, stage):
-                (rstgt, rstgt_filename) = self.new_makefile_stamp(stage.dependency)
-                self.add_log_string("Adding target '%s'"%rstgt)
-                wd = stage.wd
-                if wd is None: wd = self.git_repo.filename(repo.path)
-                env = ""
-                for (k,v) in stage.env.as_makefile_strings():
-                    env = env + (" %s=%s"%(k,v))
-                    pass
-                if env != "": env = env + ";"
-                exec = stage.exec
-                if exec is None: exec=""
-                print("\nGRIP_%s_%s_ENV := %s"%(repo.name, stage.name, env), file=f)
-                print("\n.PHONY: %s revoke.%s"%(rstgt, rstgt), file=f)
-                print("%s: %s"%(rstgt, rstgt_filename), file=f)
-                print("revoke.%s:\n\trm -f %s"%(rstgt, rstgt_filename), file=f)
-                print("%s:"%(rstgt_filename), file=f)
-                print("\t$(GRIP_%s_%s_ENV) cd %s && (%s)"%(repo.name, stage.name, wd, exec), file=f)
-                print("\ttouch %s"%(rstgt_filename), file=f)
-                if stage.requires is not None:
-                    for r in stage.requires:
-                        self.add_log_string("Dependent on '%s'"%(r.target_name()))
-                        ostgt_filename = self.get_makefile_stamp_filename(r)
-                        print("%s: %s"%(rstgt_filename,ostgt_filename), file=f)
-                        pass
-                    pass
-                if stage.satisfies is not None:
-                    self.add_log_string("Global stage '%s' depends on repo '%s' stage '%s'"%(stage.satisfies.target_name(), repo.name, stage.name))
-                    ostgt_filename = self.get_makefile_stamp_filename(stage.satisfies)
-                    print("%s: %s"%(ostgt_filename, rstgt_filename), file=f)
-                    ostgt = self.get_makefile_stamp(stage.satisfies)
-                    print("revoke.%s: revoke.%s"%(ostgt, rstgt), file=f)
-                    pass
-                if stage.name in stages:
-                    self.add_log_string("Global stage '%s' dependends on repo '%s'"%(stage.name, repo.name))
-                    stgt_filename = self.get_makefile_stamp_filename(stages[stage.name])
-                    print("%s: %s"%(stgt_filename, rstgt_filename), file=f)
-                    pass
+                self.write_stage_to_makefile(f, repo, stage)
                 pass
             self.repo_desc_config.fold_repo_stages(None, write_to_makefile)
             pass
         # clean out make stamps
+        pass
+    #f write_stage_to_makefile
+    def write_stage_to_makefile(self, f, repo, stage):
+        (tgt, tgt_filename) = self.new_makefile_stamp(stage.dependency)
+        sn = stage.get_name()
+        if repo is None:
+            self.add_log_string("Adding global stage '%s'"%sn)
+            rs_name = "%s"%(sn)
+            pass
+        else:
+            self.add_log_string("Adding target '%s'"%tgt)
+            rs_name = "%s_%s"%(repo.name, sn)
+            pass
+
+        wd = stage.wd
+        if wd is None:
+            if repo is None:
+                wd = self.git_repo.filename()
+                pass
+            else:
+                wd = self.git_repo.filename(repo.path)
+                pass
+            pass
+
+        env = ""
+        for (k,v) in stage.env.as_makefile_strings():
+            env = env + (" %s=%s"%(k,v))
+            pass
+        if env != "": env = env + ";"
+
+        exec = stage.exec
+
+        print("\nGRIP_%s_ENV := %s"%(rs_name, env), file=f)
+
+        print("\n.PHONY: %s revoke.%s"%(tgt, tgt), file=f)
+        print("%s: %s"%(tgt, tgt_filename), file=f)
+        print("revoke.%s:\n\trm -f %s"%(tgt, tgt_filename), file=f)
+
+        print("%s:"%(tgt_filename), file=f)
+        if exec is not None:
+            print("\t$(GRIP_%s_ENV) cd %s && (%s)"%(rs_name, wd, exec), file=f)
+            pass
+        print("\ttouch %s"%(tgt_filename), file=f)
+
+        if stage.requires is not None:
+            for r in stage.requires:
+                self.add_log_string("Dependent on '%s'"%(r.target_name()))
+                ostgt_filename = self.get_makefile_stamp_filename(r)
+                print("%s: %s"%(tgt_filename,ostgt_filename), file=f)
+                pass
+            pass
+        if stage.satisfies is not None:
+            self.add_log_string("Global stage '%s' depends on repo '%s' stage '%s'"%(stage.satisfies.target_name(), repo.name, stage.name))
+            ostgt_filename = self.get_makefile_stamp_filename(stage.satisfies)
+            print("%s: %s"%(ostgt_filename, tgt_filename), file=f)
+            ostgt = self.get_makefile_stamp(stage.satisfies)
+            print("revoke.%s: revoke.%s"%(ostgt, tgt), file=f)
+            pass
+        if repo is not None:
+            config_stage = self.repo_desc_config.get_stage(stage.name)
+            if config_stage is not None:
+                self.add_log_string("Global stage '%s' depends on repo '%s'"%(config_stage.name, repo.name))
+                stgt_filename = self.get_makefile_stamp_filename(config_stage.dependency)
+                print("%s: %s"%(stgt_filename, tgt_filename), file=f)
+                pass
+            pass
         pass
     #f get_root
     def get_root(self):

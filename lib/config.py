@@ -69,13 +69,44 @@ class GripConfig(object):
         """
         values.Set_obj_properties(self, {"doc"})
         self.env.build_from_values(values.env)
-        if values.repos is None:values.repos={}
+        self.build_stages_from_values(values)
+        self.build_repos_from_values(values)
+        pass
+    #f build_stages_from_values
+    def build_stages_from_values(self, values):
+        """
+        Build a stages dictionary
+        it must have <stage name> -> Stage for every stage name in the global stages
+        as well as those locally for the config
+        """
+        stage_values = {}
         if values.stage is not None:
             for stage in values.stage.Get_other_attrs():
-                stage_values = values.stage.Get(stage)
-                self.stages[stage] = GitRepoStageDesc(grip_repo_desc=self.grip_repo_desc, name=stage, values=stage_values)
+                stage_values[stage] = values.stage.Get(stage)
                 pass
             pass
+        for s in self.grip_repo_desc.iter_stages():
+            sn = s.get_name()
+            if sn not in stage_values:
+                stage_values[sn] = None
+                pass
+            pass
+        self.stages = {}
+        for sn in stage_values.keys():
+            self.stages[sn] = self.grip_repo_desc.get_stage(sn)
+            if self.stages[sn] is None:
+                self.stages[sn] = GitRepoStageDesc(grip_repo_desc=self.grip_repo_desc, name=sn, values=stage_values[sn])
+                pass
+            else:
+                self.stages[sn] = self.stages[sn].clone(values=stage_values[sn])
+                pass
+            pass
+        pass
+    #f build_repos_from_values
+    def build_repos_from_values(self, values):
+        """
+        """
+        if values.repos is None:values.repos={}
         for r in values.repos:
             if r not in self.grip_repo_desc.repos:raise GripTomlError("repo '%s' specified in config '%s' but it is not defined in the file"%(r, self.name))
             self.repos[r] = self.grip_repo_desc.repos[r].clone()
@@ -110,6 +141,12 @@ class GripConfig(object):
             yield self.repos[n]
             pass
         pass
+    #f iter_stages - iterate over stages in config, each is Stage instance
+    def iter_stages(self):
+        for n in self.stages:
+            yield self.stages[n]
+            pass
+        pass
     #f validate
     def validate(self, error_handler=None):
         for r in self.iter_repos():
@@ -119,6 +156,9 @@ class GripConfig(object):
             s.validate(self,error_handler=error_handler)
             pass
         pass
+    #f has_stage - used by Stage to validate for a repo
+    def has_stage(self, stage_name):
+        return stage_name in self.stages
     #f resolve
     def resolve(self, error_handler=None):
         """
@@ -144,6 +184,13 @@ class GripConfig(object):
         Get name string for this configuration
         """
         return self.name
+    #f get_stage - used by repo to build makefiles
+    def get_stage(self, stage_name):
+        """
+        Get dictionary of stage name -> Stage
+        """
+        if stage_name in self.stages: return self.stages[stage_name]
+        return None
     #f get_doc_string
     def get_doc_string(self):
         """
@@ -161,20 +208,12 @@ class GripConfig(object):
         """
         r = self.grip_repo_desc.get_doc(include_configs=False)
         blah = [self.get_doc_string()]
-        r_stages = {}
-        for sn in self.get_global_stage_names():
-            r_stages[sn] = None
-            pass
-        for (sn,s) in self.stages.items():
-            r_stages[sn] = s
-            pass
-        r_stage_names = list(r_stages.keys())
+        r_stage_names = list(self.stages.keys())
         r_stage_names.sort()
         if len(r_stage_names)>0:
             blah.append("Stages: %s"%(" ".join(r_stage_names)))
             for sn in r_stage_names:
-                if r_stages[sn] is None: continue
-                stage_doc = r_stages[sn].get_doc_string()
+                stage_doc = self.stages[sn].get_doc_string()
                 if stage_doc is not None: blah.append(("Stage %s"%sn,[stage_doc]))
                 pass
             pass
@@ -183,12 +222,12 @@ class GripConfig(object):
             pass
         r.append(("Configuration '%s'"%self.name,blah))
         return r
-    #f get_global_stage_names
-    def get_global_stage_names(self):
-        return self.grip_repo_desc.get_stages().keys()
-    #f get_global_stages
-    def get_global_stages(self):
-        return self.grip_repo_desc.get_stages()
+    #f fold_config_stages
+    def fold_config_stages(self, acc, callback_fn):
+        for s in self.iter_stages():
+            acc = callback_fn(acc, None, s)
+            pass
+        return acc
     #f fold_repo_stages
     def fold_repo_stages(self, acc, callback_fn):
         for r in self.iter_repos():

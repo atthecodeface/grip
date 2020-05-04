@@ -374,7 +374,7 @@ class GitRepo(object):
         pass
         return cls(dest, git_url=repo_url, log=log)
     #f filename - get filename of full path relative to repo in file system
-    def filename(self, paths):
+    def filename(self, paths=[]):
         if type(paths)!=list: paths=[paths]
         filename = self.path
         for p in paths: filename=os.path.join(filename,p)
