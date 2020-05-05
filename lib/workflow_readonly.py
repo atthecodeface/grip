@@ -29,7 +29,7 @@ class ReadOnly(Workflow):
             self.verbose.message("%s is unmodified (%s) but a descendant of 'upstream' (%s) - maybe a 'fetch' is required?"%(repo_string, cs, cs_upstream))
             pass
         else:
-            self.verbose.warning("%s is unmodified (%s) and an ancestor of 'upstream' (%s) - (if desired, 'git merge upstream' by hand in the repo brings it up to tip)"%(repo_string, cs, cs_upstream))
+            self.verbose.message("%s is unmodified (%s) and an ancestor of 'upstream' (%s) - (if desired, 'git merge upstream' by hand in the repo brings it up to tip)"%(repo_string, cs, cs_upstream))
             pass
         return
     def merge(self, force=False):

@@ -482,7 +482,7 @@ class GripRepo:
         """
         with open(self.grip_path(self.grip_env_filename), "w") as f:
             for (k,v) in self.grip_env_iter():
-                print('%s=%s ; export %s'%(k,v,k), file=f)
+                print('%s="%s" ; export %s'%(k,v,k), file=f)
                 pass
             pass
         pass

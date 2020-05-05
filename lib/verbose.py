@@ -14,7 +14,7 @@ class TermColors:
     blue       = "\033[94m"
     magenta    = "\033[95m"
     cyan       = "\033[96m"
-    
+
 class Verbose:
     level_verbose = 0
     level_info = 1
@@ -23,8 +23,8 @@ class Verbose:
     level_error = 4
     level_fatal = 5
     colors = {level_verbose :TermColors.plain,
-              level_info    :TermColors.cyan,
-              level_message :TermColors.green,
+              level_info    :TermColors.green,
+              level_message :TermColors.cyan,
               level_warning :TermColors.yellow,
               level_error   :TermColors.red,
               level_fatal   :(TermColors.bold + TermColors.red),
@@ -55,4 +55,4 @@ class Verbose:
         return self.write(self.level_error, s)
     def fatal(self, s):
         return self.write(self.level_fatal, s)
-        
+
