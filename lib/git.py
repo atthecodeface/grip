@@ -3,6 +3,11 @@ import os, re, unittest
 import lib.oscommand, lib.verbose
 from .exceptions import *
 
+#a Global branchnames
+branch_upstream = "upstream"
+branch_remote_of_upstream = "%s@{upstream}"%branch_upstream
+branch_head = "HEAD"
+
 #a Useful functions
 #f git_command
 def git_command(options=None, cmd=None, **kwargs):
@@ -139,17 +144,24 @@ class GitRepo(object):
                 pass
             pass
         self.git_url = git_url
-        try:
-            self.upstream_origin = self.get_config(["branch","upstream","remote"])
-        except:
-            self.upstream_origin = None
-            pass
-        try:
-            self.upstream_push_branch = self.get_config(["branch","upstream","merge"])
-        except:
-            self.upstream_push_branch = None
-            pass
+        (self.upstream_origin, self.upstream_push_branch) = self.get_branch_remote_and_merge(branch_upstream)
         pass
+    #f get_branch_remote_and_merge
+    def get_branch_remote_and_merge(self, branch_name):
+        """
+        For a given branch attempt to get remote and merge - i.e. where to fetch/push to
+        """
+        origin = None
+        push_branch = None
+        try:
+            origin = self.get_config(["branch",branch_name,"remote"])
+        except:
+            pass
+        try:
+            push_branch = self.get_config(["branch",branch_name,"merge"])
+        except:
+            pass
+        return (origin, push_branch)
     #f get_name
     def get_name(self):
         return self.path
@@ -170,7 +182,32 @@ class GitRepo(object):
                              cwd=self.path)
         output=output.strip()
         return output
-    #f get_cs
+    #f set_upstream_of_branch
+    def set_upstream_of_branch(self, branch_name, origin, origin_branch, log=None):
+        """
+        Set upstream of a branch
+        """
+        output = git_command(cmd="branch --set-upstream-to=%s/%s '%s'"%(origin, origin_branch, branch_name),
+                             log=log,
+                             cwd=self.path)
+        output = output.strip()
+        if len(output.strip()) > 0: return output
+        raise Exception("Failed to set upstream branch for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
+        # git branch
+    #f get_branch_name - get *A* branch name
+    def get_branch_name(self, ref="HEAD", log=None):
+        """
+        Get changeset of the git repo
+
+        This is more valuable to the user if git repo is_modified() is false.
+        """
+        output = git_command(cmd="rev-parse --abbrev-ref '%s'"%ref,
+                             log=log,
+                             cwd=self.path)
+        output = output.strip()
+        if len(output.strip()) > 0: return output
+        raise Exception("Failed to determine branch for git repo '%s' ref '%s'"%(self.get_name(), ref))
+    #f get_cs - get hash of a specified branch
     def get_cs(self, branch_name=None, log=None):
         """
         Get changeset of the git repo
@@ -184,6 +221,18 @@ class GitRepo(object):
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to determine changeset for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
+    #f has_cs - determine if it has a changeset or branch
+    def has_cs(self, branch_name=None, log=None):
+        """
+        Determine if a branch/hash is in the repo
+        """
+        if branch_name is None: branch_name="HEAD"
+        (rc,_) = git_command(cmd="rev-parse --verify --quiet %s^{commit}"%branch_name,
+                             log=log,
+                             cwd=self.path,
+                             exception_on_error=False,
+                             include_rc=True)
+        return rc==0
     #f is_modified
     def is_modified(self, options=None, log=None):
         """
@@ -261,7 +310,7 @@ class GitRepo(object):
     #f fetch
     def fetch(self, log=None):
         """
-        Fetch changes from upstream
+        Fetch changes from remote
         """
         output = git_command(cmd="fetch",
                              cwd=self.path,
@@ -330,12 +379,16 @@ class GitRepo(object):
         """
         Clone a branch of a repo_url into a checkout directory
         bare checkouts are used in testing only
+
+        # git clone --depth 1 --single-branch --branch <name> --no-checkout
+        # git checkout --detach <changeset>
+
         """
         url = cls.parse_git_url(repo_url)
         if dest is None: dest=url.repo_name
         git_options = []
         if branch is not None: git_options.append( "--branch %s"%branch )
-        if (bare is not None) and bare: git_options.append( "--bare")
+        if (bare is not None) and bare: git_options.append( "--bare") # For TEST only
         if changeset is not None: git_options.append( "--no-checkout")
         if depth is not None:   git_options.append( "--depth %s"%(depth))
         if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
@@ -350,14 +403,14 @@ class GitRepo(object):
             pass
         try:
             # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
-            git_command(options=options, log=log, cwd=dest, cmd="branch --move upstream")
+            git_command(options=options, log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)
             pass
         except:
             # If the branch move failed then just create the branch at this head
-            git_command(options=options, log=log, cwd=dest, cmd="branch upstream HEAD")
+            git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
             pass
         if changeset is None:
-            git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%(new_branch_name))
+            git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
             pass
         else:
             try:

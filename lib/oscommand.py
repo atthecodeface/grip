@@ -22,7 +22,7 @@ class OSCommand:
             return "Error in " + self.cmd.string_command_result()
         pass
     #f __init__
-    def __init__(self, cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None, log=None):
+    def __init__(self, cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None, log=None, exception_on_error=True, include_rc=False):
         """
         Run an OS command in a subprocess shell
 
@@ -36,6 +36,8 @@ class OSCommand:
         self.env = env
         self.process = None
         self.log = log
+        self.exception_on_error = exception_on_error
+        self.include_rc = include_rc
         if run:
             self.start_process()
             self.run(input_data=input_data)
@@ -49,7 +51,7 @@ class OSCommand:
                                         shell=True, # So that args is a string not a list
                                         cwd=self.cwd,
                                         env=self.env,
-                                        stdin =subprocess.PIPE, # Create new stdin; we can 
+                                        stdin =subprocess.PIPE, # Create new stdin; we can
                                         stdout=subprocess.PIPE, # Create stdout to be captured
                                         stderr=subprocess.PIPE, # Create stderr to be captured
                                         bufsize=16*1024,  # Large buffer for input and output
@@ -78,6 +80,9 @@ class OSCommand:
     #f error_output
     def error_output(self):
         return self.stderr
+    #f return_code
+    def return_code(self):
+        return self.rc
     #f run
     def run(self, input_data=None):
         (self.stdout, self.stderr) = self.process.communicate(input_data)
@@ -93,8 +98,9 @@ class OSCommand:
         if len(self.stderr)>0 and self.stderr_output_indicates_error:
             had_error=True
             pass
-        if had_error:
+        if had_error and self.exception_on_error:
             raise self.Error(self)
+        if self.include_rc: return (self.rc, self.stdout)
         return self.stdout
     #f log_start
     def log_start(self, writer):

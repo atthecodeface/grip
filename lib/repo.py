@@ -1,6 +1,6 @@
 #a Imports
 import os, time
-from .git import GitRepo
+from .git import GitRepo, branch_upstream, branch_head
 from .stage import GitRepoStageDependency
 from .repodesc import GripRepoDesc
 from .repostate import GripRepoState
@@ -19,15 +19,27 @@ def pp_stdout(acc, s, indent=0):
 class GripSubrepo:
     ws = workflows()
     #f __init__
-    def __init__(self, grip_repo, repo_desc):
-        self.name = repo_desc.name
+    def __init__(self, grip_repo, git_repo=None, name=None, repo_desc=None):
+        """
+        Either git_repo is None and repo_desc describes a subrepo OR
+        git_repo is already a GitRepo and name must be given too
+        """
         self.grip_repo = grip_repo
-        try:
-            self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
+        if repo_desc is not None:
+            self.name = repo_desc.name
+            try:
+                self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
+                pass
+            except PathError as e:
+                raise SubrepoError("subrepo failed: %s"%(str(e)))
             pass
-        except PathError as e:
-            raise SubrepoError("subrepo failed: %s"%(str(e)))
-        self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
+            self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
+        else:
+            if (name is None) or (git_repo is None): raise Exception("Bug in invocation of GripSubrepo")
+            self.name = name
+            self.git_repo = git_repo
+            self.workflow = grip_repo.repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
+            pass
         pass
     #f install_hooks
     def install_hooks(self):
@@ -267,6 +279,7 @@ class GripRepo:
     #f update_state
     def update_state(self):
         for r in self.subrepos:
+            if r==self.toplevel_subrepo: continue
             self.config_state.update_repo_state(r.name, changeset=r.get_cs())
             pass
         pass
@@ -323,6 +336,7 @@ class GripRepo:
         if config is None: raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
         # print(config)
         self.repo_desc_config = config
+        self.configure_toplevel_repo()
         self.check_clone_permitted()
         self.config_state = self.repo_state.select_config(self.repo_desc_config.name)
         self.clone_subrepos(options)
@@ -332,6 +346,38 @@ class GripRepo:
         self.write_config()
         self.grip_env_write()
         self.create_grip_makefiles()
+        pass
+    #f configure_toplevel_repo - set toplevel git repo to have correct branches if it does not already
+    def configure_toplevel_repo(self):
+        """
+        Must only be invoked if the grip repository is not yet configured
+        In some circumstances the repository could have been git cloned by hand
+        In this case we need to ensure it is unmodified, and set the required branches
+        appropriately
+        """
+        if self.git_repo.is_modified():
+            raise ConfigurationError("Git repo is modified and cannot be configured")
+        # The next bit is really for workflow single I think
+        try:
+            branch = self.get_branch_name(log=self.log)
+            pass
+        except:
+            raise ConfigurationError("Git repo is not at the head of a branch and so cannot be configured")
+        (origin, push_branch) = self.get_branch_remote_and_merge(branch)
+        if (origin is None) or (push_branch is None):
+            raise ConfigurationError("Git repo branch does not have a remote to merge with and so cannot be configured")
+        has_upstream   = self.git_repo.has_cs(branch_name=branch_upstream, log=self.log)
+        has_wip_branch = self.git_repo.has_cs(branch_name=self.branch_name, log=self.log)
+        if has_upstream and has_wip_branch: return
+        if has_upstream:
+            raise Exception("Grip repository git repo has branch '%s' but not the WIP branch '%s' - try a proper clone"%(branch_upstream, self.branch_name))
+        if has_wip_branch:
+            raise Exception("Grip repository git repo does not have branch '%s' but *has* not the WIP branch '%s' - try a proper clone"%(branch_upstream, self.branch_name))
+        cs = self.git_repo.get_cs(branch_head)
+        self.verbose.message("Setting branches '%s' and '%s' to point at current head"%(branch_upstream, self.branch_name))
+        self.git_repo.set_upstream_of_branch(branch_name=branch_upstream, origin=origin, origin_branch=push_branch, log=self.log)
+        self.git_repo.change_branch_ref(branch_name=branch_upstream, ref=cs, log=self.log)
+        self.git_repo.change_branch_ref(branch_name=self.branch_name, ref=cs, log=self.log)
         pass
     #f reconfigure
     def reconfigure(self, options):
@@ -355,12 +401,10 @@ class GripRepo:
                 raise UserError("Not permitted to clone '%s' to  '%s"%(r.url, dest))
             pass
         pass
-    #f clone_subrepos
+    #f clone_subrepos - git clone the subrepos to the correct changesets
     def clone_subrepos(self, options, force_shallow=False):
         # Clone all subrepos to the correct paths from url / branch at correct changeset
         # Use shallow if required
-        # git clone --depth 1 --single-branch --branch <name> --no-checkout
-        # git checkout --detach <changeset>
         for r in self.repo_desc_config.iter_repos():
             r_state = self.config_state.get_repo_state(self.repo_desc_config, r.name)
             dest = self.git_repo.filename([r.path])
@@ -380,12 +424,14 @@ class GripRepo:
             r.install_hooks()
             pass
         pass
-    #f create_subrepos
+    #f create_subrepos - create python objects that correspond to the checked-out subrepos
     def create_subrepos(self):
         self.subrepos = []
+        self.toplevel_subrepo = GripSubrepo(self, git_repo=self.git_repo, name="toplevel_grip_repo")
+        self.subrepos.append(self.toplevel_subrepo)
         for r in self.repo_desc_config.iter_repos():
             try:
-                self.subrepos.append(GripSubrepo(self, r))
+                self.subrepos.append(GripSubrepo(self, repo_desc=r))
                 pass
             except SubrepoError as e:
                 self.verbose.warning("Subrepo '%s' could not be found - is this grip repo a full checkout?"%(r.name))

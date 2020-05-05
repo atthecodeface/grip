@@ -53,7 +53,9 @@ class Single(Workflow):
             self.verbose.message("%s is modified (%s) - attempting a commit"%(self.get_repo_workflow_string(), reason.get_reason()))
             self.git_repo.commit(log=self.log)
             pass
-        return self.check_git_repo_is_upstreamed()
+        is_upstreamed = self.check_git_repo_is_upstreamed()
+        self.verbose.error("%s is not upstreamed - perhaps a grip merge is required."%(self.get_repo_workflow_string()))
+        return is_upstreamed
     def merge(self, force=False):
         reason = self.git_repo.is_modified(self.options, log=self.log)
         if reason is not None:
