@@ -41,7 +41,7 @@ class EnvTomlDict(TomlDict):
 #c GripEnv
 class GripEnv:
     #v regular expressions
-    name_match_re = r"""(?P<name>([^@]*))@(?P<rest>.*)$"""
+    name_match_re = r"""(?P<name>([a-zA-Z_][a-zA-Z_0-9]*))@(?P<rest>.*)$"""
     name_match_re = re.compile(name_match_re)
     #f __init__
     def __init__(self, parent=None, name=None, default_values={}):
@@ -150,14 +150,11 @@ class GripEnv:
         if s is None: return None
         n = s.find("@")
         if n<0: return acc+s
-        if len(s)==n+1:
-            if not finalize: return None
-            raise GripTomlError("Unexpected '@' at end of string using environment %s",self.full_name())
         acc = acc + s[:n]
         m = self.name_match_re.match(s,n+1)
         if m is None:
-            if not finalize: return None
-            return GripEnvError(self, s, "Could not parse (char %d) as a grip environment substitution"%(n+1)).invoke(error_handler)
+            acc = acc + "@"
+            return self.substitute(s[n+1:],acc,finalize=finalize,error_handler=error_handler)
         k = m.group('name')
         if len(k)==0:
             v="@"*2
