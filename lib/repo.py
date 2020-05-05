@@ -359,11 +359,11 @@ class GripRepo:
             raise ConfigurationError("Git repo is modified and cannot be configured")
         # The next bit is really for workflow single I think
         try:
-            branch = self.get_branch_name(log=self.log)
+            branch = self.git_repo.get_branch_name(log=self.log)
             pass
         except:
             raise ConfigurationError("Git repo is not at the head of a branch and so cannot be configured")
-        (origin, push_branch) = self.get_branch_remote_and_merge(branch)
+        (origin, push_branch) = self.git_repo.get_branch_remote_and_merge(branch)
         if (origin is None) or (push_branch is None):
             raise ConfigurationError("Git repo branch does not have a remote to merge with and so cannot be configured")
         has_upstream   = self.git_repo.has_cs(branch_name=branch_upstream, log=self.log)
@@ -375,9 +375,9 @@ class GripRepo:
             raise Exception("Grip repository git repo does not have branch '%s' but *has* not the WIP branch '%s' - try a proper clone"%(branch_upstream, self.branch_name))
         cs = self.git_repo.get_cs(branch_head)
         self.verbose.message("Setting branches '%s' and '%s' to point at current head"%(branch_upstream, self.branch_name))
-        self.git_repo.set_upstream_of_branch(branch_name=branch_upstream, origin=origin, origin_branch=push_branch, log=self.log)
         self.git_repo.change_branch_ref(branch_name=branch_upstream, ref=cs, log=self.log)
         self.git_repo.change_branch_ref(branch_name=self.branch_name, ref=cs, log=self.log)
+        self.git_repo.set_upstream_of_branch(branch_name=branch_upstream, origin=origin, origin_branch=push_branch, log=self.log)
         pass
     #f reconfigure
     def reconfigure(self, options):

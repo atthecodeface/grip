@@ -161,6 +161,11 @@ class GitRepo(object):
             push_branch = self.get_config(["branch",branch_name,"merge"])
         except:
             pass
+        if push_branch is not None:
+            if push_branch[:11]=="refs/heads/":
+                push_branch = push_branch[11:]
+                pass
+            pass
         return (origin, push_branch)
     #f get_name
     def get_name(self):
