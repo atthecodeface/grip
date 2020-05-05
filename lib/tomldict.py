@@ -26,7 +26,7 @@ class TomlError(Exception):
 #c TomlDict
 class TomlDict(object):
     """
-    attributes can be types, or 
+    attributes can be types, or
     """
     Wildcard = None
     class _values(object):
@@ -101,6 +101,10 @@ class TomlDict(object):
         pass
 
 #c TomlDictParser
+def str_keys(d):
+    return ", ".join([k for k in d.keys()])
+bool_options = {"True":True, "False":False, "Yes":True, "No":False,
+                "true":True, "false":False, "yes":True, "no":False}
 class TomlDictParser(object):
     """
     """
@@ -114,6 +118,13 @@ class TomlDictParser(object):
             if type(value)!=t: raise TomlError(msg, "Expected %s but got '%s'"%(type_str(t),str(value)))
             return fn(self, parent, msg, value)
         return f
+    @classmethod
+    def from_dict_attr_bool(cls):
+        def bool_of_str(self, parent, msg, value):
+            if value not in bool_options.keys():
+                raise TomlError(msg,"Boolean of '%s' is not one of the permitted options %s"%(value, str_keys(bool_options)))
+            return bool_options[value]
+        return cls.from_dict_attr_value(str,bool_of_str)
     @staticmethod
     def from_dict_attr_list(t, fn=None):
         if fn==None: fn=TomlDictParser.identity_fn
@@ -162,4 +173,4 @@ class TomlDictParser(object):
             for a in rtd.keys(): r.append(a)
             raise TomlError(msg, "Unparsed keys '%s'"%(" ".join(r)))
         return values
-    
+

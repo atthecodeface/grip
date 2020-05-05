@@ -24,7 +24,7 @@ class GripFileTomlDict(TomlDict):
     stages         = TomlDictParser.from_dict_attr_list(str)
     base_repos     = TomlDictParser.from_dict_attr_list(str)
     default_config = TomlDictParser.from_dict_attr_value(str)
-    logging        = TomlDictParser.from_dict_attr_value(str)
+    logging        = TomlDictParser.from_dict_attr_bool()
     repo           = TomlDictParser.from_dict_attr_dict(RepoTomlDict)
     config         = TomlDictParser.from_dict_attr_dict(ConfigTomlDict)
     workflow       = TomlDictParser.from_dict_attr_value(str)
@@ -174,11 +174,7 @@ class GripRepoDesc(object):
         for (n,c) in self.configs.items():
             c.validate(error_handler=error_handler)
             pass
-        if self.logging is not None:
-            if self.logging not in self.logging_options.keys():
-                raise RepoDescError("logging of '%s' is not one of the permitted options %s"%(self.logging, str_keys(self.logging_options)))
-            self.logging = self.logging_options[self.logging]
-            pass
+        if self.logging is None: self.logging=False
         pass
     #f resolve
     def resolve(self, error_handler=None):

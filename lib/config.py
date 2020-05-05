@@ -69,8 +69,27 @@ class GripConfig(object):
         """
         values.Set_obj_properties(self, {"doc"})
         self.env.build_from_values(values.env)
-        self.build_stages_from_values(values)
+        # Build repos before stages, as stages refer to the repos
         self.build_repos_from_values(values)
+        self.build_stages_from_values(values)
+        pass
+    #f build_repos_from_values
+    def build_repos_from_values(self, values):
+        """
+        """
+        if values.repos is None:values.repos={}
+        for r in values.repos:
+            if r not in self.grip_repo_desc.repos:raise GripTomlError("repo '%s' specified in config '%s' but it is not defined in the file"%(r, self.name))
+            self.repos[r] = self.grip_repo_desc.repos[r].clone()
+            pass
+        for r in values.Get_other_attrs(): # These must be RepoDescTomDict._values
+            if r not in self.repos:raise GripTomlError("repo '%s' description specified in config '%s' but it is not one of the repos for that config (repos are %s)"%(r, self.name, str_keys(self.repos)))
+            repo_desc = values.Get(r)
+            self.repos[r] = GitRepoDesc(r, values=repo_desc, parent=self.repos[r], grip_repo_desc=self.grip_repo_desc)
+            pass
+        for r in self.iter_repos():
+            r.set_grip_config(self)
+            pass
         pass
     #f build_stages_from_values
     def build_stages_from_values(self, values):
@@ -100,24 +119,6 @@ class GripConfig(object):
             else:
                 self.stages[sn] = self.stages[sn].clone(values=stage_values[sn])
                 pass
-            pass
-        pass
-    #f build_repos_from_values
-    def build_repos_from_values(self, values):
-        """
-        """
-        if values.repos is None:values.repos={}
-        for r in values.repos:
-            if r not in self.grip_repo_desc.repos:raise GripTomlError("repo '%s' specified in config '%s' but it is not defined in the file"%(r, self.name))
-            self.repos[r] = self.grip_repo_desc.repos[r].clone()
-            pass
-        for r in values.Get_other_attrs(): # These must be RepoDescTomDict._values
-            if r not in self.repos:raise GripTomlError("repo '%s' description specified in config '%s' but it is not one of the repos for that config (repos are %s)"%(r, self.name, str_keys(self.repos)))
-            repo_desc = values.Get(r)
-            self.repos[r] = GitRepoDesc(r, values=repo_desc, parent=self.repos[r], grip_repo_desc=self.grip_repo_desc)
-            pass
-        for r in self.iter_repos():
-            r.set_grip_config(self)
             pass
         pass
     #f resolve_git_urls
@@ -211,7 +212,13 @@ class GripConfig(object):
         r_stage_names = list(self.stages.keys())
         r_stage_names.sort()
         if len(r_stage_names)>0:
-            blah.append("Stages: %s"%(" ".join(r_stage_names)))
+            stages_string = "Stages:"
+            for rsn in r_stage_names:
+                action_string = ""
+                if self.stages[rsn].is_action():action_string = "*"
+                stages_string += " %s%s"%(action_string,rsn)
+                pass
+            blah.append(stages_string)
             for sn in r_stage_names:
                 stage_doc = self.stages[sn].get_doc_string()
                 if stage_doc is not None: blah.append(("Stage %s"%sn,[stage_doc]))
@@ -234,6 +241,17 @@ class GripConfig(object):
             acc = r.fold_repo_stages(acc, callback_fn)
             pass
         return acc
+    #f write_makefile_entries
+    def write_makefile_entries(self, f, verbose):
+        for stage in self.iter_stages():
+            stage.write_makefile_entries(f, verbose)
+            pass
+        for r in self.iter_repos():
+            for stage in r.iter_stages():
+                stage.write_makefile_entries(f, verbose)
+                pass
+            pass
+        pass
     #f prettyprint
     def prettyprint(self, acc, pp):
         acc = pp(acc, "config.%s:" % (self.name))

@@ -1,6 +1,7 @@
 #a Imports
 import os, time
 from .git import GitRepo
+from .stage import GitRepoStageDependency
 from .repodesc import GripRepoDesc
 from .repostate import GripRepoState
 from .repoconfig import GripRepoConfig
@@ -401,31 +402,13 @@ class GripRepo:
         # recreate environment
         # clean out make stamps
         pass
-    #f get_makefile_stamp_filename
-    def get_makefile_stamp_filename(self, rd):
+    #f get_makefile_stamp_path
+    def get_makefile_stamp_path(self, rd):
         """
         Get an absolute path to a makefile stamp filename
         """
         rd_tgt = rd.target_name()
         return os.path.join(self.grip_path(self.makefile_stamps_dirname), rd_tgt)
-    #f get_makefile_stamp
-    def get_makefile_stamp(self, rd):
-        """
-        Get makefile stamp of a 'stage', 'requires' or 'satisfies'
-        """
-        return rd.target_name()
-    #f new_makefile_stamp
-    def new_makefile_stamp(self,rd):
-        """
-        Get an absolute path to a makefile stamp filename
-        Clean the file if it exists
-
-        If repo is None then it is a global stage
-        """
-        rd_tgt = self.get_makefile_stamp(rd)
-        rd_tgt_filename = self.get_makefile_stamp_filename(rd)
-        if os.path.exists(rd_tgt_filename): os.unlink(rd_tgt_filename)
-        return (rd_tgt, rd_tgt_filename)
     #f create_grip_makefiles
     def create_grip_makefiles(self):
         """
@@ -434,6 +417,7 @@ class GripRepo:
         Create makefile.env and makefile
         Delete makefile stamps
         """
+        GitRepoStageDependency.set_makefile_path_fn(self.get_makefile_stamp_path)
         self.add_log_string("Cleaning makefile stamps directory '%s'"%self.grip_path(self.makefile_stamps_dirname))
         makefile_stamps = self.grip_path(self.makefile_stamps_dirname)
         try:
@@ -443,94 +427,29 @@ class GripRepo:
             pass
         self.add_log_string("Creating makefile environment file '%s'"%self.grip_path(self.grip_makefile_env_filename))
         with open(self.grip_path(self.grip_makefile_env_filename),"w") as f:
+            print("GQ=@",file=f)
+            print("GQE=@echo",file=f)
             for (n,v) in self.repo_desc_config.get_env_as_makefile_strings():
-                print("%s:=%s"%(n,v),file=f)
+                print("%s=%s"%(n,v),file=f)
                 pass
             for r in self.repo_desc_config.iter_repos():
                 for (n,v) in r.get_env_as_makefile_strings():
-                    print("# REPO %s wants %s:=%s"%(r.name, n,v),file=f)
+                    print("# REPO %s wants %s=%s"%(r.name, n,v),file=f)
                     pass
                 pass
             pass
         # create makefiles
         self.add_log_string("Creating makefile '%s'"%self.grip_path(self.grip_makefile_filename))
         with open(self.grip_path(self.grip_makefile_filename),"w") as f:
+            print("THIS_MAKEFILE = %s\n"%(self.grip_path(self.grip_makefile_filename)), file=f)
             print("-include %s"%(self.grip_path(self.grip_makefile_env_filename)), file=f)
-            for stage in self.repo_desc_config.iter_stages():
-                self.write_stage_to_makefile(f, None, stage)
+            def log_and_verbose(s):
+                self.add_log_string(s)
+                self.verbose.info(s)
                 pass
-            def write_to_makefile(acc, repo, stage):
-                self.write_stage_to_makefile(f, repo, stage)
-                pass
-            self.repo_desc_config.fold_repo_stages(None, write_to_makefile)
+            self.repo_desc_config.write_makefile_entries(f, verbose=log_and_verbose)
             pass
         # clean out make stamps
-        pass
-    #f write_stage_to_makefile
-    def write_stage_to_makefile(self, f, repo, stage):
-        (tgt, tgt_filename) = self.new_makefile_stamp(stage.dependency)
-        sn = stage.get_name()
-        if repo is None:
-            self.add_log_string("Adding global stage '%s'"%sn)
-            rs_name = "%s"%(sn)
-            pass
-        else:
-            self.add_log_string("Adding target '%s'"%tgt)
-            rs_name = "%s_%s"%(repo.name, sn)
-            pass
-
-        wd = stage.wd
-        if wd is None:
-            if repo is None:
-                wd = self.git_repo.filename()
-                pass
-            else:
-                wd = self.git_repo.filename(repo.path)
-                pass
-            pass
-
-        env = ""
-        for (k,v) in stage.env.as_makefile_strings():
-            env = env + (" %s=%s"%(k,v))
-            pass
-        if env != "": env = env + ";"
-
-        exec = stage.exec
-
-        print("\nGRIP_%s_ENV := %s"%(rs_name, env), file=f)
-
-        print("\n.PHONY: %s revoke.%s"%(tgt, tgt), file=f)
-        print("%s: %s"%(tgt, tgt_filename), file=f)
-        print("revoke.%s:\n\trm -f %s"%(tgt, tgt_filename), file=f)
-
-        print("%s:"%(tgt_filename), file=f)
-        if exec is not None:
-            print("\t$(GRIP_%s_ENV) cd %s && (%s)"%(rs_name, wd, exec), file=f)
-            pass
-        print("\ttouch %s"%(tgt_filename), file=f)
-
-        if stage.requires is not None:
-            for r in stage.requires:
-                self.add_log_string("Dependent on '%s'"%(r.target_name()))
-                ostgt_filename = self.get_makefile_stamp_filename(r)
-                print("%s: %s"%(tgt_filename,ostgt_filename), file=f)
-                pass
-            pass
-        if stage.satisfies is not None:
-            self.add_log_string("Global stage '%s' depends on repo '%s' stage '%s'"%(stage.satisfies.target_name(), repo.name, stage.name))
-            ostgt_filename = self.get_makefile_stamp_filename(stage.satisfies)
-            print("%s: %s"%(ostgt_filename, tgt_filename), file=f)
-            ostgt = self.get_makefile_stamp(stage.satisfies)
-            print("revoke.%s: revoke.%s"%(ostgt, tgt), file=f)
-            pass
-        if repo is not None:
-            config_stage = self.repo_desc_config.get_stage(stage.name)
-            if config_stage is not None:
-                self.add_log_string("Global stage '%s' depends on repo '%s'"%(config_stage.name, repo.name))
-                stgt_filename = self.get_makefile_stamp_filename(config_stage.dependency)
-                print("%s: %s"%(stgt_filename, tgt_filename), file=f)
-                pass
-            pass
         pass
     #f get_root
     def get_root(self):

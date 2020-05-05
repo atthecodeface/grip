@@ -74,7 +74,7 @@ class GitRepoDesc(object):
                 pass
             for (n,s) in parent.stages.items():
                 if n not in self.stages:
-                    self.stages[n] = s.clone()
+                    self.stages[n] = s.clone(grip_repo_desc=grip_repo_desc, git_repo_desc=self)
                     pass
                 pass
             pass
@@ -157,6 +157,12 @@ class GitRepoDesc(object):
             if not error_on_not_found: return None
             raise GripTomlError("Stage '%s' not known in repository '%s'"%(stage_name, self.name))
         return self.stages[stage_name]
+    #f iter_stages
+    def iter_stages(self):
+        for (sn,s) in self.stages.items():
+            yield(s)
+            pass
+        pass
     #f fold_repo_stages
     def fold_repo_stages(self, acc, callback_fn):
         for (sn,s) in self.stages.items():
