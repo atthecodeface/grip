@@ -1,7 +1,8 @@
 #a Imports
 import os, sys, re, copy
+from typing import Optional, Dict, List, Tuple
 import toml
-from .tomldict import TomlDict, TomlDictParser
+from .tomldict import TomlDict, TomlDictValues, TomlDictParser
 from .git import GitRepo
 from .workflows import workflows
 from .exceptions import *
@@ -35,6 +36,7 @@ class GripEnv:
     #v regular expressions
     name_match_re_string = r"""(?P<name>([a-zA-Z_][a-zA-Z_0-9]*))@(?P<rest>.*)$"""
     name_match_re = re.compile(name_match_re_string)
+    env : Dict[str,str]
     #f __init__
     def __init__(self, parent=None, name=None, default_values={}):
         self.name = name
@@ -42,11 +44,11 @@ class GripEnv:
         self.env = {}
         self.add_values(default_values)
         pass
-    #f get_root
+    #f get_root - find root environment by tracing parents
     def get_root(self):
         if self.parent is not None: return self.parent.get_root()
         return self
-    #f add_values
+    #f add_values - add values from a dictionary to the environment
     def add_values(self, values_d):
         """
         Add values from the dictionary 'values_d' to this environment
@@ -55,17 +57,17 @@ class GripEnv:
             self.env[k] = v
             pass
         pass
-    #f build_from_values
-    def build_from_values(self, values):
+    #f build_from_values - build from TomlDictValues 'other attributes'
+    def build_from_values(self, values : Optional[TomlDictValues]):
         """
-        Add key/value pairs from a TomlDict.values 'other attributes'
+        Add key/value pairs from a TomlDictValues 'other attributes'
         """
         if values is None: return
         for k in values.Get_other_attrs():
              self.env[k] = values.Get(k)
              pass
         pass
-    #f resolve
+    #f resolve - resolve self.env looking for @KEY@ in each
     def resolve(self, error_handler=None):
         """
         Resolve the values in the environment where the values include references
@@ -102,8 +104,8 @@ class GripEnv:
             self.env[k] = self.substitute(self.env[k], finalize=True, error_handler=error_handler)
             pass
         pass
-    #f full_name
-    def full_name(self):
+    #f full_name - get hierarchical name of environment
+    def full_name(self) -> str:
         """
         Return a string with the full hierarchial name of this environment
         """
@@ -112,8 +114,8 @@ class GripEnv:
             r = self.parent.full_name()+"."
             pass
         return r+self.name
-    #f value_of_key
-    def value_of_key(self, k, raise_exception=True, environment_overrides=True, error_handler=None):
+    #f value_of_key - get value of key, from parents if not local, using environment if required
+    def value_of_key(self, k : str, raise_exception=True, environment_overrides=True, error_handler=None) -> Optional[str]:
         """
         Find value of a key within the environment
         If environment_overrides is True then first look in os.environ
@@ -131,8 +133,8 @@ class GripEnv:
         if r is not None: return r
         if not raise_exception: return None
         return GripEnvValueError(self,k,"Configuration or environment value not specified").invoke(error_handler)
-    #f substitute
-    def substitute(self, s, acc="", finalize=True, error_handler=None):
+    #f substitute - substitute environment contents as required in a string, return None if unknown variable
+    def substitute(self, s:Optional[str], acc="", finalize=True, error_handler=None) -> Optional[str]:
         """
         Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
         Find any @@ and replace
@@ -153,13 +155,14 @@ class GripEnv:
             if finalize: v="@"
             pass
         else:
-            v = self.value_of_key(k, raise_exception=finalize, error_handler=error_handler)
-            if v is None: return None
+            key_value = self.value_of_key(k, raise_exception=finalize, error_handler=error_handler)
+            if key_value is None: return None
+            v = key_value
             pass
         acc = acc + v
         return self.substitute(m.group('rest'), acc=acc, finalize=finalize, error_handler=error_handler)
-    #f as_dict
-    def as_dict(self, include_parent=False):
+    #f as_dict - generate key->value pair, including parent if required
+    def as_dict(self, include_parent=False) -> Dict[str,str]:
         """
         Generate a dictionary of environment
         Include parents if required, with children overriding parents if keys
@@ -174,7 +177,7 @@ class GripEnv:
             pass
         return e
     #f as_makefile_strings
-    def as_makefile_strings(self, include_parent=False):
+    def as_makefile_strings(self, include_parent=False) -> List[Tuple[str,str]]:
         """
         Generate a list of (key,value) pairs from the complete environment
         Include parents (recursively) if desired
@@ -185,12 +188,13 @@ class GripEnv:
             r.append((k,v))
             pass
         return r
-    #f as_str
-    def as_str(self, include_parent=False):
+    #f as_str - Generate a string for pretty printing
+    def as_str(self, include_parent=False) -> str:
         """
         Generate a string representation of the environment, including parents if required
         Used for pretty-printing
         """
+        r = []
         d = self.as_dict(include_parent=include_parent)
         for (k,v) in d.items():
             r.append("%s:'%s'"%(k,v))

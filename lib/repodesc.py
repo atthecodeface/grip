@@ -6,7 +6,9 @@ from .git import GitRepo
 from .workflows import workflows
 from .exceptions import *
 from .env import GripEnv, EnvTomlDict
-from .stage import StageTomlDict, GitRepoStageDependency, GitRepoStageDesc
+from .stage import Dependency as StageDependency
+from .stage import Descriptor as StageDescriptor
+from .stage import StageTomlDict
 from .git_repo_desc import RepoDescTomlDict, GitRepoDesc
 from .config import GripConfig, ConfigTomlDict
 
@@ -135,8 +137,6 @@ class GripRepoDesc(object):
         values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
         # values.Prettyprint()
         self.build_from_values(values)
-        self.validate(error_handler=error_handler)
-        self.resolve(error_handler=error_handler)
         pass
     #f read_toml_file
     def read_toml_file(self, grip_toml_filename, subrepos=[], error_handler=None):
@@ -210,8 +210,7 @@ class GripRepoDesc(object):
         self.stages = {}
         if values.stages is not None:
             for s in values.stages:
-                self.stages[s] = GitRepoStageDesc(grip_repo_desc=self, name=s, values=None)
-                # stages[s] = GitRepoStageDependency(s, must_be_global=True)
+                self.stages[s] = StageDescriptor(grip_repo_desc=self, name=s, values=None)
                 pass
             pass
         for config_name in values.configs:

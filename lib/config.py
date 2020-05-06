@@ -4,7 +4,9 @@ from .tomldict import TomlDict, TomlDictParser
 from .exceptions import *
 from .env import GripEnv, EnvTomlDict
 from .git_repo_desc import RepoDescTomlDict, GitRepoDesc
-from .stage import StageTomlDict, GitRepoStageDependency, GitRepoStageDesc
+# from .stage import Dependency as StageDependency
+from .stage import Descriptor as StageDescriptor
+from .stage import StageTomlDict
 
 #a Useful functions
 def str_keys(d):
@@ -114,7 +116,7 @@ class GripConfig(object):
         for sn in stage_values.keys():
             self.stages[sn] = self.grip_repo_desc.get_stage(sn)
             if self.stages[sn] is None:
-                self.stages[sn] = GitRepoStageDesc(grip_repo_desc=self.grip_repo_desc, name=sn, values=stage_values[sn])
+                self.stages[sn] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=sn, values=stage_values[sn])
                 pass
             else:
                 self.stages[sn] = self.stages[sn].clone(values=stage_values[sn])

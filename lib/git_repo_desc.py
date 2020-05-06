@@ -6,7 +6,8 @@ from .git import GitRepo
 from .workflows import workflows
 from .exceptions import *
 from .env import GripEnv, EnvTomlDict
-from .stage import StageTomlDict, GitRepoStageDesc
+from .stage import Descriptor as StageDescriptor
+from .stage import StageTomlDict
 
 class RepoDescTomlDict(TomlDict):
     """A repo description: where it is, which VCS it uses, pull methodology, push methodology, where it exists,
@@ -35,7 +36,7 @@ class GitRepoDesc(object):
 
     A GitRepoDesc may be read-only; push-to-integration; push-to-patch?; merge?
 
-    Possibly it should have a default dictionary of <stage> -> <GitRepoStageDesc>
+    Possibly it should have a default dictionary of <stage> -> <StageDescriptor>
     """
     url      = None
     branch   = None
@@ -62,7 +63,7 @@ class GitRepoDesc(object):
         if values is not None:
             for stage in values.Get_other_attrs():
                 stage_values = values.Get(stage)
-                self.stages[stage] = GitRepoStageDesc(self.grip_repo_desc, stage, git_repo_desc=self, values=stage_values)
+                self.stages[stage] = StageDescriptor(self.grip_repo_desc, stage, git_repo_desc=self, values=stage_values)
                 pass
             pass
         if parent is not None:
