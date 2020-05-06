@@ -15,34 +15,54 @@ def pp_stdout(acc, s, indent=0):
     return ""
 
 #a Classes
-#c GripSubrepo class
-class GripSubrepo:
-    ws = workflows()
+#c Repository class
+class Repository(object):
+    #f Documentation
+    """
+    This class manages a git repository that may be a simple git
+    subrepository or the toplevel repository.
+
+    It provides methods for repository management such as:
+
+    * status  - report status of the repository
+              - branch must be WIP
+    * commit  - commit all changes in the repository
+              - branch must be WIP
+    * fetch   - fetch updates (to local 'upstream' branch)
+    * merge   - merge branch with 'upstream' branch
+              - branch must be WIP
+              - must be unmodified
+    * prepush - verify WIP branch is ready to be pushed
+              - branch must be WIP
+              - must be unmodified
+              - may not need to be merged - that depends on workflow
+    * push    - push WIP to the push upstream
+              - branch must be WIP
+              - must be unmodified
+              - may not need to be merged - that depends on workflow
+    """
     #f __init__
-    def __init__(self, grip_repo, git_repo=None, name=None, repo_desc=None):
+    def __init__(self, name, grip_repo, parent, git_repo, repo_desc):
         """
-        Either git_repo is None and repo_desc describes a subrepo OR
-        git_repo is already a GitRepo and name must be given too
         """
+        self.name = name
         self.grip_repo = grip_repo
-        if repo_desc is not None:
-            self.name = repo_desc.name
-            try:
-                self.git_repo = GitRepo(path=grip_repo.git_repo.filename([repo_desc.path]))
-                pass
-            except PathError as e:
-                raise SubrepoError("subrepo failed: %s"%(str(e)))
-            pass
-            self.workflow = repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
-        else:
-            if (name is None) or (git_repo is None): raise Exception("Bug in invocation of GripSubrepo")
-            self.name = name
-            self.git_repo = git_repo
-            self.workflow = grip_repo.repo_desc.workflow(grip_repo, self.git_repo, grip_repo.log, grip_repo.verbose)
-            pass
+        self.parent = parent
+        self.git_repo = git_repo
+        self.repo_desc = repo_desc
+        self.workflow = repo_desc.workflow(grip_repo, git_repo, grip_repo.log, grip_repo.verbose)
+        self.subrepos = []
+        if parent: parent.append_subrepo(self)
+        pass
+    #f append_subrepo
+    def append_subrepo(self, child):
+        self.subrepos.append(child)
         pass
     #f install_hooks
     def install_hooks(self):
+        for sr in self.subrepos:
+            sr.install_hooks()
+            pass
         pass
     #f status
     def status(self):
@@ -123,6 +143,7 @@ class GripSubrepo:
     #f All done
     pass
 
+#a Toplevel grip repository class - this describes/contains the whole thing
 #c GripRepo class
 class GripRepo:
     #v Static properties
@@ -420,33 +441,23 @@ class GripRepo:
                                        changeset = r_state.changeset )
             pass
         self.create_subrepos()
-        for r in self.subrepos:
-            r.install_hooks()
-            pass
         pass
     #f create_subrepos - create python objects that correspond to the checked-out subrepos
     def create_subrepos(self):
         self.subrepos = []
-        self.toplevel_subrepo = GripSubrepo(self, git_repo=self.git_repo, name="toplevel_grip_repo")
+        self.toplevel_subrepo = Repository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, repo_desc=self.repo_desc )
         self.subrepos.append(self.toplevel_subrepo)
-        for r in self.repo_desc_config.iter_repos():
+        for rd in self.repo_desc_config.iter_repos():
             try:
-                self.subrepos.append(GripSubrepo(self, repo_desc=r))
+                gr = GitRepo(path=self.git_repo.filename([rd.path]))
+                sr = Repository(name=rd.name, grip_repo=self, parent=self.toplevel_subrepo, git_repo=gr, repo_desc=rd)
+                self.subrepos.append(sr)
                 pass
             except SubrepoError as e:
                 self.verbose.warning("Subrepo '%s' could not be found - is this grip repo a full checkout?"%(r.name))
                 pass
             pass
-        pass
-    #f xupdate_subrepos
-    def xupdate_subrepos(self):
-        # Maybe not do this at all for now?
-        pass
-    #f xupdate_grip_env
-    def xupdate_grip_env(self):
-        # repos are up-to-date
-        # recreate environment
-        # clean out make stamps
+        self.toplevel_subrepo.install_hooks()
         pass
     #f get_makefile_stamp_path
     def get_makefile_stamp_path(self, rd):
