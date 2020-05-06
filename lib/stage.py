@@ -69,7 +69,7 @@ class GitRepoStageDependency:
                 return GripTomlError("%s: repo not in configuration '%s'"%(reason, grip_config.get_name())).invoke(error_handler)
             self.stage = self.repo.get_repo_stage(self.stage_name, error_on_not_found=False)
             if self.stage is None:
-                return GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, stage_name, repo_name, grip_config.get_name())).invoke(error_handler)
+                return GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, self.stage_name, self.repo.name, grip_config.get_name())).invoke(error_handler)
             pass
         else:
             if not grip_config.has_stage(self.stage_name):
