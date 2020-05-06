@@ -1,18 +1,20 @@
 #a Imports
 import os, sys, re, copy
 import toml
-from .tomldict import TomlDict, TomlDictParser
-from .git import GitRepo
-from .workflows import workflows
-from .exceptions import *
-from .env import GripEnv, EnvTomlDict
-from .descriptor.stage import Dependency as StageDependency
-from .descriptor.stage import Descriptor as StageDescriptor
-from .descriptor.stage import StageTomlDict
-from .descriptor.repo  import RepoDescTomlDict
-from .descriptor.repo  import Descriptor as GitRepoDesc
-from .descriptor.config import Descriptor as ConfigDescriptor
-from .descriptor.config import ConfigTomlDict
+from typing import Optional, Dict, List, Tuple, Any, Iterator, Sequence, Union
+from ..exceptions import *
+from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
+from ..git import GitRepo
+from ..workflows import workflows
+from ..exceptions import *
+from ..env import GripEnv, EnvTomlDict
+from .stage import Dependency as StageDependency
+from .stage import Descriptor as StageDescriptor
+from .stage import StageTomlDict
+from .repo  import RepoDescTomlDict
+from .repo  import Descriptor as RepoDescriptor
+from .config import Descriptor as ConfigDescriptor
+from .config import ConfigTomlDict
 
 #a Useful functions
 def str_keys(d):
@@ -38,8 +40,38 @@ class GripFileTomlDict(TomlDict):
     pass
 
 #a Classes
-#c GripRepoDesc - complete description of a grip repo, from the grip toml file
-class GripRepoDesc(object):
+#c DescriptorValues - namespace that contains values from the TomlDict
+class DescriptorValues(object):
+    name : Optional[str] = None
+    default_config : str      = ""
+    base_repos : List[str]    = []
+    configs : List[str]       = []
+    stages  : List[str]       = []
+    config  : Dict[str, TomlDictValues]  = {}
+    repo    : Dict[str, TomlDictValues]  = {}
+    logging : bool = False
+    workflow : Optional[str] = None
+    doc : Optional[str] = None
+    def __init__(self, values):
+        values.Set_obj_properties(self, ["name", "workflow", "base_repos", "default_config", "logging", "doc", "configs", "stages", "config", "repo"])
+        if values.base_repos is None: self.base_repos=[]
+        if values.stages     is None: self.stages=[]
+        self.repo={}
+        if values.repo is not None:
+            for repo_name in values.repo.Get_other_attrs():
+                self.repo[repo_name] = values.repo.Get(repo_name)
+                pass
+            pass
+        self.config={}
+        if values.config is not None:
+            for config_name in values.config.Get_other_attrs():
+                self.config[config_name] = values.config.Get(config_name)
+                pass
+            pass
+        pass
+
+#c Descriptor - complete description of a grip repo, from the grip toml file
+class Descriptor(object):
     """
     A GripRepoDesc is a complete description of the Grip repo
 
@@ -60,28 +92,18 @@ class GripRepoDesc(object):
     name       : name of repo - used in branchnames
     doc        : documentation
     """
-    raw_toml_dict = None
-    default_config = None
-    base_repos = []
-    configs = {}
-    repos = {}
-    stages = []
+    values : DescriptorValues
+    name           : Optional[str]
+    default_config : Optional[str]
+    base_repos     : List[str]
+    configs        : Dict[str,ConfigDescriptor]
+    repos          : Dict[str,RepoDescriptor]
+    stages         : Dict[str,StageDescriptor]
     supported_workflows = workflows()
     re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
-    #v static properties
-    logging_options = {"True":True, "False":False, "Yes":True, "No":False}
     #f __init__
     def __init__(self, git_repo):
-        self.name = None
-        self.workflow = None
-        self.default_config = None
-        self.repos = {}
-        self.configs = {}
-        self.stages = {}
-        self.base_repos = []
-        self.doc = None
         self.git_repo = git_repo
-        self.logging = None
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
         default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
@@ -99,8 +121,8 @@ class GripRepoDesc(object):
         except toml.decoder.TomlDecodeError as e:
             raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
         return r
-    #f read_toml_string
-    def read_toml_string(self, grip_toml_string, subrepo_toml_strings, filename="<toml_file>", error_handler=None):
+    #f read_toml_strings
+    def read_toml_strings(self, grip_toml_string, subrepo_toml_strings, filename="<toml_file>"):
         """
         Create the description and validate it from the grip_toml_string contents
 
@@ -140,12 +162,21 @@ class GripRepoDesc(object):
         # values.Prettyprint()
         self.build_from_values(values)
         pass
+    #f build_from_toml_dict
+    def build_from_toml_dict(self):
+        """
+        Create the description and validate it from the grip_toml_string contents
+        """
+        values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
+        # values.Prettyprint()
+        self.build_from_values(values)
+        pass
     #f read_toml_file
     def read_toml_file(self, grip_toml_filename, subrepos=[], error_handler=None):
         """
         Load the <root_dir>/.grip/grip.toml file
 
-        subrepos is a list of GitRepoDesc instances which may have been checked
+        subrepos is a list of RepoDescriptor instances which may have been checked
         out which may have grip.toml files. Add these after the main file.
         """
         with open(grip_toml_filename) as f:
@@ -160,7 +191,43 @@ class GripRepoDesc(object):
                     pass
                 pass
             pass
-        self.read_toml_string(toml_string, subrepo_toml_strings, filename=grip_toml_filename, error_handler=error_handler)
+        self.read_toml_strings(toml_string, subrepo_toml_strings, filename=grip_toml_filename)
+        self.build_from_toml_dict()
+        pass
+    #f build_from_values
+    def build_from_values(self, values):
+        self.values = DescriptorValues(values)
+        if len(self.values.repo)==0:    raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
+        if len(self.values.configs)==0: raise GripTomlError("'configs' must be provided in grip configuration file")
+        self.name           = self.values.name
+        self.default_config = self.values.default_config
+        self.base_repos     = self.values.base_repos
+        self.workflow       = self.values.workflow
+        self.logging        = self.values.logging
+        self.doc            = self.values.doc
+        self.env.build_from_values(values.env)
+        # Must validate the base_repos here so users can assume self.repos[x] is valid for x in self.base_repos
+        for r in self.values.base_repos:
+            if r not in self.values.repo: raise RepoDescError("repo '%s', one of the base_repos, is not one of the repos described (which are %s)"%(r, str_keys(self.values.repo)))
+            pass
+        # Build stages before configs
+        self.repos = {}
+        for (repo_name, repo_values) in self.values.repo.items():
+            self.repos[repo_name] = RepoDescriptor(repo_name, values=repo_values, grip_repo_desc=self)
+            pass
+        self.stages = {}
+        for s in self.values.stages:
+            self.stages[s] = StageDescriptor(grip_repo_desc=self, name=s, values=None)
+            pass
+        self.configs = {}
+        for config_name in self.values.configs:
+            self.configs[config_name] = ConfigDescriptor(config_name, self)
+            pass
+        for (config_name, config_values) in self.values.config.items():
+            if config_name not in self.configs:
+                raise GripTomlError("'config.%s' provided without '%s' in configs"%(config_name,config_name))
+            self.configs[config_name].build_from_values(config_values)
+            pass
         pass
     #f validate
     def validate(self, error_handler=None):
@@ -188,46 +255,13 @@ class GripRepoDesc(object):
             c.resolve(error_handler=error_handler)
             pass
         pass
-    #f validate_workflow
+    #f validate_workflow - map from workflow name to workflow class
     def validate_workflow(self, workflow, user):
         if workflow is None:
             raise RepoDescError("'%s' is does not have a workflow specified"%(user))
         if workflow not in self.supported_workflows:
             raise RepoDescError("workflow '%s' used in %s is not in workflows supported by this version of grip (which are %s)"%(self.workflow, user, str_keys(self.supported_workflows)))
         return self.supported_workflows[workflow]
-    #f build_from_values
-    def build_from_values(self, values):
-        values.Set_obj_properties(self, {"name", "workflow", "base_repos", "default_config", "logging", "doc"})
-        if values.repo           is None: raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
-        if values.configs        is None: raise GripTomlError("'configs' must be provided in grip configuration file")
-        self.env.build_from_values(values.env)
-        for repo_name in values.repo.Get_other_attrs():
-            self.repos[repo_name] = GitRepoDesc(repo_name, values=values.repo.Get(repo_name), grip_repo_desc=self)
-            pass
-        # Must validate the base_repos here so users can assume self.repos[x] is valid for x in self.base_repos
-        for r in self.base_repos:
-            if r not in self.repos: raise RepoDescError("repo '%s', one of the base_repos, is not one of the repos described (which are %s)"%(r, str_keys(self.repos)))
-            pass
-        # Build stages before configs
-        self.stages = {}
-        if values.stages is not None:
-            for s in values.stages:
-                self.stages[s] = StageDescriptor(grip_repo_desc=self, name=s, values=None)
-                pass
-            pass
-        for config_name in values.configs:
-            self.configs[config_name] = ConfigDescriptor(config_name, self)
-            pass
-        if values.config is not None:
-            for config_name in values.config.Get_other_attrs():
-                if config_name not in self.configs:
-                    raise GripTomlError("'config.%s' provided without '%s' in configs"%(config_name,config_name))
-                config = self.configs[config_name]
-                config_values= values.config.Get(config_name)
-                config.build_from_values(config_values)
-                pass
-            pass
-        pass
     #f prettyprint
     def prettyprint(self, acc, pp):
         acc = pp(acc, "default_config: %s"%(self.default_config))
@@ -243,23 +277,23 @@ class GripRepoDesc(object):
             acc = c.prettyprint(acc, ppr)
             pass
         return acc
-    #f iter_repos - iterate over repos in config, each is GitRepoDesc instance
-    def iter_repos(self):
+    #f iter_repos - iterate over repos in config, each is RepoDescriptor instance
+    def iter_repos(self) -> Iterator[RepoDescriptor]:
         for n in self.repos:
             yield self.repos[n]
             pass
         pass
     #f iter_stages - iterate over stages in config, each is Stage instance
-    def iter_stages(self):
+    def iter_stages(self) -> Iterator[StageDescriptor]:
         for n in self.stages:
             yield self.stages[n]
             pass
         pass
-    #f get_configs
-    def get_configs(self):
-        return self.configs.keys()
+    #f get_configs - get names of configs
+    def get_configs(self) -> List[str]:
+        return list(self.configs.keys())
     #f get_stage - used by Config
-    def get_stage(self, stage_name):
+    def get_stage(self, stage_name) -> Optional[StageDescriptor]:
         """
         Get dictionary of stage name -> Stage
         """
@@ -273,7 +307,7 @@ class GripRepoDesc(object):
         if self.doc is None: return "Undocumented"
         return self.doc.strip()
     #f get_doc
-    def get_doc(self, include_configs=True):
+    def get_doc(self, include_configs=True) -> Sequence[ Union [ str, List[ Tuple[str, Any]]]]:
         """
         Return documentation = list of <string> | (name * documentation)
         List should include all configurations
@@ -288,10 +322,10 @@ class GripRepoDesc(object):
             pass
         return r
     #f is_logging_enabled
-    def is_logging_enabled(self):
+    def is_logging_enabled(self) -> bool:
         return self.logging
     #f select_config
-    def select_config(self, config_name=None):
+    def select_config(self, config_name=None) -> Optional[ConfigDescriptor]:
         """
         Return a selected configuration
         """
@@ -309,127 +343,4 @@ class GripRepoDesc(object):
         pass
     #f All done
     pass
-
-#a Unittest for GripRepoDesc class
-from .test_utils import UnitTestObject
-class GripRepoDescUnitTestBase(UnitTestObject):
-    config_toml = None
-    config_name = False
-    grd_assert = None
-    cfg_assert = None
-    exception_expected = None
-    def test_it(self):
-        def git_repo():pass
-        git_repo.get_git_url_string = lambda:""
-        git_repo.get_path = lambda:""
-        if self.config_toml is not None:
-            grd = GripRepoDesc(git_repo=git_repo)
-            if self.exception_expected is not None:
-                self.assertRaises(self.exception_expected, grd.read_toml_string, self.config_toml)
-                pass
-            else:
-                grd.read_toml_string(self.config_toml)
-                pass
-            if self.grd_assert is not None:
-                self._test_obj_asserts(grd, self.grd_assert, "grip_repo_desc")
-                pass
-            if self.config_name is not False:
-                cfg = grd.select_config(config_name=self.config_name)
-                if cfg is None:
-                    self.assertEqual(cfg, self.cfg_assert)
-                    pass
-                else:
-                    self._test_obj_asserts(cfg, self.cfg_assert, "config_desc")
-                    pass
-                pass
-            pass
-        pass
-    pass
-class GripRepoDescUnitTest1(GripRepoDescUnitTestBase):
-    """
-    Note that only configuration's repodescs have resolved git_url properties
-    """
-    config_toml = """name="y"\ndefault_config="x"\nconfigs=["x"]\nbase_repos=[]\nrepo={}\n"""
-    grd_assert = {"name":"y","default_config":"x", "base_repos":[]}
-    pass
-class GripRepoDescUnitTestBadDefaultConfig(GripRepoDescUnitTestBase):
-    exception_expected = RepoDescError
-    config_toml = """name="y"\ndefault_config="ax"\nconfigs=["x"]\nbase_repos=[]\nrepo={}\n"""
-    pass
-class GripRepoDescUnitTest2(GripRepoDescUnitTestBase):
-    config_toml = """name="y"\nworkflow="readonly"\ndefault_config="x"\nconfigs=["x"]\nbase_repos=["fred"]\nrepo.fred={url='a',path='b'}\n"""
-    grd_assert = {"base_repos":["fred"],
-                  "repos":{
-                      "fred":{"name":"fred","url":"a","path":"b"},
-                  }
-    }
-    pass
-class GripRepoDescUnitTest3(GripRepoDescUnitTestBase):
-    config_toml = """name="y"\nworkflow="readonly"\ndefault_config="x"\nconfigs=["x"]\nbase_repos=[]\nrepo.fred={url='a',path='b'}\n"""
-    grd_assert = {"base_repos":[],
-                  "repos":{
-                      "fred":{"name":"fred","url":"a","path":"b"},
-                  }
-    }
-    pass
-class GripRepoDescUnitTest4(GripRepoDescUnitTestBase):
-    config_toml = """name="y"\nworkflow="readonly"\ndefault_config="x"\nconfigs=["x"]\nbase_repos=[]\nrepo.fred={url='a',path='b'}\n"""
-    grd_assert = {"base_repos":[],
-                  "repos":{
-                      "fred":{"name":"fred","url":"a","path":"b"},
-                  }
-    }
-    pass
-class GripRepoDescUnitTestBadBaseRepos(GripRepoDescUnitTestBase):
-    exception_expected = RepoDescError
-    config_toml = """name="y"\ndefault_config="x"\nconfigs=["x"]\nbase_repos=["f"]\nrepo.fred={url='a',path='b'}\n"""
-    pass
-class GripRepoDescUnitTestConfigBase(GripRepoDescUnitTestBase):
-    config_toml = """
-    name="y"
-    workflow="readonly"
-    default_config="x"
-    configs=["x","y"]
-    base_repos=["fred"]
-    repo.fred={url='ssh://me@there/path/to/thing.git'}
-    repo.jim={url='some/path/to/jim.git',workflow="single"}
-    repo.joe={url='git://sourceware.org/git/binutils-gdb.git',workflow="readonly",path="binutils"}
-    config.x.repos = ["jim"]
-    config.y.fred.path = "nothing"
-    config.y.repos = ["joe"]
-    """
-    pass
-class GripRepoDescUnitTestConfig1(GripRepoDescUnitTestConfigBase):
-    config_name = "unknown_config"
-    cfg_assert = None
-    pass
-class GripRepoDescUnitTestConfig2(GripRepoDescUnitTestConfigBase):
-    config_name = None # default
-    cfg_assert = {"name":"x"}
-    pass
-class GripRepoDescUnitTestConfig3(GripRepoDescUnitTestConfigBase):
-    config_name = "x"
-    cfg_assert = {"name":"x", "repos":{"fred":{"git_url":{"protocol":"ssh", "user":"me", "host":"there", "path":"path/to/thing.git"}, "path":"thing"}}}
-    pass
-class GripRepoDescUnitTestConfig4(GripRepoDescUnitTestConfigBase):
-    config_name = "y"
-    cfg_assert = {"name":"y", "repos":{"fred":{"path":"nothing"}}}
-    pass
-class GripRepoDescUnitTestConfig5(GripRepoDescUnitTestConfigBase):
-    config_name = "y"
-    cfg_assert = {"repos":{"fred":{"workflow":{"name":"readonly"}}}}
-    pass
-class GripRepoDescUnitTestConfig6(GripRepoDescUnitTestConfigBase):
-    config_name = "x"
-    cfg_assert = {"repos":{"jim":{"workflow":{"name":"single"}}}}
-    pass
-class GripRepoDescUnitTestConfig7(GripRepoDescUnitTestConfigBase):
-    config_name = "y"
-    cfg_assert = {"repos":{"joe":{"workflow":{"name":"readonly"}}}}
-    pass
-class GripRepoDescUnitTestConfig8(GripRepoDescUnitTestConfigBase):
-    config_name = "y"
-    cfg_assert = {"repos":{"joe":{"git_url":{"protocol":"git","host":"sourceware.org", "path":"git/binutils-gdb.git"}, "path":"binutils"}}}
-    pass
-
 

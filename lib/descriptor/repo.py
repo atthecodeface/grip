@@ -1,5 +1,5 @@
 #a Imports
-from typing import Optional, Type
+from typing import Optional, Type, List, Union, Any, Tuple, Sequence
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
 from ..git import GitRepo
 from ..workflows import workflows
@@ -67,16 +67,15 @@ class Descriptor(object):
     values : DescriptorValues
     name : str
     cloned_from : Optional[Type['Descriptor']]
-    url      = None
-    branch   = None
-    path     = None
-    workflow = None
-    git_url  = None
-    shallow  = None
-    env      = None
-    doc      = None
-    grip_config = None
-    inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env", "doc"]
+    url      : Optional[str]
+    branch   : Optional[str]
+    path     : Optional[str]
+    shallow  : int
+    env      : GripEnv
+    doc      : Optional[str]
+    # workflow :
+    # git_url  :
+    # grip_config
     #f __init__
     def __init__(self, name, grip_repo_desc, values=None, clone=None):
         """
@@ -102,7 +101,6 @@ class Descriptor(object):
                     pass
                 pass
             pass
-        if self.values.workflow is None: self.workflow = grip_repo_desc.workflow
         if self.values.url      is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
         pass
     #f clone
@@ -125,7 +123,8 @@ class Descriptor(object):
             pass
         pass
     #f get_path
-    def get_path(self):
+    def get_path(self) -> str:
+        assert self.path is not None
         return self.path
     #f get_git_url
     def get_git_url(self):
@@ -133,12 +132,13 @@ class Descriptor(object):
         """
         return self.git_url
     #f get_git_url_string
-    def get_git_url_string(self):
+    def get_git_url_string(self) -> str:
         """
         """
+        assert self.git_url is not None
         return self.git_url.git_url()
     #f get_doc_string
-    def get_doc_string(self):
+    def get_doc_string(self) -> str:
         """
         Get documentation string for this configuration
         """
@@ -146,7 +146,7 @@ class Descriptor(object):
         if self.doc is not None: r = self.doc
         return r
     #f get_doc
-    def get_doc(self):
+    def get_doc(self) -> Sequence[ Union [ str, List[ Tuple[str, Any]]]]:
         """
         Return documentation = list of <string> | (name * documentation)
         Get documentation
@@ -168,7 +168,7 @@ class Descriptor(object):
             pass
         return r
     #f add_stage_names_to_set
-    def add_stage_names_to_set(self, s):
+    def add_stage_names_to_set(self, s:set):
         for k in self.stages:
             s.add(k)
             pass
@@ -192,7 +192,7 @@ class Descriptor(object):
             pass
         return acc
     #f is_shallow
-    def is_shallow(self):
+    def is_shallow(self) -> bool:
         if self.shallow is not None:
             if self.shallow=="yes" or self.shallow=="true":
                 return True
@@ -200,7 +200,12 @@ class Descriptor(object):
         return False
     #f validate
     def validate(self, error_handler=None):
-        self.workflow = self.grip_repo_desc.validate_workflow(self.workflow, self.name)
+        if self.values.workflow is None:
+            self.workflow = self.grip_repo_desc.workflow
+            pass
+        else:
+            self.workflow = self.grip_repo_desc.validate_workflow(self.values.workflow, self.name)
+            pass
         for (n,s) in self.stages.items():
             s.validate(self.grip_config, error_handler=error_handler)
             pass
@@ -212,10 +217,11 @@ class Descriptor(object):
         """
         self.env = GripEnv(name="repo %s"%self.name, parent=env)
         self.env.build_from_values(self.values.env)
-        self.url    = self.env.substitute(self.values.url,     error_handler=error_handler)
-        self.branch = self.env.substitute(self.values.branch,  error_handler=error_handler)
-        self.path   = self.values.path
-        self.doc    = self.values.doc
+        self.url     = self.env.substitute(self.values.url,      error_handler=error_handler)
+        self.branch  = self.env.substitute(self.values.branch,   error_handler=error_handler)
+        self.shallow = self.env.substitute(self.values.shallow,  error_handler=error_handler)
+        self.path    = self.values.path
+        self.doc     = self.values.doc
         try:
             self.git_url = GitRepo.parse_git_url(self.url)
             pass

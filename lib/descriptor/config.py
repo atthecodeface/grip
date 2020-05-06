@@ -40,7 +40,7 @@ class ConfigTomlDict(TomlDict):
         Wildcard     = TomlDictParser.from_dict_attr_dict(SpecificConfigTomlDict)
         pass
 
-#c Desciptor - a set of GripRepoDesc's for a configuration of the grip repo
+#c Descriptor - a set of GripRepoDesc's for a configuration of the grip repo
 class Descriptor(object):
     """
     This describes a configuration of a grip repo.

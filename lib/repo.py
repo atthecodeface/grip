@@ -2,7 +2,7 @@
 import os, time
 from .git import GitRepo, branch_upstream, branch_head
 from .descriptor.stage import Dependency as StageDependency
-from .repodesc import GripRepoDesc
+from .descriptor.grip import Descriptor as GripRepoDescriptor
 from .repostate import GripRepoState
 from .repoconfig import GripRepoConfig
 from .workflows import workflows
@@ -292,13 +292,13 @@ class GripRepo:
         self.read_state(error_handler=error_handler)
         self.read_config(error_handler=error_handler)
         pass
-    #f read_desc - Create GripRepoDesc and read grip.toml (and those of subrepos)
+    #f read_desc - Create GripRepoDescriptor and read grip.toml (and those of subrepos)
     def read_desc(self, subrepos=[], validate=True, error_handler=None):
         """
         subrepos is a list of GitRepoDesc whose 'grip.toml' files should also be read if possible
         """
         self.add_log_string("Reading grip.toml file '%s'"%self.grip_path(self.grip_toml_filename))
-        self.repo_desc = GripRepoDesc(git_repo=self.git_repo)
+        self.repo_desc = GripRepoDescriptor(git_repo=self.git_repo)
         self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos, error_handler=error_handler)
         if validate:
             print("Validating and resolving")
