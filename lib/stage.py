@@ -3,6 +3,7 @@ from .tomldict import TomlDict, TomlDictParser
 from .exceptions import *
 from .env import GripEnv, EnvTomlDict
 import os
+from typing import List, ClassVar
 
 #a Classes
 #c StageTomlDict - Toml dictionary that describes a stage
@@ -121,7 +122,7 @@ class GitRepoStageDesc(object):
     env  = None # Environment to be exported in .grip/env
     doc = None
     action = False
-    requires = []
+    requires : List[str]= []
     satisfies = None
     #f __init__
     def __init__(self, grip_repo_desc, name, clone=None, git_repo_desc=None, values=None):

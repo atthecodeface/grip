@@ -133,6 +133,7 @@ class GripRepoDesc(object):
                 pass
             pass
         values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
+        # values.Prettyprint()
         self.build_from_values(values)
         self.validate(error_handler=error_handler)
         self.resolve(error_handler=error_handler)

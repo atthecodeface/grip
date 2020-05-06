@@ -24,14 +24,6 @@ class GripEnvValueError(GripEnvError):
     """
     pass
 
-#c GripTomlError - exception used when reading the grip toml file
-class GripTomlError(ConfigurationError):
-    pass
-
-#c RepoDescError - exception used when a repo description is invalid
-class RepoDescError(ConfigurationError):
-    pass
-
 #a Classes
 #c EnvTomlDict
 class EnvTomlDict(TomlDict):
@@ -41,8 +33,8 @@ class EnvTomlDict(TomlDict):
 #c GripEnv
 class GripEnv:
     #v regular expressions
-    name_match_re = r"""(?P<name>([a-zA-Z_][a-zA-Z_0-9]*))@(?P<rest>.*)$"""
-    name_match_re = re.compile(name_match_re)
+    name_match_re_string = r"""(?P<name>([a-zA-Z_][a-zA-Z_0-9]*))@(?P<rest>.*)$"""
+    name_match_re = re.compile(name_match_re_string)
     #f __init__
     def __init__(self, parent=None, name=None, default_values={}):
         self.name = name
