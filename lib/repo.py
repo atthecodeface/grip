@@ -1,7 +1,7 @@
 #a Imports
 import os, time
 from .git import GitRepo, branch_upstream, branch_head
-from .stage import Dependency as StageDependency
+from .descriptor.stage import Dependency as StageDependency
 from .repodesc import GripRepoDesc
 from .repostate import GripRepoState
 from .repoconfig import GripRepoConfig
@@ -301,12 +301,17 @@ class GripRepo:
         self.repo_desc = GripRepoDesc(git_repo=self.git_repo)
         self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos, error_handler=error_handler)
         if validate:
+            print("Validating and resolving")
             self.repo_desc.validate(error_handler=error_handler)
             self.repo_desc.resolve(error_handler=error_handler)
             if self.repo_desc.is_logging_enabled() and self.log:
                 self.log.set_tidy(self.log_to_logfile)
                 pass
             self.set_branch_name()
+            pass
+        else:
+            print("Resolving")
+            self.repo_desc.resolve(error_handler=error_handler)
             pass
         pass
     #f read_state - Read state.toml

@@ -6,11 +6,13 @@ from .git import GitRepo
 from .workflows import workflows
 from .exceptions import *
 from .env import GripEnv, EnvTomlDict
-from .stage import Dependency as StageDependency
-from .stage import Descriptor as StageDescriptor
-from .stage import StageTomlDict
-from .git_repo_desc import RepoDescTomlDict, GitRepoDesc
-from .config import GripConfig, ConfigTomlDict
+from .descriptor.stage import Dependency as StageDependency
+from .descriptor.stage import Descriptor as StageDescriptor
+from .descriptor.stage import StageTomlDict
+from .descriptor.repo  import RepoDescTomlDict
+from .descriptor.repo  import Descriptor as GitRepoDesc
+from .descriptor.config import Descriptor as ConfigDescriptor
+from .descriptor.config import ConfigTomlDict
 
 #a Useful functions
 def str_keys(d):
@@ -50,7 +52,7 @@ class GripRepoDesc(object):
     Attributes:
     -----------
     default_config : <default config string>
-    configs    : list of GripConfig object instances
+    configs    : list of ConfigDescriptor object instances
     base_repos : list <repo name> of the repos used in all configurations
     repos      : dict { <repo name> : <git repo description object> }
     stages     : list <stage names>
@@ -214,7 +216,7 @@ class GripRepoDesc(object):
                 pass
             pass
         for config_name in values.configs:
-            self.configs[config_name] = GripConfig(config_name, self)
+            self.configs[config_name] = ConfigDescriptor(config_name, self)
             pass
         if values.config is not None:
             for config_name in values.config.Get_other_attrs():

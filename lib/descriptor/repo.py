@@ -1,11 +1,10 @@
 #a Imports
-import os, sys, re, copy
-import toml
-from .tomldict import TomlDict, TomlDictParser
-from .git import GitRepo
-from .workflows import workflows
-from .exceptions import *
-from .env import GripEnv, EnvTomlDict
+from typing import Optional, Type
+from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
+from ..git import GitRepo
+from ..workflows import workflows
+from ..exceptions import *
+from ..env import GripEnv, EnvTomlDict
 from .stage import Descriptor as StageDescriptor
 from .stage import StageTomlDict
 
@@ -23,21 +22,8 @@ class RepoDescTomlDict(TomlDict):
     Wildcard  = TomlDictParser.from_dict_attr_dict(StageTomlDict)
     pass
 
-#c GitRepoDesc - a grip repo module (where it sits in the grip repo, its source url/branch etc, and its stages)
-class GitRepoDesc(object):
-    """
-    A GitRepoDesc is a simple object containing the data describing a git repo that is part of a grip repo
-
-    Each GitRepoDesc should have an entry repo.<name> as a table of <property>:<value> in the grip.toml file
-
-    Possibly this can include <install>
-
-    A GitRepoDesc may have a changeset associated with it from a .grip/state file
-
-    A GitRepoDesc may be read-only; push-to-integration; push-to-patch?; merge?
-
-    Possibly it should have a default dictionary of <stage> -> <StageDescriptor>
-    """
+#c DescriptorValues - namespace that contains values from the TomlDict
+class DescriptorValues(object):
     url      = None
     branch   = None
     path     = None
@@ -49,44 +35,79 @@ class GitRepoDesc(object):
     grip_config = None
     inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env", "doc"]
     #f __init__
-    def __init__(self, name, grip_repo_desc, values=None, parent=None):
+    def __init__(self, values : TomlDictValues, clone : Type['DescriptorValues']):
+        if values is not None:
+            values.Set_obj_properties(self, values.Get_fixed_attrs())
+            pass
+        def set_current_or_parent(k):
+            if getattr(self,k) is None: setattr(self,k,getattr(clone,k))
+            pass
+        if clone is not None:
+            for k in self.inherited_properties:
+                set_current_or_parent(k)
+                pass
+            pass
+        pass
+
+#c Descriptor - a descriptor of a repository within the grip description
+class Descriptor(object):
+    """
+    This is a simple object containing the data describing a git repo that is part of a grip repo
+
+    Each GitRepoDesc should have an entry repo.<name> as a table of <property>:<value> in the grip.toml file
+
+    Possibly this can include <install>
+
+    A GitRepoDesc may have a changeset associated with it from a .grip/state file
+
+    A GitRepoDesc may be read-only; push-to-integration; push-to-patch?; merge?
+
+    Possibly it should have a default dictionary of <stage> -> <StageDescriptor>
+    """
+    values : DescriptorValues
+    name : str
+    cloned_from : Optional[Type['Descriptor']]
+    url      = None
+    branch   = None
+    path     = None
+    workflow = None
+    git_url  = None
+    shallow  = None
+    env      = None
+    doc      = None
+    grip_config = None
+    inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env", "doc"]
+    #f __init__
+    def __init__(self, name, grip_repo_desc, values=None, clone=None):
         """
         values must be a RepoDescTomlDict._values
         """
         self.name   = name
-        self.parent = parent
         self.grip_repo_desc = grip_repo_desc
+        self.cloned_from = clone
         self.stages = {}
+        clone_values = None
+        if clone is not None: clone_values=clone.values
+        self.values = DescriptorValues(values, clone_values)
         if values is not None:
-            values.Set_obj_properties(self, values.Get_fixed_attrs())
-            pass
-        if values is not None:
-            for stage in values.Get_other_attrs():
-                stage_values = values.Get(stage)
-                self.stages[stage] = StageDescriptor(self.grip_repo_desc, stage, git_repo_desc=self, values=stage_values)
+            for stage_name in values.Get_other_attrs():
+                stage_values = values.Get(stage_name)
+                self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, git_repo_desc=self, values=stage_values)
                 pass
             pass
-        if parent is not None:
-            def set_current_or_parent(k):
-                if getattr(self,k) is None: setattr(self,k,getattr(parent,k))
-                pass
-            for k in self.inherited_properties:
-                set_current_or_parent(k)
-                pass
-            for (n,s) in parent.stages.items():
+        if clone is not None:
+            for (n,s) in clone.stages.items():
                 if n not in self.stages:
                     self.stages[n] = s.clone(grip_repo_desc=grip_repo_desc, git_repo_desc=self)
                     pass
                 pass
             pass
-        if self.workflow is None: self.workflow = grip_repo_desc.workflow
-        if self.url      is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
+        if self.values.workflow is None: self.workflow = grip_repo_desc.workflow
+        if self.values.url      is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
         pass
     #f clone
     def clone(self):
-        c = self.__class__(name=self.name, values=None, grip_repo_desc=self.grip_repo_desc, parent=self)
-        c.parent = self.parent
-        return c
+        return self.__class__(name=self.name, values=None, grip_repo_desc=self.grip_repo_desc, clone=self)
     #f set_grip_config
     def set_grip_config(self, grip_config):
         """
@@ -189,13 +210,12 @@ class GitRepoDesc(object):
         """
         Resolve the strings in the repo description and its stages, using the repo configuration's environment
         """
-        env = GripEnv(name="repo %s"%self.name,
-                      parent=env)
-        env.build_from_values(self.env)
-        self.env = env
-        self.url    = self.env.substitute(self.url,     error_handler=error_handler)
-        self.path   = self.env.substitute(self.path,    error_handler=error_handler)
-        self.branch = self.env.substitute(self.branch,  error_handler=error_handler)
+        self.env = GripEnv(name="repo %s"%self.name, parent=env)
+        self.env.build_from_values(self.values.env)
+        self.url    = self.env.substitute(self.values.url,     error_handler=error_handler)
+        self.branch = self.env.substitute(self.values.branch,  error_handler=error_handler)
+        self.path   = self.values.path
+        self.doc    = self.values.doc
         try:
             self.git_url = GitRepo.parse_git_url(self.url)
             pass

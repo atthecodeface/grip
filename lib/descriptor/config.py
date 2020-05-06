@@ -1,12 +1,13 @@
 #a Imports
 import os, sys, re, copy
-from .tomldict import TomlDict, TomlDictParser
-from .exceptions import *
-from .env import GripEnv, EnvTomlDict
-from .git_repo_desc import RepoDescTomlDict, GitRepoDesc
-# from .stage import Dependency as StageDependency
+from typing import Dict, Type
+from ..exceptions import *
+from ..env import GripEnv, EnvTomlDict
+from ..tomldict import TomlDict, TomlDictParser
 from .stage import Descriptor as StageDescriptor
 from .stage import StageTomlDict
+from .repo  import RepoDescTomlDict
+from .repo  import Descriptor as GitRepoDesc
 
 #a Useful functions
 def str_keys(d):
@@ -39,16 +40,16 @@ class ConfigTomlDict(TomlDict):
         Wildcard     = TomlDictParser.from_dict_attr_dict(SpecificConfigTomlDict)
         pass
 
-#c GripConfig - a set of GripRepoDesc's for a configuration of the grip repo
-class GripConfig(object):
+#c Desciptor - a set of GripRepoDesc's for a configuration of the grip repo
+class Descriptor(object):
     """
-    A GripConfig describes a configuration of a grip repo.
+    This describes a configuration of a grip repo.
 
     A grip repo configuration is a set of git repos, and for each git repo the relevant commands and dependencies
     to install, test_install, make, run, test and precommit
 
     """
-    repos = {} # dictionary of <repo name> : <GitRepoDesc instance>
+    repos : Dict[str,Type['GitRepoDesc']] = {}
     #f __init__
     def __init__(self, name, grip_repo_desc):
         self.name = name
@@ -87,7 +88,7 @@ class GripConfig(object):
         for r in values.Get_other_attrs(): # These must be RepoDescTomDict._values
             if r not in self.repos:raise GripTomlError("repo '%s' description specified in config '%s' but it is not one of the repos for that config (repos are %s)"%(r, self.name, str_keys(self.repos)))
             repo_desc = values.Get(r)
-            self.repos[r] = GitRepoDesc(r, values=repo_desc, parent=self.repos[r], grip_repo_desc=self.grip_repo_desc)
+            self.repos[r] = GitRepoDesc(r, values=repo_desc, clone=self.repos[r], grip_repo_desc=self.grip_repo_desc)
             pass
         for r in self.iter_repos():
             r.set_grip_config(self)

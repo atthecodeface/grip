@@ -1,9 +1,9 @@
 #a Imports
 import os
 from typing import Optional, List, Callable, Type, ClassVar, Union, Any
-from .tomldict import TomlDict, TomlDictValues, TomlDictParser
-from .exceptions import *
-from .env import GripEnv, EnvTomlDict
+from ..tomldict import TomlDict, TomlDictValues, TomlDictParser
+from ..exceptions import *
+from ..env import GripEnv, EnvTomlDict
 
 #a Classes
 #c StageTomlDict - Toml dictionary that describes a stage
