@@ -58,6 +58,12 @@ class Repository(object):
     def append_subrepo(self, child):
         self.subrepos.append(child)
         pass
+    #f iter_subrepos
+    def iter_subrepos(self):
+        for s in self.subrepos:
+            yield(s)
+            pass
+        pass
     #f install_hooks
     def install_hooks(self):
         for sr in self.subrepos:
@@ -66,6 +72,7 @@ class Repository(object):
         pass
     #f status
     def status(self):
+        for sr in self.subrepos: sr.status()
         try:
             s = "Getting status of repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
@@ -77,6 +84,7 @@ class Repository(object):
         pass
     #f commit
     def commit(self):
+        for sr in self.subrepos: sr.commit()
         try:
             s = "Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
@@ -91,6 +99,7 @@ class Repository(object):
         pass
     #f fetch
     def fetch(self):
+        for sr in self.subrepos: sr.fetch()
         try:
             s = "Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
@@ -103,6 +112,7 @@ class Repository(object):
         pass
     #f merge
     def merge(self, force=False):
+        for sr in self.subrepos: sr.merge()
         try:
             s = "Merging repo '%s' with workflow '%s' (force %s)"%(self.name, self.workflow.name, str(force))
             self.grip_repo.add_log_string(s)
@@ -115,6 +125,7 @@ class Repository(object):
         pass
     #f prepush
     def prepush(self):
+        for sr in self.subrepos: sr.prepush()
         try:
             s = "Prepushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
@@ -127,6 +138,7 @@ class Repository(object):
         pass
     #f push
     def push(self):
+        for sr in self.subrepos: sr.push()
         try:
             s = "Pushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
             self.grip_repo.add_log_string(s)
@@ -165,6 +177,20 @@ class GripRepo:
             path = os.path.dirname(path)
             return GripRepo.find_git_repo_of_grip_root(path, log=log)
         return git_repo
+    #f clone - classmethod to create an instance after a git clone
+    @classmethod
+    def clone(cls, options, repo_url, branch, path=None, dest=None):
+        dest_path = dest
+        if path is not None:
+            if dest_path is not None:
+                dest_path = os.path.join(path,dest)
+                pass
+            else:
+                dest_path = path
+                pass
+            pass
+        repo = GitRepo.clone(options, repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path)
+        return cls(repo)
     #f __init__
     def __init__(self, git_repo=None, path=None, options=None, ensure_configured=False, invocation="", error_handler=None):
         self.log=Log()
@@ -186,7 +212,7 @@ class GripRepo:
         self.repo_config      = None
         self.repo_desc_config = None
         self.config_state     = None
-        self.subrepos         = None
+        self.repo_instance_tree = None
         self.read_desc_state_config(use_current_config=True, error_handler=error_handler)
         if ensure_configured:
             if self.repo_desc_config is None:
@@ -241,7 +267,7 @@ class GripRepo:
             self.branch_name = "WIP__%s_%s"%(base, time_str)
             pass
         pass
-    #f read_desc_state_config
+    #f read_desc_state_config - Read grip.toml, state.toml, local.config.toml
     def read_desc_state_config(self, use_current_config=False, error_handler=None):
         """
         Read the .grip/grip.toml grip description file, the
@@ -256,7 +282,7 @@ class GripRepo:
         if use_current_config:
             self.read_desc_state_config(use_current_config=False, error_handler=error_handler)
             pass
-        subrepos = []
+        subrepos = [] # List of GitRepoDescs
         if use_current_config and (self.repo_desc_config is not None):
             for r in self.repo_desc_config.iter_repos():
                 subrepos.append(r)
@@ -266,8 +292,11 @@ class GripRepo:
         self.read_state(error_handler=error_handler)
         self.read_config(error_handler=error_handler)
         pass
-    #f read_desc
+    #f read_desc - Create GripRepoDesc and read grip.toml (and those of subrepos)
     def read_desc(self, subrepos=[], error_handler=None):
+        """
+        subrepos is a list of GitRepoDesc whose 'grip.toml' files should also be read if possible
+        """
         self.add_log_string("Reading grip.toml file '%s'"%self.grip_path(self.grip_toml_filename))
         self.repo_desc = GripRepoDesc(git_repo=self.git_repo)
         self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos, error_handler=error_handler)
@@ -276,13 +305,13 @@ class GripRepo:
             pass
         self.set_branch_name()
         pass
-    #f read_state
+    #f read_state - Read state.toml
     def read_state(self, error_handler=None):
         self.add_log_string("Reading state file '%s'"%self.grip_path(self.state_toml_filename))
         self.repo_state = GripRepoState()
         self.repo_state.read_toml_file(self.grip_path(self.state_toml_filename))
         pass
-    #f read_config
+    #f read_config - Create GripRepoConfig and read local.config.toml; set self.repo_config.config (GripConfig of config)
     def read_config(self, error_handler=None):
         self.add_log_string("Reading local configuration state file '%s'"%self.grip_path(self.config_toml_filename))
         self.repo_desc_config = None
@@ -299,8 +328,7 @@ class GripRepo:
         pass
     #f update_state
     def update_state(self):
-        for r in self.subrepos:
-            if r==self.toplevel_subrepo: continue
+        for r in self.repo_instance_tree.iter_subrepos():
             self.config_state.update_repo_state(r.name, changeset=r.get_cs())
             pass
         pass
@@ -444,20 +472,17 @@ class GripRepo:
         pass
     #f create_subrepos - create python objects that correspond to the checked-out subrepos
     def create_subrepos(self):
-        self.subrepos = []
-        self.toplevel_subrepo = Repository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, repo_desc=self.repo_desc )
-        self.subrepos.append(self.toplevel_subrepo)
+        self.repo_instance_tree = Repository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, repo_desc=self.repo_desc )
         for rd in self.repo_desc_config.iter_repos():
             try:
                 gr = GitRepo(path=self.git_repo.filename([rd.path]))
-                sr = Repository(name=rd.name, grip_repo=self, parent=self.toplevel_subrepo, git_repo=gr, repo_desc=rd)
-                self.subrepos.append(sr)
+                sr = Repository(name=rd.name, grip_repo=self, parent=self.repo_instance_tree, git_repo=gr, repo_desc=rd)
                 pass
             except SubrepoError as e:
                 self.verbose.warning("Subrepo '%s' could not be found - is this grip repo a full checkout?"%(r.name))
                 pass
             pass
-        self.toplevel_subrepo.install_hooks()
+        self.repo_instance_tree.install_hooks()
         pass
     #f get_makefile_stamp_path
     def get_makefile_stamp_path(self, rd):
@@ -543,7 +568,7 @@ class GripRepo:
                 pass
             pass
         pass
-    #f invoke_shell
+    #f invoke_shell - use created environment file to invoke a shell
     def invoke_shell(self, shell, args=None):
         env = {}
         for (k,v) in os.environ.items():
@@ -553,34 +578,16 @@ class GripRepo:
         cmd_line = ["grip_shell"]
         cmd_line += ["-c", "source %s; %s %s"%(self.grip_path(self.grip_env_filename), shell, " ".join(args))]
         os.execvpe("bash", cmd_line, env)
-    #f clone
-    @classmethod
-    def clone(cls, options, repo_url, branch, path=None, dest=None):
-        dest_path = dest
-        if path is not None:
-            if dest_path is not None:
-                dest_path = os.path.join(path,dest)
-                pass
-            else:
-                dest_path = path
-                pass
-            pass
-        repo = GitRepo.clone(options, repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path)
-        return cls(repo)
     #f status
     def status(self):
         self.create_subrepos()
-        for r in self.subrepos:
-            r.status()
-            pass
+        self.repo_instance_tree.status()
         pass
     #f commit
     def commit(self):
         self.create_subrepos()
-        for r in self.subrepos:
-            r.commit()
-            pass
-        self.verbose.message("All subrepos commited")
+        self.repo_instance_tree.commit()
+        self.verbose.message("All repos commited")
         self.update_state()
         self.write_state()
         self.verbose.message("Updated state")
@@ -589,17 +596,12 @@ class GripRepo:
     #f fetch
     def fetch(self):
         self.create_subrepos()
-        for r in self.subrepos:
-            r.fetch()
-            pass
-        self.verbose.message("All subrepos fetched")
+        self.repo_instance_tree.fetch()
         pass
     #f merge
     def merge(self):
         self.create_subrepos()
-        for r in self.subrepos:
-            r.merge()
-            pass
+        self.repo_instance_tree.merge()
         self.verbose.message("All subrepos merged")
         self.update_state()
         self.write_state()
@@ -609,14 +611,10 @@ class GripRepo:
     #f publish
     def publish(self, prepush_only=False):
         self.create_subrepos()
-        for r in self.subrepos:
-            r.prepush()
-            pass
+        self.repo_instance_tree.prepush()
         self.verbose.message("All subrepos prepushed")
         if prepush_only: return
-        for r in self.subrepos:
-            r.push()
-            pass
+        self.repo_instance_tree.push()
         self.verbose.message("All subrepos pushed")
         self.update_state()
         self.write_state()
