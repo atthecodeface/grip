@@ -1,7 +1,12 @@
 #a Imports
-from typing import Type, Dict, List, Sequence, Any
+from typing import Type, Dict, List, Sequence, Any, Iterable
 from ..options import Options
-from ..git import *
+from ..log import Log
+from ..verbose import Verbose
+from ..git import Repository as GitRepository, branch_upstream, branch_remote_of_upstream, branch_head
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..grip import Toplevel
 
 #a Classes
 #c Workflow - base class for workflows
@@ -9,8 +14,12 @@ class Workflow(object):
     name = "Base workflow class - must be subclassed"
     permitted = False
     options : Options
+    git_repo : GitRepository
+    log : Log
+    verbose : Verbose
+    toplevel : Type['Toplevel']
     #f __init__
-    def __init__(self, toplevel, git_repo):
+    def __init__(self, toplevel: Type['Toplevel'], git_repo: GitRepository):
         self.toplevel = toplevel
         self.git_repo  = git_repo
         self.options = toplevel.options
@@ -125,7 +134,7 @@ class Workflow(object):
         return True
     #f get_subclasses
     @classmethod
-    def get_subclasses(cls, so_far=set()):
+    def get_subclasses(cls, so_far=set()) -> Iterable[Type['Workflow']]:
         for subclass in cls.__subclasses__():
             if subclass not in so_far:
                 so_far.add(subclass)

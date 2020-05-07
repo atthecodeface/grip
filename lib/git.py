@@ -5,6 +5,7 @@ from typing import Type, Dict, Optional, Tuple
 from .oscommand import command as os_command
 from .oscommand import OSCommandError
 from .options import Options
+from .log import Log
 from .exceptions import *
 
 #a Global branchnames
@@ -20,8 +21,9 @@ def git_command(options=None, cmd=None, **kwargs) -> str:
                                      cmd=cmd,
                                      **kwargs)
 
-#a Git url class
-class GitUrl:
+#a Classes
+#c Git url class
+class Url:
     #v Class properties for git url parsing
     git_protocol_re  = r"(?P<protocol>ssh|git|http|https|ftp|ftps|file)"
     git_user_host_re = r"((?P<user>([a-zA-Z0-9_]*))@|)(?P<host>[a-zA-Z0-9_.]+)"
@@ -84,7 +86,7 @@ class GitUrl:
         if self.path_dir != "": return False
         return True
     #f make_relative_to - if .is_leaf() then make relative to another of these
-    def make_relative_to(self, abs_url:Type['GitUrl']) -> None:
+    def make_relative_to(self, abs_url:Type['Url']) -> None:
         assert self.host is None
         assert self.path_dir == ""
         self.host     = abs_url.host
@@ -100,16 +102,44 @@ class GitUrl:
     #f All done
     pass
 
-#a GitRepo class
-class GitRepo(object):
+#c Git remote (origin and branch)
+class Remote(object):
+    origin : str
+    branch : str
+    def __init__(self, origin:str, branch:str):
+        if branch[:11]=="refs/heads/":
+            branch = branch[11:]
+            pass
+        self.origin = origin
+        self.branch = branch
+        pass
+    def get_origin(self) -> str: return self.origin
+    def get_branch(self) -> str: return self.branch
+
+#c Repository class
+class Repository(object):
     """
     A Git repo object for a git repository within the local filesystem
     """
     #t instance properties
-    git_url : GitUrl
-    path :str
+    git_url  : Url
+    upstream : Remote
+    path     : Path
+    options  : Options
+    log      : Log
+    #f git_command
+    def git_command(self, cwd=None, cmd=None, **kwargs) -> str:
+        if cwd is None:
+            cwd = self.path
+            pass
+        return os_command(options = self.options,
+                          log     = self.log,
+                          cmd     = "git %s"%(cmd),
+                          cwd     = str(cwd),
+                          **kwargs)
+
     #f __init__
-    def __init__(self, path, git_url=None, permit_no_remote=False, log=None):
+    def __init__(self, path, git_url=None, permit_no_remote=False, log=None, options=None):
         """
         Create the object from a given path
 
@@ -117,18 +147,19 @@ class GitRepo(object):
         Should chase the path to the toplevel (or do git root)
         Should find the git_url this was cloned from too
         """
+        if log is None: log=Log()
+        if options is None: options=Options()
+        self.log = log
+        self.options = options
         if path is None: path="."
-        if not os.path.exists(os.path.abspath(path)):
-            raise PathError("path '%s' does not exist"%os.path.abspath(path))
-        git_output = git_command(cwd=os.path.abspath(path),
-                                 cmd="rev-parse --show-toplevel",
-                                 log=log)
-        self.path = os.path.realpath(git_output.strip())
+        path = Path(path)
+        if not path.exists():
+            raise PathError("path '%s' does not exist"%str(path))
+        git_output = self.git_command(cwd=path, cmd="rev-parse --show-toplevel")
+        self.path = Path(git_output.strip())
         if git_url is None:
             try:
-                git_output = git_command(cwd=self.path,
-                                         cmd="remote get-url origin",
-                                         log=log)
+                git_output = self.git_command(cmd="remote get-url origin")
                 pass
             except Exception as e:
                 if not permit_no_remote: raise e
@@ -139,14 +170,17 @@ class GitRepo(object):
                 git_url = None
                 pass
             else:
-                git_url = GitUrl(git_url)
+                git_url = Url(git_url)
                 pass
             pass
         self.git_url = git_url
-        (self.upstream_origin, self.upstream_push_branch) = self.get_branch_remote_and_merge(branch_upstream)
+        self.upstream = self.get_branch_remote_and_merge(branch_upstream)
         pass
+    #f get_upstream - get Remote corresponding to the upstream
+    def get_upstream(self) -> Remote:
+        return self.upstream
     #f get_branch_remote_and_merge
-    def get_branch_remote_and_merge(self, branch_name) -> Tuple[Optional[str], Optional[str]]:
+    def get_branch_remote_and_merge(self, branch_name) -> Optional[Remote]:
         """
         For a given branch attempt to get remote and merge - i.e. where to fetch/push to
         """
@@ -160,15 +194,11 @@ class GitRepo(object):
             push_branch = self.get_config(["branch",branch_name,"merge"])
         except:
             pass
-        if push_branch is not None:
-            if push_branch[:11]=="refs/heads/":
-                push_branch = push_branch[11:]
-                pass
-            pass
-        return (origin, push_branch)
+        if origin is None or push_branch is None: return None
+        return Remote(origin, push_branch)
     #f get_name
     def get_name(self) -> str:
-        return self.path
+        return str(self.path)
     #f get_git_url
     def get_git_url(self):
         return self.git_url
@@ -177,7 +207,7 @@ class GitRepo(object):
         return self.git_url.as_string()
     #f get_path
     def get_path(self) -> str:
-        return self.path
+        return str(self.path)
     #f get_config
     def get_config(self, config_path, log=None) -> str:
         config=".".join(config_path)
@@ -388,7 +418,7 @@ class GitRepo(object):
         # git checkout --detach <changeset>
 
         """
-        url = GitUrl(repo_url)
+        url = Url(repo_url)
         if dest is None: dest=url.repo_name
         git_options = []
         if branch is not None: git_options.append( "--branch %s"%branch )

@@ -1,7 +1,7 @@
 #a Imports
 import os, time
 from typing import Type, List, Dict, Iterable, Optional, Any
-from .git import GitRepo, branch_upstream, branch_head
+from .git import Repository as GitRepo
 from .descriptor.stage import Dependency as StageDependency
 from .descriptor.grip import Descriptor as GripRepoDescriptor
 from .config.file import ConfigFile as GripRepoConfig

@@ -1,7 +1,10 @@
 #a Imports
-from .base import Workflow
-from ..git import *
 from ..exceptions  import *
+from .base import Workflow
+from ..git import Repository as GitRepository
+from ..log import Log
+from ..options import Options
+from ..verbose import Verbose
 
 #a Classes
 #c Single workflow
@@ -26,6 +29,10 @@ class Single(Workflow):
     The grip repo state is updated with the cs of the post-merge, i.e. successfully pushed, repo
     """
     name = "single"
+    options: Options
+    git_repo: GitRepository
+    log: Log
+    verbose: Verbose
     def install_hooks(self):
         raise Exception("install_hooks not implemented for %s"%self.name)
     def status(self):

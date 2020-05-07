@@ -2,7 +2,7 @@
 from typing import Optional, Dict, Sequence, Collection, Any, Union, Type
 from ..exceptions import *
 from ..tomldict import TomlDict, TomlDictParser
-from ..git import GitRepo
+from ..git import Repository as GitRepo
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
 from .stage import Dependency as StageDependency

@@ -1,7 +1,9 @@
 #a Imports
 import os, time
 from typing import Type, List, Dict, Iterable, Optional
-from .git import GitRepo, GitUrl, branch_upstream, branch_head
+from .git import branch_upstream, branch_head
+from .git import Repository as GitRepo
+from .git import Url as GitUrl
 from .log import Log
 from .verbose import Verbose
 from .options import Options
@@ -72,6 +74,8 @@ class Toplevel:
             try:
                 git_repo = Toplevel.find_git_repo_of_grip_root(path, self.log)
             except Exception as e:
+                print(str(e))
+                raise e
                 pass
             pass
         if git_repo is None:

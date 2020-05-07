@@ -4,7 +4,7 @@ import toml
 from typing import Optional, Dict, List, Tuple, Any, Iterator, Sequence, Union
 from ..exceptions import *
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
-from ..git import GitRepo
+from ..git import Repository as GitRepo
 from ..workflow import get_workflow, supported_workflows
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict

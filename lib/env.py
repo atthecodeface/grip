@@ -2,7 +2,6 @@
 import os, sys, re, copy
 from typing import Optional, Dict, List, Tuple
 from .tomldict import TomlDict, TomlDictValues, TomlDictParser
-from .git import GitRepo
 from .exceptions import *
 
 #a Exceptions
@@ -210,7 +209,3 @@ class GripEnv:
             pass
         pass
 
-#a Unittest for GripRepoDesc class
-from .test_utils import UnitTestObject
-class GripEnvUnitTestBase(UnitTestObject):
-    pass

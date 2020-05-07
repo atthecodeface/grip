@@ -1,5 +1,5 @@
 #a Imports
-from typing import List, Optional
+from typing import Type, List, Optional
 from .base import Workflow
 from .readonly import *
 from .single import *
@@ -12,7 +12,7 @@ def supported_workflows() -> List[str]:
         pass
     return d
 
-def get_workflow(name) -> Optional[Workflow]:
+def get_workflow(name) -> Optional[Type[Workflow]]:
     for w in Workflow.get_subclasses():
         if w.name==name: return w
         pass

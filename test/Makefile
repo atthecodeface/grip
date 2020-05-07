@@ -16,3 +16,8 @@ check_types:
 .PHONY:check_types_stubgen
 check_types_stubgen:
 	stubgen lib/*/*py lib/*.py
+
+.PHONY:check_types_with_stubs
+check_types_with_stubs:
+	MYPYPATH=$(CURDIR)/lib/mypy_stubs mypy lib/workflow/*py
+
