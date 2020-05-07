@@ -1,14 +1,16 @@
 #a Imports
 import os, sys, re, copy
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, cast
 from .tomldict import TomlDict, TomlDictValues, TomlDictParser
+# Specifically this imports type ErrorHandler (plus all exceptions)
 from .exceptions import *
+from .types import MakefileStrings, EnvDict
 
 #a Exceptions
 #c GripEnvError - exception used when reading the grip toml file
 class GripEnvError(ConfigurationError):
     grip_type = "Grip repository environment error"
-    def __init__(self, grip_env, key, reason):
+    def __init__(self, grip_env:'GripEnv', key:str, reason:str):
         s = "Environment error in '%s' for '%s': %s"%(grip_env.full_name(), key, reason)
         self.grip_env = grip_env
         self.key =key
@@ -33,20 +35,20 @@ class GripEnv:
     #v regular expressions
     name_match_re_string = r"""(?P<name>([a-zA-Z_][a-zA-Z_0-9]*))@(?P<rest>.*)$"""
     name_match_re = re.compile(name_match_re_string)
-    env : Dict[str,str]
+    env : EnvDict
     #f __init__
-    def __init__(self, parent=None, name=None, default_values={}):
+    def __init__(self, parent:Optional['GripEnv']=None, name:str="<unnamed env>", default_values:EnvDict={}):
         self.name = name
         self.parent = parent
         self.env = {}
         self.add_values(default_values)
         pass
     #f get_root - find root environment by tracing parents
-    def get_root(self):
+    def get_root(self) -> 'GripEnv':
         if self.parent is not None: return self.parent.get_root()
         return self
     #f add_values - add values from a dictionary to the environment
-    def add_values(self, values_d):
+    def add_values(self, values_d:EnvDict) -> None:
         """
         Add values from the dictionary 'values_d' to this environment
         """
@@ -55,7 +57,7 @@ class GripEnv:
             pass
         pass
     #f build_from_values - build from TomlDictValues 'other attributes'
-    def build_from_values(self, values : Optional[TomlDictValues]):
+    def build_from_values(self, values : Optional[TomlDictValues]) -> None:
         """
         Add key/value pairs from a TomlDictValues 'other attributes'
         """
@@ -65,7 +67,7 @@ class GripEnv:
              pass
         pass
     #f resolve - resolve self.env looking for @KEY@ in each
-    def resolve(self, error_handler=None):
+    def resolve(self, error_handler:ErrorHandler=None) -> None:
         """
         Resolve the values in the environment where the values include references
         to other environment variables (with @KEY@)
@@ -98,7 +100,8 @@ class GripEnv:
         # Capture the environment keys to resolve - self.env itself may change in our loop if error handlers add values
         env_to_resolve = list(self.env.keys())
         for k in env_to_resolve:
-            self.env[k] = self.substitute(self.env[k], finalize=True, error_handler=error_handler)
+            e = self.substitute(self.env[k], finalize=True, error_handler=error_handler)
+            if e is not None: self.env[k] = e
             pass
         pass
     #f full_name - get hierarchical name of environment
@@ -112,7 +115,7 @@ class GripEnv:
             pass
         return r+self.name
     #f value_of_key - get value of key, from parents if not local, using environment if required
-    def value_of_key(self, k : str, raise_exception=True, environment_overrides=True, error_handler=None) -> Optional[str]:
+    def value_of_key(self, k : str, raise_exception:bool =True, environment_overrides:bool =True, error_handler:ErrorHandler=None) -> Optional[str]:
         """
         Find value of a key within the environment
         If environment_overrides is True then first look in os.environ
@@ -129,9 +132,11 @@ class GripEnv:
             pass
         if r is not None: return r
         if not raise_exception: return None
-        return GripEnvValueError(self,k,"Configuration or environment value not specified").invoke(error_handler)
+        e = GripEnvValueError(self,k,"Configuration or environment value not specified").invoke(error_handler)
+        assert ((e is None) or (type(e)==str))
+        return cast(Optional[str],e)
     #f substitute - substitute environment contents as required in a string, return None if unknown variable
-    def substitute(self, s:Optional[str], acc="", finalize=True, error_handler=None) -> Optional[str]:
+    def substitute(self, s:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
         """
         Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
         Find any @@ and replace
@@ -159,7 +164,7 @@ class GripEnv:
         acc = acc + v
         return self.substitute(m.group('rest'), acc=acc, finalize=finalize, error_handler=error_handler)
     #f as_dict - generate key->value pair, including parent if required
-    def as_dict(self, include_parent=False) -> Dict[str,str]:
+    def as_dict(self, include_parent:bool=False) -> EnvDict:
         """
         Generate a dictionary of environment
         Include parents if required, with children overriding parents if keys
@@ -174,7 +179,7 @@ class GripEnv:
             pass
         return e
     #f as_makefile_strings
-    def as_makefile_strings(self, include_parent=False) -> List[Tuple[str,str]]:
+    def as_makefile_strings(self, include_parent:bool=False) -> MakefileStrings:
         """
         Generate a list of (key,value) pairs from the complete environment
         Include parents (recursively) if desired
@@ -186,7 +191,7 @@ class GripEnv:
             pass
         return r
     #f as_str - Generate a string for pretty printing
-    def as_str(self, include_parent=False) -> str:
+    def as_str(self, include_parent:bool=False) -> str:
         """
         Generate a string representation of the environment, including parents if required
         Used for pretty-printing
@@ -198,7 +203,7 @@ class GripEnv:
             pass
         return " ".join(r)
     #f show - print environment for humans for debug
-    def show(self, msg, include_parent=False):
+    def show(self, msg:str, include_parent:bool=False) -> None:
         """
         Print environment for debugging, including the parent environments if desired
         """

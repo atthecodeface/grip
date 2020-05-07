@@ -1,19 +1,26 @@
 #a Imports
 import sys, os, re
 import subprocess
-from typing import Optional
-from .verbose import info
+from typing import Type, Optional, Union, Dict, Any, Tuple
+from .log import Log
 from .options import Options
 
 #a OSCommand
 class OSCommand:
+    # Result type - depends on include_rc
+    Result = Union[str, Tuple[int,str]]
     #t Types of properties
     options : Optional[Options]
-    cmd : Optional[str]
+    log : Log
+    cmd : str
     cwd : Optional[str]
-    env : Optional[str]
+    env : Optional[Dict[str,str]]
     include_rc : bool
     exception_on_error : bool
+    process: Any
+    stderr: str
+    stdout: str
+    rc : int
     #c NullOptions
     class NullOptions:
         verbose = False
@@ -23,7 +30,7 @@ class OSCommand:
         """
         Exception to capture the result of an OS command
         """
-        def __init__(self, cmd):
+        def __init__(self, cmd:'OSCommand') -> None:
             self.cmd = cmd
             pass
         pass
@@ -32,19 +39,29 @@ class OSCommand:
             return "Error in " + self.cmd.string_command_result()
         pass
     #f __init__
-    def __init__(self, cmd, options=None, cwd=None, env=None, run=True, stderr_output_indicates_error=True, input_data=None, log=None, exception_on_error=True, include_rc=False):
+    def __init__(self, cmd:str,
+                 options:Optional[Options]=None,
+                 cwd : Optional[str] = None,
+                 env : Optional[Dict[str,str]] = None,
+                 run : bool =True,
+                 stderr_output_indicates_error : bool =True,
+                 input_data : Optional[str] =None,
+                 log : Optional[Log] = None,
+                 exception_on_error :bool =True,
+                 include_rc         :bool =False):
         """
         Run an OS command in a subprocess shell
 
         log can be None or a logger with an 'add_entry' method
         """
-        if options is None: options=self.NullOptions()
+        if options is None: options=Options()
         self.options = options
         self.stderr_output_indicates_error = stderr_output_indicates_error
         self.cmd = cmd
         self.cwd = cwd
         self.env = env
         self.process = None
+        if log is None: log=Log()
         self.log = log
         self.exception_on_error = exception_on_error
         self.include_rc = include_rc
@@ -54,8 +71,7 @@ class OSCommand:
             pass
         pass
     #f start_process
-    def start_process(self):
-        # info(self.options, "Executing command \"%s\":" % self.cmd)
+    def start_process(self) -> None:
         if self.log: self.log.add_entry(self.log_start)
         self.process = subprocess.Popen(args=self.cmd,
                                         shell=True, # So that args is a string not a list
@@ -69,7 +85,7 @@ class OSCommand:
                                         )
         pass
     #f output_string
-    def output_string(self, s, max_lines=100) -> str:
+    def output_string(self, s:str, max_lines:int=100) -> str:
         sl = s.rstrip("\n").split("\n")
         if len(sl)==1: return sl[0]
         append = ""
@@ -79,7 +95,7 @@ class OSCommand:
             pass
         return "\\n".join(sl)
     #f string_command_result
-    def string_command_result(self):
+    def string_command_result(self) -> str:
         r = ""
         r += "OS Command '%s' completed\n" % (self.cmd)
         r += "  WD %s\n" % (self.cwd)
@@ -88,22 +104,21 @@ class OSCommand:
         r += "  Stderr: %s\n"     % (self.output_string(self.stderr))
         return r
     #f error_output
-    def error_output(self):
+    def error_output(self) -> str:
         return self.stderr
     #f return_code
-    def return_code(self):
+    def return_code(self) -> int:
         return self.rc
     #f run
-    def run(self, input_data=None):
-        (self.stdout, self.stderr) = self.process.communicate(input_data)
-        self.stdout = self.stdout.decode()
-        self.stderr = self.stderr.decode()
+    def run(self, input_data:Optional[str]=None) -> None:
+        (stdout, stderr) = self.process.communicate(input_data)
+        self.stdout = stdout.decode()
+        self.stderr = stderr.decode()
         self.rc                    = self.process.wait()
         if self.log: self.log.add_entry(self.log_result)
-        # info(self.options, self.string_command_result())
         pass
     #f result
-    def result(self):
+    def result(self) -> Result:
         had_error   = (self.rc!=0)
         if len(self.stderr)>0 and self.stderr_output_indicates_error:
             had_error=True
@@ -113,11 +128,11 @@ class OSCommand:
         if self.include_rc: return (self.rc, self.stdout)
         return self.stdout
     #f log_start
-    def log_start(self, writer):
+    def log_start(self, writer:Log.Writer) -> None:
         writer("OS command '%s' started in wd '%s' with env '%s'"%(self.cmd, self.cwd, self.env))
         pass
     #f log_result
-    def log_result(self, writer):
+    def log_result(self, writer:Log.Writer) -> None:
         self.log.write_multiline( writer=writer, s=self.string_command_result())
         pass
     #f All done
@@ -127,6 +142,6 @@ class OSCommand:
 OSCommandError = OSCommand.Error
 
 #a Toplevel
-def command(options, cmd, **kwargs):
-    cmd = OSCommand(options=options, cmd=cmd, run=True, **kwargs)
-    return cmd.result()
+def command(options:Optional[Options], cmd:str, **kwargs:Any) -> OSCommand.Result:
+    cmd_result = OSCommand(options=options, cmd=cmd, run=True, **kwargs)
+    return cmd_result.result()

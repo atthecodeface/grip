@@ -15,31 +15,38 @@ class Options(object):
     help     = False
     show_log = False
     quiet    = False
-    def __init__(self):
+    _verbose_fn : Verbose
+    #f __init__
+    def __init__(self) -> None:
         pass
     #f has - return true if we have an option
-    def has(self, n) -> bool:
+    def has(self, n:str) -> bool:
         return hasattr(self,n)
     # get - get an option with a default, or raise exception
-    def get(self, n:str, default=UnknownOption) -> Any:
+    def get(self, n:str, default:Any=UnknownOption) -> Any:
         if self.has(n): return getattr(self,n)
         if default is UnknownOption: raise UnknownOption("Option %s unknown"%n)
         return default
     #f _validate - validate the options
-    def _validate(self):
+    def _validate(self) -> None:
+        self._verbose_fn = Verbose(level=Verbose.level_info)
         if (type(self.verbose)==bool) or (type(self.quiet)==bool):
-            verbose = Verbose(level=Verbose.level_info)
-            if (type(self.verbose)==bool) and self.verbose: verbose.set_level(Verbose.level_verbose)
-            elif (type(self.quiet)==bool) and self.quiet:   verbose.set_level(Verbose.level_warning)
-            else:              verbose.set_level(Verbose.level_info)
-            self.verbose = verbose
+            if (type(self.quiet)==bool) and self.quiet:
+                self._verbose_fn.set_level(Verbose.level_warning)
+                pass
+            if (type(self.verbose)==bool) and self.verbose:
+                self._verbose_fn.set_level(Verbose.level_verbose)
+                pass
             pass
         elif type(self.verbose)==int:
-            self.verbose = Verbose(level=self.verbose)
+            self._verbose_fn.set_level(self.verbose)
             pass
         pass
+    #f get_verbose_fn
+    def get_verbose_fn(self) -> Verbose:
+        return self._verbose_fn
     #f dump - print to screen
-    def dump(self):
+    def dump(self) -> None:
         for k in dir(self):
             print(k,self.get(k))
             pass

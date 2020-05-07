@@ -2,8 +2,8 @@
 import os, time
 from typing import Type, List, Dict, Iterable, Optional, Any
 from .git import Repository as GitRepo
-from .descriptor.stage import Dependency as StageDependency
-from .descriptor.grip import Descriptor as GripRepoDescriptor
+from .descriptor import StageDependency as StageDependency
+from .descriptor import GripDescriptor as GripRepoDescriptor
 from .config.file import ConfigFile as GripRepoConfig
 from .state.file  import StateFile as GripRepoState
 from .workflow import Workflow

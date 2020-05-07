@@ -1,8 +1,9 @@
 #a Imports
-from typing import Type, Dict, List, Sequence, Any, Iterable
+from typing import Type, Dict, List, Sequence, Any, Iterable, Tuple, Set
 from ..options import Options
 from ..log import Log
 from ..verbose import Verbose
+from ..exceptions import *
 from ..git import Repository as GitRepository, branch_upstream, branch_remote_of_upstream, branch_head
 
 from typing import TYPE_CHECKING
@@ -11,15 +12,15 @@ if TYPE_CHECKING: from ..grip import Toplevel
 #a Classes
 #c Workflow - base class for workflows
 class Workflow(object):
-    name = "Base workflow class - must be subclassed"
-    permitted = False
-    options : Options
-    git_repo : GitRepository
-    log : Log
-    verbose : Verbose
-    toplevel : Type['Toplevel']
+    name      : str = "Base workflow class - must be subclassed"
+    permitted : bool = False
+    options   : Options
+    git_repo  : GitRepository
+    log       : Log
+    verbose   : Verbose
+    toplevel  : 'Toplevel'
     #f __init__
-    def __init__(self, toplevel: Type['Toplevel'], git_repo: GitRepository):
+    def __init__(self, toplevel:'Toplevel', git_repo: GitRepository):
         self.toplevel = toplevel
         self.git_repo  = git_repo
         self.options = toplevel.options
@@ -27,25 +28,27 @@ class Workflow(object):
         self.verbose = toplevel.verbose
         pass
     #f get_branch_name
-    def get_branch_name(self, **kwargs):
+    def get_branch_name(self, **kwargs:Any) -> str:
         return self.toplevel.get_branch_name(**kwargs)
     #f install_hooks
-    def install_hooks(self):
+    def install_hooks(self) -> None:
         """
         Install any hooks required in the subrepos?
         """
         raise Exception("install_hooks not implemented for workflow %s"%self.name)
     #f get_repo_workflow_string
-    def get_repo_workflow_string(self):
+    def get_repo_workflow_string(self) -> str:
         return "Repo (%s) %s"%(self.name, self.git_repo.get_name())
     #f status
-    def status(self):
+    def status(self) -> bool:
         """
         Report status of a git repo given a workflow
+
+        Return False if could not be done
         """
         raise Exception("status not implemented for workflow %s"%self.name)
     #f commit
-    def commit(self):
+    def commit(self) -> bool:
         """
         Commit a git_repo using the workflow
 
@@ -55,17 +58,17 @@ class Workflow(object):
         """
         raise Exception("commit not implemented for workflow %s"%self.name)
     #f fetch
-    def fetch(self):
+    def fetch(self, **kwargs:Any) -> bool:
         self.verbose.info("Fetching %s"%(self.get_repo_workflow_string()))
-        output = self.git_repo.fetch(log=self.log)
+        output = self.git_repo.fetch()
         if len(output)>0:print(output)
         current_cs = self.git_repo.get_cs(branch_name=branch_upstream)
         fetched_cs = self.git_repo.get_cs(branch_name=branch_remote_of_upstream)
-        self.git_repo.change_branch_ref(log=self.log, branch_name=branch_upstream, ref=fetched_cs)
+        self.git_repo.change_branch_ref(branch_name=branch_upstream, ref=fetched_cs)
         self.verbose.message("Repo '%s' %s stream branch now at %s (was at %s)"%(self.git_repo.get_name(), branch_upstream, fetched_cs, current_cs))
         return True
     #f merge
-    def merge(self):
+    def merge(self, **kwargs:Any) -> bool:
         """
         Merge a git_repo with upstream using the workflow
 
@@ -75,7 +78,7 @@ class Workflow(object):
         """
         raise Exception("merge not implemented for workflow %s"%self.name)
     #f prepush
-    def prepush(self):
+    def prepush(self) -> bool:
         """
         Prepare to push a git_repo upstream using the workflow
         This may be a merge; it may be nothing
@@ -86,7 +89,7 @@ class Workflow(object):
         """
         raise Exception("prepush not implemented for workflow %s"%self.name)
     #f push
-    def push(self):
+    def push(self) -> bool:
         """
         Push a git_repo upstream using the workflow
 
@@ -96,8 +99,8 @@ class Workflow(object):
         """
         raise Exception("push not implemented for workflow %s"%self.name)
     #f check_git_repo_is_descendant
-    def check_git_repo_is_descendant(self):
-        cs_history = self.git_repo.get_cs_history(branch_name=self.toplevel.get_branch_name(), log=self.log)
+    def check_git_repo_is_descendant(self) -> bool:
+        cs_history = self.git_repo.get_cs_history(branch_name=self.toplevel.get_branch_name())
         try:
             cs = self.git_repo.get_cs(branch_name=branch_upstream)
         except HowUnknownBranch as e:
@@ -107,23 +110,23 @@ class Workflow(object):
         self.verbose.info("%s is a descendant of '%s' branch (at cs %s)"%(self.get_repo_workflow_string(), branch_upstream, cs))
         return True
     #f how_git_repo_upstreamed
-    def how_git_repo_upstreamed(self):
+    def how_git_repo_upstreamed(self) -> Tuple[str,str,int]:
         """
         Return 0 if git repo matches upstream
         Return 1 if git repo is descendant of upstream
         Return -1 if git repo is ancestor of upstream
         """
-        cs = self.git_repo.get_cs(log=self.log)
-        cs_upstream = self.git_repo.get_cs(branch_name=branch_upstream, log=self.log)
+        cs = self.git_repo.get_cs()
+        cs_upstream = self.git_repo.get_cs(branch_name=branch_upstream)
         if cs==cs_upstream: return (cs, cs_upstream, 0)
         try:
-            cs_history = self.git_repo.get_cs_history(branch_name=branch_upstream, log=self.log)
+            cs_history = self.git_repo.get_cs_history(branch_name=branch_upstream)
         except HowUnknownBranch as e:
             raise WorkflowError("%s"%str(e))
         if cs in cs_history: return (cs, cs_upstream, -1)
         return (cs, cs_upstream, 1)
     #f check_git_repo_is_upstreamed
-    def check_git_repo_is_upstreamed(self, exception_if_not=True):
+    def check_git_repo_is_upstreamed(self, exception_if_not:bool=True) -> bool:
         (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
         if cmp>0:
             self.verbose.warning("%s is at cs '%s' which is not an ancestor of '%s' branch"%(self.get_repo_workflow_string(), cs, branch_upstream))
@@ -134,7 +137,7 @@ class Workflow(object):
         return True
     #f get_subclasses
     @classmethod
-    def get_subclasses(cls, so_far=set()) -> Iterable[Type['Workflow']]:
+    def get_subclasses(cls, so_far:Set[Type['Workflow']]=set()) -> Iterable[Type['Workflow']]:
         for subclass in cls.__subclasses__():
             if subclass not in so_far:
                 so_far.add(subclass)

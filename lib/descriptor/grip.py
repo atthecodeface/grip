@@ -1,23 +1,30 @@
 #a Imports
 import os, sys, re, copy
 import toml
-from typing import Optional, Dict, List, Tuple, Any, Iterator, Sequence, Union
+from typing import Type, Optional, Dict, List, Tuple, Any, Iterator, Sequence, Mapping, Union, cast
 from ..exceptions import *
-from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
-from ..git import Repository as GitRepo
-from ..workflow import get_workflow, supported_workflows
+from ..tomldict import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
+from ..git import Repository as GitRepository
+from ..git import Url as GitUrl
+from ..workflow import Workflow, get_workflow, supported_workflows
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
 from .stage import Dependency as StageDependency
 from .stage import Descriptor as StageDescriptor
 from .stage import StageTomlDict
 from .repo  import RepoDescTomlDict
-from .repo  import Descriptor as RepoDescriptor
+from .repo  import Descriptor as RepositoryDescriptor
 from .config import Descriptor as ConfigDescriptor
 from .config import ConfigTomlDict
 
+from typing import TYPE_CHECKING
+from ..types import PrettyPrinter, Documentation, DocumentationEntry, MakefileStrings, EnvDict
+if TYPE_CHECKING:
+    from ..grip import Toplevel
+    from ..workflow import Workflow
+
 #a Useful functions
-def str_keys(d):
+def str_keys(d:Mapping[str,Any]) -> str:
     return ", ".join([k for k in d.keys()])
 
 #a Toml parser classes - description of a .grip/grip.toml file
@@ -41,6 +48,12 @@ class GripFileTomlDict(TomlDict):
 
 #a Classes
 #c DescriptorValues - namespace that contains values from the TomlDict
+class GripFileTomlDictValues(TomlDictValues):
+    base_repos : Optional[List[str]]
+    stages :     Optional[List[str]]
+    config :     Optional[TomlDictValues]
+    repo   :     Optional[TomlDictValues]
+    pass
 class DescriptorValues(object):
     name : Optional[str] = None
     default_config : str      = ""
@@ -52,8 +65,9 @@ class DescriptorValues(object):
     logging : bool = False
     workflow : Optional[str] = None
     doc : Optional[str] = None
-    def __init__(self, values):
-        values.Set_obj_properties(self, ["name", "workflow", "base_repos", "default_config", "logging", "doc", "configs", "stages", "config", "repo"])
+    env : TomlDictValues
+    def __init__(self, values:GripFileTomlDictValues):
+        values.Set_obj_properties(self, ["name", "workflow", "base_repos", "default_config", "logging", "doc", "configs", "stages", "config", "repo", "env"])
         if values.base_repos is None: self.base_repos=[]
         if values.stages     is None: self.stages=[]
         self.repo={}
@@ -97,11 +111,12 @@ class Descriptor(object):
     default_config : Optional[str]
     base_repos     : List[str]
     configs        : Dict[str,ConfigDescriptor]
-    repos          : Dict[str,RepoDescriptor]
+    repos          : Dict[str,RepositoryDescriptor]
     stages         : Dict[str,StageDescriptor]
     re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
+    workflow : Type[Workflow]
     #f __init__
-    def __init__(self, git_repo):
+    def __init__(self, git_repo:GitRepository):
         self.git_repo = git_repo
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
@@ -110,7 +125,7 @@ class Descriptor(object):
         self.env = GripEnv(name='grip.toml', default_values=default_env)
         pass
     #f toml_loads
-    def toml_loads(self, filename, s):
+    def toml_loads(self, filename:str, s:str) -> RawTomlDict:
         """
         A wrapper around toml.loads to provide a suitable error on an exception
         """
@@ -121,7 +136,7 @@ class Descriptor(object):
             raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
         return r
     #f read_toml_strings
-    def read_toml_strings(self, grip_toml_string, subrepo_toml_strings, filename="<toml_file>"):
+    def read_toml_strings(self, grip_toml_string:str, subrepo_toml_strings:Dict[str,str], filename:str="<toml_file>")->None:
         """
         Create the description and validate it from the grip_toml_string contents
 
@@ -159,19 +174,21 @@ class Descriptor(object):
             pass
         values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
         # values.Prettyprint()
+        values = cast(GripFileTomlDictValues, values)
         self.build_from_values(values)
         pass
     #f build_from_toml_dict
-    def build_from_toml_dict(self):
+    def build_from_toml_dict(self) -> None:
         """
         Create the description and validate it from the grip_toml_string contents
         """
         values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
+        values = cast(GripFileTomlDictValues, values)
         # values.Prettyprint()
         self.build_from_values(values)
         pass
     #f read_toml_file
-    def read_toml_file(self, grip_toml_filename, subrepos=[], error_handler=None):
+    def read_toml_file(self, grip_toml_filename:str, subrepos:List[RepositoryDescriptor]=[], error_handler:ErrorHandler=None) -> None:
         """
         Load the <root_dir>/.grip/grip.toml file
 
@@ -194,17 +211,16 @@ class Descriptor(object):
         self.build_from_toml_dict()
         pass
     #f build_from_values
-    def build_from_values(self, values):
+    def build_from_values(self, values:GripFileTomlDictValues) -> None:
         self.values = DescriptorValues(values)
         if len(self.values.repo)==0:    raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
         if len(self.values.configs)==0: raise GripTomlError("'configs' must be provided in grip configuration file")
         self.name           = self.values.name
         self.default_config = self.values.default_config
         self.base_repos     = self.values.base_repos
-        self.workflow       = self.values.workflow
         self.logging        = self.values.logging
         self.doc            = self.values.doc
-        self.env.build_from_values(values.env)
+        self.env.build_from_values(self.values.env)
         # Must validate the base_repos here so users can assume self.repos[x] is valid for x in self.base_repos
         for r in self.values.base_repos:
             if r not in self.values.repo: raise RepoDescError("repo '%s', one of the base_repos, is not one of the repos described (which are %s)"%(r, str_keys(self.values.repo)))
@@ -212,7 +228,7 @@ class Descriptor(object):
         # Build stages before configs
         self.repos = {}
         for (repo_name, repo_values) in self.values.repo.items():
-            self.repos[repo_name] = RepoDescriptor(repo_name, values=repo_values, grip_repo_desc=self)
+            self.repos[repo_name] = RepositoryDescriptor(repo_name, values=repo_values, grip_repo_desc=self)
             pass
         self.stages = {}
         for s in self.values.stages:
@@ -229,7 +245,7 @@ class Descriptor(object):
             pass
         pass
     #f validate
-    def validate(self, error_handler=None):
+    def validate(self, error_handler:ErrorHandler=None) -> None:
         if self.name is None:
             raise RepoDescError("Unnamed repo descriptors are not permitted - the .grip/grip.toml file should have a toplevel 'name' field")
         if self.re_valid_name.match(self.name) is None:
@@ -237,16 +253,16 @@ class Descriptor(object):
         self.env.resolve(error_handler=error_handler)
         if self.default_config not in self.configs:
             raise RepoDescError("default_config of '%s' is undefined (defined configs are %s)" % (self.default_config, str_keys(self.configs)))
-        if self.workflow is not None:
-            self.workflow = self.validate_workflow(self.workflow, "grip repo description")
-            pass
+        if self.values.workflow is None:
+            raise RepoDescError("workflow must be defined")
+        self.workflow = self.validate_workflow(self.values.workflow, "grip repo description")
         for (n,c) in self.configs.items():
             c.validate(error_handler=error_handler)
             pass
         if self.logging is None: self.logging=False
         pass
     #f resolve
-    def resolve(self, error_handler=None):
+    def resolve(self, error_handler:ErrorHandler=None) -> None:
         """
         Resolve any values using grip environment variables to config or default values
         """
@@ -255,30 +271,15 @@ class Descriptor(object):
             pass
         pass
     #f validate_workflow - map from workflow name to workflow class
-    def validate_workflow(self, workflow, user):
+    def validate_workflow(self, workflow:str, user:str) -> Type[Workflow]:
         if workflow is None:
             raise RepoDescError("'%s' is does not have a workflow specified"%(user))
         w = get_workflow(workflow)
         if w is None:
             raise RepoDescError("workflow '%s' used in %s is not in workflows supported by this version of grip (which are %s)"%(workflow, user, supported_workflows()))
         return w
-    #f prettyprint
-    def prettyprint(self, acc, pp):
-        acc = pp(acc, "default_config: %s"%(self.default_config))
-        acc = pp(acc, "base_repos:     %s"%(str(self.base_repos)))
-        for (n,r) in self.repos.items():
-            def ppr(acc, s, indent=0):
-                return pp(acc, s, indent=indent)
-            acc = r.prettyprint(acc, ppr)
-            pass
-        for (n,c) in self.configs.items():
-            def ppr(acc, s, indent=0):
-                return pp(acc, s, indent=indent)
-            acc = c.prettyprint(acc, ppr)
-            pass
-        return acc
     #f iter_repos - iterate over repos in config, each is RepoDescriptor instance
-    def iter_repos(self) -> Iterator[RepoDescriptor]:
+    def iter_repos(self) -> Iterator[RepositoryDescriptor]:
         for n in self.repos:
             yield self.repos[n]
             pass
@@ -293,27 +294,34 @@ class Descriptor(object):
     def get_configs(self) -> List[str]:
         return list(self.configs.keys())
     #f get_stage - used by Config
-    def get_stage(self, stage_name) -> Optional[StageDescriptor]:
+    def get_stage(self, stage_name:str) -> Optional[StageDescriptor]:
         """
         Get dictionary of stage name -> Stage
         """
         if stage_name in self.stages: return self.stages[stage_name]
         return None
+    #f get_repo - used by Config
+    def get_repo(self, repo_name:str) -> Optional[RepositoryDescriptor]:
+        """
+        Get dictionary of stage name -> Stage
+        """
+        if repo_name in self.repos: return self.repos[repo_name]
+        return None
     #f get_doc_string
-    def get_doc_string(self):
+    def get_doc_string(self) -> str:
         """
         Return documentation string
         """
         if self.doc is None: return "Undocumented"
         return self.doc.strip()
     #f get_doc
-    def get_doc(self, include_configs=True) -> Sequence[ Union [ str, List[ Tuple[str, Any]]]]:
+    def get_doc(self, include_configs:bool=True) -> Documentation:
         """
         Return documentation = list of <string> | (name * documentation)
         List should include all configurations
         List should always start with (None, repo.doc) if there is repo doc
         """
-        r = []
+        r : Documentation = []
         r.append(self.get_doc_string())
         if include_configs:
             for (n,c) in self.configs.items():
@@ -325,7 +333,7 @@ class Descriptor(object):
     def is_logging_enabled(self) -> bool:
         return self.logging
     #f select_config
-    def select_config(self, config_name=None) -> Optional[ConfigDescriptor]:
+    def select_config(self, config_name:Optional[str]=None) -> Optional[ConfigDescriptor]:
         """
         Return a selected configuration
         """
@@ -333,7 +341,7 @@ class Descriptor(object):
         if config_name not in self.configs: return None
         return self.configs[config_name]
     #f resolve_git_urls
-    def resolve_git_urls(self, grip_git_url):
+    def resolve_git_urls(self, grip_git_url:GitUrl) -> None:
         """
         Resolve all relative (and those using environment variables?) git urls
         """
@@ -341,6 +349,21 @@ class Descriptor(object):
             c.resolve_git_urls(grip_git_url)
             pass
         pass
+    #f prettyprint
+    def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
+        acc = pp(acc, "default_config: %s"%(self.default_config))
+        acc = pp(acc, "base_repos:     %s"%(str(self.base_repos)))
+        for (n,r) in self.repos.items():
+            def ppr(acc:Any, s:str, indent:int=0) -> Any:
+                return pp(acc, s, indent=indent)
+            acc = r.prettyprint(acc, ppr)
+            pass
+        for (n,c) in self.configs.items():
+            def ppr(acc:Any, s:str, indent:int=0) -> Any:
+                return pp(acc, s, indent=indent)
+            acc = c.prettyprint(acc, ppr)
+            pass
+        return acc
     #f All done
     pass
 

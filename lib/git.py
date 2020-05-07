@@ -1,9 +1,10 @@
 #a Imports
 import os, re, unittest
 from pathlib import Path
-from typing import Type, Dict, Optional, Tuple
+from typing import Type, Dict, Optional, Tuple, Any, List, Union, cast
 from .oscommand import command as os_command
 from .oscommand import OSCommandError
+from .oscommand import OSCommand
 from .options import Options
 from .log import Log
 from .exceptions import *
@@ -15,11 +16,8 @@ branch_head = "HEAD"
 
 #a Useful functions
 #f git_command
-def git_command(options=None, cmd=None, **kwargs) -> str:
-    cmd="git %s"%(cmd)
-    return os_command(options=options,
-                                     cmd=cmd,
-                                     **kwargs)
+def git_command(options:Optional[Options]=None, cmd:str="", **kwargs:Any) -> OSCommand.Result:
+    return os_command(options=options, cmd="git %s"%(cmd), **kwargs)
 
 #a Classes
 #c Git url class
@@ -71,7 +69,8 @@ class Url:
             return "%s/%s"%(url, self.path)
         return self.path
     #f parse_path
-    def parse_path(self):
+    def parse_path(self) -> None:
+        assert self.path is not None
         (d,f) = os.path.split(self.path)
         if f=='': self.path = d
         (path_dir, path_leaf) = os.path.split(self.path)
@@ -86,7 +85,7 @@ class Url:
         if self.path_dir != "": return False
         return True
     #f make_relative_to - if .is_leaf() then make relative to another of these
-    def make_relative_to(self, abs_url:Type['Url']) -> None:
+    def make_relative_to(self, abs_url:'Url') -> None:
         assert self.host is None
         assert self.path_dir == ""
         self.host     = abs_url.host
@@ -97,7 +96,7 @@ class Url:
         self.parse_path()
         pass
     # __str__ - get human readable version
-    def __str__(self):
+    def __str__(self) -> str:
         return "host %s user %s port %s path %s"%(self.host, self.user, self.port, self.path)
     #f All done
     pass
@@ -122,13 +121,14 @@ class Repository(object):
     A Git repo object for a git repository within the local filesystem
     """
     #t instance properties
-    git_url  : Url
-    upstream : Remote
+    git_url  : str
+    url      : Url
+    upstream : Optional[Remote]
     path     : Path
     options  : Options
     log      : Log
-    #f git_command
-    def git_command(self, cwd=None, cmd=None, **kwargs) -> str:
+    #f git_command_result
+    def git_command_result(self, cwd:Optional[Path]=None, cmd:str="", **kwargs:Any) -> OSCommand.Result:
         if cwd is None:
             cwd = self.path
             pass
@@ -138,8 +138,11 @@ class Repository(object):
                           cwd     = str(cwd),
                           **kwargs)
 
+    #f git_command
+    def git_command(self, **kwargs:Any) -> str:
+        return cast(str,git_command(**kwargs))
     #f __init__
-    def __init__(self, path, git_url=None, permit_no_remote=False, log=None, options=None):
+    def __init__(self, path_str:str, git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
         """
         Create the object from a given path
 
@@ -151,8 +154,8 @@ class Repository(object):
         if options is None: options=Options()
         self.log = log
         self.options = options
-        if path is None: path="."
-        path = Path(path)
+        if path_str is None: path_str="."
+        path = Path(path_str)
         if not path.exists():
             raise PathError("path '%s' does not exist"%str(path))
         git_output = self.git_command(cwd=path, cmd="rev-parse --show-toplevel")
@@ -166,21 +169,16 @@ class Repository(object):
                 git_url = ""
                 pass
             git_url = git_output.strip()
-            if git_url=="":
-                git_url = None
-                pass
-            else:
-                git_url = Url(git_url)
-                pass
             pass
         self.git_url = git_url
+        self.url = Url(git_url)
         self.upstream = self.get_branch_remote_and_merge(branch_upstream)
         pass
     #f get_upstream - get Remote corresponding to the upstream
-    def get_upstream(self) -> Remote:
+    def get_upstream(self) -> Optional[Remote]:
         return self.upstream
     #f get_branch_remote_and_merge
-    def get_branch_remote_and_merge(self, branch_name) -> Optional[Remote]:
+    def get_branch_remote_and_merge(self, branch_name:str) -> Optional[Remote]:
         """
         For a given branch attempt to get remote and merge - i.e. where to fetch/push to
         """
@@ -200,208 +198,184 @@ class Repository(object):
     def get_name(self) -> str:
         return str(self.path)
     #f get_git_url
-    def get_git_url(self):
-        return self.git_url
+    def get_git_url(self) -> Url:
+        return self.url
     #f get_git_url_string
     def get_git_url_string(self) -> str:
-        return self.git_url.as_string()
+        return self.url.as_string()
     #f get_path
     def get_path(self) -> str:
         return str(self.path)
     #f get_config
-    def get_config(self, config_path, log=None) -> str:
+    def get_config(self, config_path:List[str]) -> str:
         config=".".join(config_path)
-        output = git_command(cmd="config --get %s"%config,
-                             log=log,
-                             cwd=self.path)
-        output=output.strip()
-        return output
+        return self.git_command(cmd="config --get %s"%config).strip()
     #f set_upstream_of_branch
-    def set_upstream_of_branch(self, branch_name, origin, origin_branch, log=None):
+    def set_upstream_of_branch(self, branch_name:str, remote:Remote) -> str:
         """
         Set upstream of a branch
         """
-        output = git_command(cmd="branch --set-upstream-to=%s/%s '%s'"%(origin, origin_branch, branch_name),
-                             log=log,
-                             cwd=self.path)
+        output = self.git_command(cmd="branch --set-upstream-to=%s/%s '%s'"%(remote.get_origin(), remote.get_branch(), branch_name))
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to set upstream branch for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
-        # git branch
     #f get_branch_name - get string branch name from a ref (a branch name)
-    def get_branch_name(self, ref="HEAD", log=None) -> str:
+    def get_branch_name(self, ref:str="HEAD") -> str:
         """
         Get changeset of the git repo
 
         This is more valuable to the user if git repo is_modified() is false.
         """
-        output = git_command(cmd="rev-parse --abbrev-ref '%s'"%ref,
-                             log=log,
-                             cwd=self.path)
+        output = self.git_command(cmd="rev-parse --abbrev-ref '%s'"%ref)
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to determine branch for git repo '%s' ref '%s'"%(self.get_name(), ref))
     #f get_cs - get hash of a specified branch
-    def get_cs(self, branch_name=None, log=None):
+    def get_cs(self, branch_name:Optional[str]=None) -> str:
         """
         Get changeset of the git repo
 
         This is more valuable to the user if git repo is_modified() is false.
         """
         if branch_name is None: branch_name="HEAD"
-        output = git_command(cmd="rev-parse '%s'"%branch_name,
-                             log=log,
-                             cwd=self.path)
+        output = self.git_command(cmd="rev-parse '%s'"%branch_name)
         output = output.strip()
         if len(output.strip()) > 0: return output
         raise Exception("Failed to determine changeset for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
     #f has_cs - determine if it has a changeset or branch
-    def has_cs(self, branch_name=None, log=None):
+    def has_cs(self, branch_name:Optional[str]=None) -> bool:
         """
         Determine if a branch/hash is in the repo
         """
         if branch_name is None: branch_name="HEAD"
-        (rc,_) = git_command(cmd="rev-parse --verify --quiet %s^{commit}"%branch_name,
-                             log=log,
-                             cwd=self.path,
-                             exception_on_error=False,
-                             include_rc=True)
+        (rc,_) = self.git_command_result(cmd="rev-parse --verify --quiet %s^{commit}"%branch_name,
+                                         exception_on_error=False,
+                                         include_rc=True)
         return rc==0
     #f is_modified
-    def is_modified(self, options=None, log=None):
+    def is_modified(self) -> Optional[GitReason]:
         """
         Return None if the git repo is unmodified since last commit
         Return <how> if the git repo is modified since last commit
         """
-        git_command(cmd="update-index -q --refresh",
-                    log=log,
-                    cwd=self.path)
+        self.git_command(cmd="update-index -q --refresh")
 
-        if (options is None) or (not options.get("ignore_unmodified",False)):
-            output = git_command(cwd=self.path,
-                                 log=log,
-                                 cmd="diff-index --name-only HEAD")
+        if not self.options.get("ignore_unmodified",False):
+            output = self.git_command(cmd="diff-index --name-only HEAD")
             output = output.strip()
             if len(output.strip()) > 0:
                 return HowFilesModified(output)
             pass
 
-        if (options is None) or (not options.get("ignore_untracked",False)):
-            output = git_command(cwd=self.path,
-                                 log=log,
-                                 cmd="ls-files -o --exclude-standard")
+        if not self.options.get("ignore_untracked",False):
+            output = self.git_command(cmd="ls-files -o --exclude-standard")
             output = output.strip()
             if len(output.strip()) > 0:
                 return HowUntrackedFiles(output)
             pass
         return None
     #f change_branch_ref
-    def change_branch_ref(self, branch_name, ref, log=None):
+    def change_branch_ref(self, branch_name:str, ref:str)->str:
         """
         Change a branch to point to a specific reference
 
         Used, for example, to make upstream point to a newly fetched head
         """
-        output = git_command(cmd="branch -f '%s' '%s'"%(branch_name, ref),
-                             log=log,
-                             cwd=self.path)
-        output = output.strip()
-        return output
+        return self.git_command(cmd="branch -f '%s' '%s'"%(branch_name, ref)).strip()
     #f get_cs_history
-    def get_cs_history(self, branch_name="", log=None):
+    def get_cs_history(self, branch_name:str="") -> List[str]:
         """
         Get list of changesets of the git repo branch
 
         This is more valuable to the user if git repo is_modified() is false.
         """
         try:
-            output = git_command(cmd="rev-list '%s'"%branch_name,
-                                 log=log,
-                                 cwd=self.path)
+            output = self.git_command(cmd="rev-list '%s'"%branch_name)
             pass
         except:
             raise HowUnknownBranch("Failed to determine changeset history of '%s' branch for git repo '%s' - is this a properly configured git repo"%(branch_name, self.get_name()))
         output = output.strip()
-        output = output.split("\n")
-        if len(output) > 0: return output
+        cs_list = output.split("\n")
+        if len(cs_list) > 0: return cs_list
         raise HowUnknownBranch("No CS histoty returned for '%s' branch for git repo '%s' - is this a properly configured git repo"%(branch_name, self.get_name()))
     #f status
-    def status(self, options=None, log=None):
+    def status(self) -> str:
         """
         Get status
         """
         status_option = ""
-        if (options is not None) and (options.get("ignore_untracked",False)):
+        if self.options.get("ignore_untracked",False):
             status_option = "--untracked-files=no"
             pass
-        output = git_command(cmd="status --porcelain %s"%status_option,
-                             cwd=self.path,
-                             log=log,
-                             stderr_output_indicates_error=False
-        )
+        output = self.git_command(cmd="status --porcelain %s"%status_option,
+                                  stderr_output_indicates_error=False )
         output = output.strip()
         return(output)
     #f fetch
-    def fetch(self, log=None):
+    def fetch(self) -> str:
         """
         Fetch changes from remote
         """
-        output = git_command(cmd="fetch",
-                             cwd=self.path,
-                             log=log,
-                             stderr_output_indicates_error=False
+        output = self.git_command(cmd="fetch",
+                                  stderr_output_indicates_error=False
         )
         output = output.strip()
-        return(output)
+        return output
     #f rebase
-    def rebase(self, options, other_branch, log):
+    def rebase(self, other_branch:str) -> Optional[GitReason]:
         """
         Rebase branch with other_branch
         """
         cmd_options = ""
-        if options.get("interactive",False): cmd_options+=" --interactive"
+        if self.options.get("interactive",False): cmd_options+=" --interactive"
         try:
-            output = git_command(cmd="rebase %s %s"%(cmd_options,other_branch),
-                                 cwd=self.path,
-                                 log=log,
-                                 stderr_output_indicates_error=False
-            )
+            output = self.git_command(cmd="rebase %s %s"%(cmd_options,other_branch),
+                                      stderr_output_indicates_error=False)
             output = output.strip()
             pass
-        except e:
-            raise GitReason("rebase failed : %s"%(str(e)))
+        except Exception as e:
+            return GitReason("rebase failed : %s"%(str(e)))
         return None
+    #f commit
+    def commit(self) -> str:
+        """
+        Commit
+        """
+        cmd_options = "-a "
+        if self.options.has("message"):
+            cmd_options+=" -m '%s'"%(self.options.get("message"))
+        try:
+            output = self.git_command(cmd="commit %s"%(cmd_options))
+            output = output.strip()
+            pass
+        except Exception as e:
+            raise GitReason("commit failed : %s"%(str(e)))
+        return output
     #f push
-    def push(self, repo, ref, dry_run=True, log=None ):
+    def push(self, repo:str, ref:str, dry_run:bool=True ) -> None:
         """
         Push to 'repo ref', with optional dry_run
         """
         cmd_options = ""
         if dry_run: cmd_options+=" --dry-run"
         try:
-            output = git_command(cmd="push %s '%s' '%s'"%(cmd_options,repo,ref),
-                                 cwd=self.path,
-                                 log=log,
-                                 stderr_output_indicates_error=False
-            )
+            output = self.git_command(cmd="push %s '%s' '%s'"%(cmd_options,repo,ref),
+                                      stderr_output_indicates_error=False)
             output = output.strip()
             pass
-        except e:
+        except Exception as e:
             raise GitReason("push failed : %s"%(str(e)))
         return None
     #f checkout_cs
-    def checkout_cs(self, options, changeset):
+    def checkout_cs(self, changeset:str) -> None:
         """
         Checkout changeset
         """
-        output = git_command(options=options,
-                             cmd="checkout %s"%(changeset),
-                             cwd=self.path,
-                             stderr_output_indicates_error=False)
+        self.git_command(cmd="checkout %s"%(changeset), stderr_output_indicates_error=False)
         pass
     #f check_clone_permitted - check if can clone url to path
     @classmethod
-    def check_clone_permitted(cls, repo_url, branch=None, dest=None, log=None):
+    def check_clone_permitted(cls, repo_url:str, dest:str, branch:str, log:Optional[Log]=None) -> bool:
         if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, dest))
         if os.path.exists(dest): raise UserError("Cannot clone to %s as it already exists"%(dest))
         dest_dir = os.path.dirname(dest)
@@ -409,7 +383,7 @@ class Repository(object):
         return True
     #f clone - clone from a Git URL (of a particular branch to a destination directory)
     @classmethod
-    def clone(cls, options, repo_url, new_branch_name, branch=None, dest=None, bare=False, depth=None, changeset=None, log=None):
+    def clone(cls, repo_url:str, new_branch_name:str, branch:Optional[str]=None, dest:Optional[str]=None, bare:bool=False, depth:Optional[int]=None, changeset:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None) -> 'Repository':
         """
         Clone a branch of a repo_url into a checkout directory
         bare checkouts are used in testing only
@@ -461,10 +435,17 @@ class Repository(object):
         pass
         return cls(dest, git_url=repo_url, log=log)
     #f filename - get filename of full path relative to repo in file system
-    def filename(self, paths=[]):
-        if type(paths)!=list: paths=[paths]
-        filename = self.path
-        for p in paths: filename=os.path.join(filename,p)
+    def filename(self, paths:Union[List[str],str]=[]) -> str:
+        if type(paths)!=list:
+            path_list=[cast(str,paths)]
+            pass
+        else:
+            path_list=cast(List[str],paths)
+            pass
+        filename = str(self.path)
+        for p in path_list:
+            filename=os.path.join(filename,p)
+            pass
         return filename
     #f All done
     pass

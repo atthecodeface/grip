@@ -8,8 +8,8 @@ from .log import Log
 from .verbose import Verbose
 from .options import Options
 from .exceptions import *
-from .descriptor.stage import Dependency as StageDependency
-from .descriptor.grip import Descriptor as GripRepoDescriptor
+from .descriptor import StageDependency as StageDependency
+from .descriptor import GripDescriptor as GripRepoDescriptor
 from .config.file import ConfigFile as GripRepoConfig
 from .state.file import StateFile as GripRepoState
 from .repo import Repository
@@ -42,16 +42,18 @@ class Toplevel:
     grip_git_url : Optional[GitUrl]
     #f find_git_repo_of_grip_root
     @classmethod
-    def find_git_repo_of_grip_root(cls, path, log=None):
-        git_repo = GitRepo(path, permit_no_remote=True, log=log)
+    def find_git_repo_of_grip_root(cls, path, options=None, log=None):
+        git_repo = GitRepo(path, permit_no_remote=True, options=options, log=log)
         path = git_repo.get_path()
         if not os.path.isdir(os.path.join(path,".grip")):
             path = os.path.dirname(path)
-            return cls.find_git_repo_of_grip_root(path, log=log)
+            return cls.find_git_repo_of_grip_root(path, options=options, log=log)
         return git_repo
     #f clone - classmethod to create an instance after a git clone
     @classmethod
-    def clone(cls, options, repo_url, branch, path=None, dest=None): # -> Type['Toplevel']
+    def clone(cls, repo_url, branch, path=None, dest=None, options=None, log=None): # -> Type['Toplevel']
+        if options is None: options=Options()
+        if log is None: log = Log()
         dest_path = dest
         if path is not None:
             if dest_path is not None:
@@ -61,18 +63,20 @@ class Toplevel:
                 dest_path = path
                 pass
             pass
-        repo = GitRepo.clone(options, repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path)
-        return cls(repo)
+        repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path, options=options, log=log)
+        return cls(repo, options=options, log=log)
     #f __init__
-    def __init__(self, git_repo:Optional[GitRepo]=None, path=None, options=None, ensure_configured=False, invocation="", error_handler=None):
-        self.log=Log()
+    def __init__(self, git_repo:Optional[GitRepo]=None, path=None, options=None, log=None, ensure_configured=False, invocation="", error_handler=None):
+        if options is None: options=Options()
+        if log is None: log = Log()
+        self.log=log
         self.options=options
-        self.verbose=options.verbose
+        self.verbose=options.get_verbose_fn()
         self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
         self.log.add_entry_string(self.invocation)
         if git_repo is None:
             try:
-                git_repo = Toplevel.find_git_repo_of_grip_root(path, self.log)
+                git_repo = Toplevel.find_git_repo_of_grip_root(path, options=self.options, log=self.log)
             except Exception as e:
                 print(str(e))
                 raise e
@@ -143,7 +147,7 @@ class Toplevel:
             pass
         pass
     #f get_branch_name - get string branch name
-    def get_branch_name(self) -> str:
+    def get_branch_name(self, **kwargs:Any) -> str:
         """
         Get branch name
         """
@@ -351,13 +355,14 @@ class Toplevel:
             self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))
             depth = None
             if r.is_shallow(): depth=1
-            r.git_repo = GitRepo.clone(options,
-                                       repo_url=r.get_git_url_string(),
+            r.git_repo = GitRepo.clone(repo_url=r.get_git_url_string(),
                                        new_branch_name=self.branch_name,
                                        branch=r_state.branch,
                                        dest=dest,
                                        depth = depth,
-                                       changeset = r_state.changeset )
+                                       changeset = r_state.changeset,
+                                       options = self.options,
+                                       log = self.log )
             pass
         self.create_subrepos()
         pass
@@ -366,7 +371,7 @@ class Toplevel:
         self.repo_instance_tree = Repository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, repo_desc=self.repo_desc )
         for rd in self.repo_desc_config.iter_repos():
             try:
-                gr = GitRepo(path=self.git_repo.filename([rd.path]))
+                gr = GitRepo(path_str=self.git_repo.filename([rd.path]), options=self.options, log=self.log)
                 sr = Repository(name=rd.name, grip_repo=self, parent=self.repo_instance_tree, git_repo=gr, repo_desc=rd)
                 pass
             except SubrepoError as e:

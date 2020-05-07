@@ -13,6 +13,10 @@ test_grip:
 check_types:
 	mypy lib/*/*py lib/*.py
 
+.PHONY:check_types_strict
+check_types_strict:
+	mypy --strict lib/*/*py lib/*.py
+
 .PHONY:check_types_stubgen
 check_types_stubgen:
 	stubgen lib/*/*py lib/*.py

@@ -2,8 +2,7 @@
 import sys, os, re
 import argparse
 import traceback
-import lib.utils
-import lib.oscommand
+from .oscommand import *
 from typing import Type, Dict, List, Sequence, Any
 from .hookable import Hookable
 from .exceptions import *
@@ -98,7 +97,7 @@ class GripCommandBase(Hookable):
         options = cmd_parser.parse_args(args, namespace=options)
         options._validate()
         self.invoke_hooks("command_options", prog=prog, parser=cmd_parser, command_name=command_name, options=options, args=args)
-        return (prog, parser, options, lib.utils.options_value(options,"args",default=[]))
+        return (prog, parser, options, options.get("args",default=[]))
 
     #f print_help
     def print_help(self):
@@ -168,7 +167,7 @@ class GripCommandBase(Hookable):
                 if (command.options.get("show_log",False)): command.show_logs(sys.stderr)
                 pass
             sys.exit(4)
-        except lib.oscommand.OSCommand.Error as e:
+        except OSCommand.Error as e:
             command.tidy_logs()
             print("Error from shell command %s" % str(e), file=sys.stderr)
             if options.verbose:

@@ -1,11 +1,16 @@
+from typing import Callable, Any, Optional
+
+ErrorFn      = Callable[[Exception],Any]
+ErrorHandler = Optional[Callable[...,Any]]
+
 class GripException(Exception):
     grip_type = "Undefined grip"
-    def invoke(self, error_handler=None):
+    def invoke(self, error_handler:ErrorHandler=None) -> Any:
         if error_handler is None: raise self
         return error_handler(self)
     @classmethod
-    def error_handler(cls,f,error_handler=None):
-        def handler(e):
+    def error_handler(cls, f:ErrorFn, error_handler:ErrorHandler=None) -> ErrorFn:
+        def handler(e:Exception) -> Any:
             if isinstance(e,cls):
                 r=f(e)
                 if r is not None: return r[0]
@@ -53,8 +58,10 @@ class SubrepoError(GripException):
 #a Git reasons - exceptions for git
 class GitReason(Exception):
     reason = "<unknown reason>"
-    def get_reason(self): return self.reason
-    def is_of(self, cls): return isinstance(self,cls)
+    def get_reason(self) -> str:
+        return self.reason
+    def is_of(self, cls:Any) -> bool:
+        return isinstance(self,cls)
     pass
 class HowUnknownBranch(GitReason):
     reason = "unknown branch"

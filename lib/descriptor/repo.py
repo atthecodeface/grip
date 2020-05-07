@@ -1,11 +1,19 @@
 #a Imports
-from typing import Optional, Type, List, Union, Any, Tuple, Sequence
+from typing import Optional, Type, List, Union, Any, Tuple, Sequence, Set, Iterable, Callable
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
 from ..git import Url as GitUrl
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
 from .stage import Descriptor as StageDescriptor
 from .stage import StageTomlDict
+
+from typing import TYPE_CHECKING
+from ..types import PrettyPrinter, Documentation, MakefileStrings
+if TYPE_CHECKING:
+    from ..descriptor import ConfigurationDescriptor
+    from ..descriptor import GripDescriptor
+    from ..grip import Toplevel
+    from ..workflow import Workflow
 
 class RepoDescTomlDict(TomlDict):
     """A repo description: where it is, which VCS it uses, pull methodology, push methodology, where it exists,
@@ -15,7 +23,7 @@ class RepoDescTomlDict(TomlDict):
     workflow  = TomlDictParser.from_dict_attr_value(str)
     branch    = TomlDictParser.from_dict_attr_value(str)
     path      = TomlDictParser.from_dict_attr_value(str)
-    shallow   = TomlDictParser.from_dict_attr_value(str)
+    shallow   = TomlDictParser.from_dict_attr_bool()
     env       = TomlDictParser.from_dict_attr_dict(EnvTomlDict)
     doc       = TomlDictParser.from_dict_attr_value(str)
     Wildcard  = TomlDictParser.from_dict_attr_dict(StageTomlDict)
@@ -34,11 +42,11 @@ class DescriptorValues(object):
     grip_config = None
     inherited_properties = ["url", "branch", "path", "workflow", "git_url", "shallow", "env", "doc"]
     #f __init__
-    def __init__(self, values : TomlDictValues, clone : Type['DescriptorValues']):
+    def __init__(self, values:Optional[TomlDictValues], clone:Optional['DescriptorValues']):
         if values is not None:
             values.Set_obj_properties(self, values.Get_fixed_attrs())
             pass
-        def set_current_or_parent(k):
+        def set_current_or_parent(k:str) -> None:
             if getattr(self,k) is None: setattr(self,k,getattr(clone,k))
             pass
         if clone is not None:
@@ -65,19 +73,18 @@ class Descriptor(object):
     """
     values : DescriptorValues
     name : str
-    cloned_from : Optional[Type['Descriptor']]
-    url      : Optional[str]
+    cloned_from : Optional['Descriptor']
+    url      : str
+    path     : str
+    shallow  : bool
     branch   : Optional[str]
-    path     : Optional[str]
-    shallow  : int
     env      : GripEnv
     doc      : Optional[str]
     git_url  : GitUrl
-    from ..workflow import Workflow
-    workflow : Workflow
+    workflow : Type['Workflow']
     # grip_config
     #f __init__
-    def __init__(self, name, grip_repo_desc, values=None, clone=None):
+    def __init__(self, name:str, grip_repo_desc:'GripDescriptor', values:Optional[TomlDictValues]=None, clone:Optional['Descriptor']=None):
         """
         values must be a RepoDescTomlDict._values
         """
@@ -101,25 +108,25 @@ class Descriptor(object):
                     pass
                 pass
             pass
-        if self.values.url      is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
+        if self.values.url is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
         pass
     #f clone
-    def clone(self):
+    def clone(self) -> 'Descriptor':
         return self.__class__(name=self.name, values=None, grip_repo_desc=self.grip_repo_desc, clone=self)
     #f set_grip_config
-    def set_grip_config(self, grip_config):
+    def set_grip_config(self, grip_config:'ConfigurationDescriptor') -> None:
         """
         When instantiated in a grip config, this is invoked
         """
         self.grip_config = grip_config
         pass
     #f resolve_git_url
-    def resolve_git_url(self, grip_git_url):
+    def resolve_git_url(self, grip_git_url:GitUrl) -> None:
         """
         Resolve relative (and those using environment variables?) git urls
         """
         if self.git_url.is_leaf():
-            self.git_url.make_relative_to(grip_git_url)
+            self.git_url.make_relative_to(abs_url=grip_git_url)
             pass
         pass
     #f get_path
@@ -127,7 +134,7 @@ class Descriptor(object):
         assert self.path is not None
         return self.path
     #f get_git_url
-    def get_git_url(self):
+    def get_git_url(self) -> GitUrl:
         """
         """
         return self.git_url
@@ -146,12 +153,12 @@ class Descriptor(object):
         if self.doc is not None: r = self.doc
         return r
     #f get_doc
-    def get_doc(self) -> Sequence[ Union [ str, List[ Tuple[str, Any]]]]:
+    def get_doc(self) -> Documentation:
         """
         Return documentation = list of <string> | (name * documentation)
         Get documentation
         """
-        r = [self.get_doc_string()]
+        r : Documentation = [self.get_doc_string()]
         r_src = ""
         if self.path    is not None: r_src += "locally at '%s'" % (self.path)
         if self.url     is not None: r_src += " remote url(orig) '%s'" % (self.url)
@@ -168,25 +175,25 @@ class Descriptor(object):
             pass
         return r
     #f add_stage_names_to_set
-    def add_stage_names_to_set(self, s:set):
+    def add_stage_names_to_set(self, s:Set[str]) -> None:
         for k in self.stages:
             s.add(k)
             pass
         pass
     #f get_repo_stage
-    def get_repo_stage(self, stage_name, error_on_not_found=True):
+    def get_repo_stage(self, stage_name:str, error_on_not_found:bool=True) -> Optional[StageDescriptor]:
         if stage_name not in self.stages:
             if not error_on_not_found: return None
             raise GripTomlError("Stage '%s' not known in repository '%s'"%(stage_name, self.name))
         return self.stages[stage_name]
     #f iter_stages
-    def iter_stages(self):
+    def iter_stages(self) -> Iterable[StageDescriptor]:
         for (sn,s) in self.stages.items():
             yield(s)
             pass
         pass
     #f fold_repo_stages
-    def fold_repo_stages(self, acc, callback_fn):
+    def fold_repo_stages(self, acc:Any, callback_fn:Callable[[Any,'Descriptor',StageDescriptor],Any])->Any:
         for (sn,s) in self.stages.items():
             acc = callback_fn(acc, self, s)
             pass
@@ -194,12 +201,10 @@ class Descriptor(object):
     #f is_shallow
     def is_shallow(self) -> bool:
         if self.shallow is not None:
-            if self.shallow=="yes" or self.shallow=="true":
-                return True
-            pass
+            return self.shallow
         return False
     #f validate
-    def validate(self, error_handler=None):
+    def validate(self, error_handler:ErrorHandler=None) -> None:
         if self.values.workflow is None:
             self.workflow = self.grip_repo_desc.workflow
             pass
@@ -211,26 +216,38 @@ class Descriptor(object):
             pass
         pass
     #f resolve
-    def resolve(self, env, error_handler=None):
+    def resolve(self, env:GripEnv, error_handler:ErrorHandler=None) -> None:
         """
         Resolve the strings in the repo description and its stages, using the repo configuration's environment
         """
         self.env = GripEnv(name="repo %s"%self.name, parent=env)
         self.env.build_from_values(self.values.env)
-        self.url     = self.env.substitute(self.values.url,      error_handler=error_handler)
-        self.branch  = self.env.substitute(self.values.branch,   error_handler=error_handler)
-        self.shallow = self.env.substitute(self.values.shallow,  error_handler=error_handler)
-        self.path    = self.values.path
-        self.doc     = self.values.doc
+        url     = self.env.substitute(self.values.url,      error_handler=error_handler)
+        if url is None:
+            raise GripTomlError("for repo '%s' has unknown url '%s'"%(self.name, self.values.url))
+        self.url = url
         try:
             self.git_url = GitUrl(self.url)
             pass
         except:
             raise GripTomlError("for repo '%s' could not parse git url '%s'"%(self.name, self.url))
 
-        if self.path is None:
+        self.branch  = self.env.substitute(self.values.branch,   error_handler=error_handler)
+        if self.values.path is None:
             self.path = self.git_url.repo_name
             pass
+        else:
+            self.path = self.values.path
+            pass
+
+        if self.values.shallow is None:
+            self.shallow = False
+            pass
+        else:
+            self.shallow = self.values.shallow
+            pass
+
+        self.doc     = self.values.doc
 
         self.env.add_values({"GRIP_REPO_PATH":"@GRIP_ROOT_PATH@/"+self.path})
         self.env.resolve(error_handler=error_handler)
@@ -240,17 +257,17 @@ class Descriptor(object):
         # print("Resolve %s:%s:%s:%s"%(self,self.name,self.url,self.git_url))
         pass
     #f get_env_as_makefile_strings
-    def get_env_as_makefile_strings(self) -> List[Tuple[str,str]]:
+    def get_env_as_makefile_strings(self) -> MakefileStrings:
         return self.env.as_makefile_strings(include_parent=False)
     #f prettyprint
-    def prettyprint(self, acc, pp):
+    def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "repo.%s:" % (self.name))
         if self.url     is not None: acc = pp(acc, "url(orig):   %s" % (self.url), indent=1)
-        if self.git_url is not None: acc = pp(acc, "url(parsed): %s" % (self.git_url.git_url()), indent=1)
+        if self.git_url is not None: acc = pp(acc, "url(parsed): %s" % (self.git_url.as_string()), indent=1)
         if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
         if self.path    is not None: acc = pp(acc, "path:        %s" % (self.path), indent=1)
         for name in self.stages:
-            def ppr(acc, s, indent=0):
+            def ppr(acc:Any, s:str, indent:int=0) -> Any:
                 return pp(acc, s, indent=indent+1)
             acc = self.stages[name].prettyprint(acc,ppr)
             pass

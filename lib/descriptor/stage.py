@@ -1,9 +1,16 @@
 #a Imports
 import os
-from typing import Optional, List, Callable, Type, ClassVar, Union, Any
+from typing import Optional, List, Callable, Type, ClassVar, Union, Any, Tuple, IO
 from ..tomldict import TomlDict, TomlDictValues, TomlDictParser
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
+
+from typing import TYPE_CHECKING
+from ..types import PrettyPrinter
+if TYPE_CHECKING:
+    from ..descriptor import RepositoryDescriptor, ConfigurationDescriptor
+    from ..descriptor import GripDescriptor
+    from ..grip import Toplevel
 
 #a Classes
 #c StageTomlDict - Toml dictionary that describes a stage
@@ -24,18 +31,19 @@ class Dependency:
     This class is a stage dependency - that is '<name>', '.<name>' or '<repo>.<name>'
     """
     #v makefile_path_fn - function from Dependency instance to its makefile stamp path - class property
-    makefile_path_fn : ClassVar = None
+    makefile_path_fn : ClassVar[Optional[Callable[['Dependency'],str]]] = None
     #v instance properties
-    repo_name : str
+    repo_name  : Optional[str] # None if global
     stage_name : str
-    stage : Type['Descriptor']
+    stage : 'Descriptor'
+    repo  : Optional['RepositoryDescriptor']
     #f set_makefile_path_fn - class method - set makefile_path_fn for the whole class
     @classmethod
-    def set_makefile_path_fn(cls, path_fn):
+    def set_makefile_path_fn(cls, path_fn:Any) -> None:
         cls.makefile_path_fn = path_fn
         pass
     #f __init__
-    def __init__(self, s, git_repo_desc=None, must_be_global=True, force_local=False):
+    def __init__(self, s:str, git_repo_desc:Optional['RepositoryDescriptor']=None, must_be_global:bool=True, force_local:bool=False):
         repo_name=None
         if git_repo_desc is not None: repo_name=git_repo_desc.name
         s_split = s.split(".")
@@ -55,25 +63,25 @@ class Dependency:
             raise GripTomlError("Bad repo dependency '%s' - must be <global stage>, .<local stage> or <repo>.<repo stage>"%s)
         if s_repo_name=="": s_repo_name = repo_name
         self.repo = None
-        self.stage = None
-        self.repo_name = s_repo_name
+        self.repo_name  = s_repo_name
         self.stage_name = s_stage_name
         pass
     #f validate
-    def validate(self, grip_config, reason, error_handler=None):
+    def validate(self, grip_config:'ConfigurationDescriptor', reason:str, error_handler:ErrorHandler=None) -> Any:
         if self.repo_name is not None:
             self.repo = grip_config.get_repo(self.repo_name, error_on_not_found=False)
             if self.repo is None:
                 return GripTomlError("%s: repo not in configuration '%s'"%(reason, grip_config.get_name())).invoke(error_handler)
-            self.stage = self.repo.get_repo_stage(self.stage_name, error_on_not_found=False)
-            if self.stage is None:
+            stage = self.repo.get_repo_stage(self.stage_name, error_on_not_found=False)
+            if stage is None:
                 return GripTomlError("%s: stage '%s' not in repo '%s' in configuration '%s'"%(reason, self.stage_name, self.repo.name, grip_config.get_name())).invoke(error_handler)
+            self.stage = stage
             pass
         else:
             if not grip_config.has_stage(self.stage_name):
                 return GripTomlError("%s: not a global stage in configuration '%s'"%(self.stage_name, grip_config.get_name())).invoke(error_handler)
             pass
-        pass
+        return None
     #f full_name - return the full name - <stage_name> if global, else <repo_name>.<stage_name>
     def full_name(self) -> str:
         if self.repo_name is None: return self.stage_name
@@ -83,7 +91,7 @@ class Dependency:
         if self.repo_name is None: return self.stage_name
         return "repo.%s.%s"%(self.repo_name, self.stage_name)
     #f makefile_path - invoke the class property makefile_path_fn on *this* instance to get its makefile stamp path
-    def makefile_path(self):
+    def makefile_path(self) -> str:
         """
         Return the pathname for a makefile target for an instance of this class
         """
@@ -97,7 +105,7 @@ class Dependency:
         """
         return self.target_name()
     #f new_makefile_stamp
-    def new_makefile_stamp(self):
+    def new_makefile_stamp(self) -> Tuple[str,str]:
         """
         Get an absolute path to a makefile stamp filename
         Clean the file if it exists
@@ -122,7 +130,7 @@ class DescriptorValues(object):
     satisfies = None
     #f clone  = clone to get required values from the other
     @classmethod
-    def clone(cls, other):
+    def clone(cls, other:'DescriptorValues') -> 'DescriptorValues':
         c = cls()
         c.wd = other.wd
         c.env = other.env
@@ -142,15 +150,16 @@ class Descriptor(object):
 
     It may have a git_repo_desc (which it is for); if it is for a config, though, this will be None
     """
-    values          : Type['DescriptorValues']
+    values          : 'DescriptorValues'
     requires        : List[Dependency]
     satisfies       : List[Dependency]
-    grip_repo_desc  : Any # Type['GripRepoDesc']
+    grip_repo_desc  : 'GripDescriptor'
+    grip_config     : 'ConfigurationDescriptor'
     #f __init__
-    def __init__(self, grip_repo_desc, name, clone=None, git_repo_desc=None, values=None):
+    def __init__(self, grip_repo_desc:'GripDescriptor', name:str, clone:Optional['Descriptor']=None, git_repo_desc:Optional['RepositoryDescriptor']=None, values:Optional['TomlDictValues']=None):
         self.grip_repo_desc = grip_repo_desc
         self.git_repo_desc = git_repo_desc # May be None
-        self.grip_config = None # Will be set by validate
+        # self.grip_config = None # Will be set by validate
         self.name = name
         self.dependency = Dependency(name, git_repo_desc=self.git_repo_desc, force_local=True)
         self.cloned_from = clone
@@ -165,18 +174,18 @@ class Descriptor(object):
             pass
         pass
     #f clone - clone the stage descriptor, particularly to instantiate it within a particular config
-    def clone(self, grip_repo_desc=None, git_repo_desc=None, values=None):
+    def clone(self, grip_repo_desc:Optional['GripDescriptor']=None, git_repo_desc:Optional['RepositoryDescriptor']=None, values:Optional['TomlDictValues']=None) -> 'Descriptor':
         if grip_repo_desc is None: grip_repo_desc = self.grip_repo_desc
-        if git_repo_desc is None:  git_repo_desc = self.git_repo_desc
+        if git_repo_desc  is None: git_repo_desc = self.git_repo_desc
         return self.__class__(grip_repo_desc=grip_repo_desc, git_repo_desc=git_repo_desc, name=self.name, clone=self, values=values)
     #f get_name - Get name of the stage
     def get_name(self) -> str:
         return self.name
     #f is_action - Return true if marked as an action (i.e. does not require a makefile stamp)
-    def is_action(self):
+    def is_action(self) -> bool:
         return self.values.action
     #f resolve - Resolve the stage environment and resolve relevant entries within that
-    def resolve(self, env : GripEnv , error_handler=None) -> None:
+    def resolve(self, env:GripEnv, error_handler:ErrorHandler=None) -> None:
         """
         Resolve any environment substitutions using the repo desc's (within configuration) environment - but not in 'requires'
         This includes resolving the local environment
@@ -189,11 +198,11 @@ class Descriptor(object):
         self.doc = self.values.doc
         pass
     #f validate - Validate the within a particular configuration
-    def validate(self, grip_config, check_dependencies=True, error_handler=None):
+    def validate(self, grip_config:'ConfigurationDescriptor', check_dependencies:bool=True, error_handler:ErrorHandler=None) -> None:
         self.grip_config = grip_config
         self.requires = []
-        for r in self.values.requires:
-            self.requires.append(Dependency(r, git_repo_desc=self.git_repo_desc, must_be_global=False))
+        for vr in self.values.requires:
+            self.requires.append(Dependency(vr, git_repo_desc=self.git_repo_desc, must_be_global=False))
             pass
         self.satisfies = []
         if self.values.satisfies is not None:
@@ -211,14 +220,14 @@ class Descriptor(object):
             pass
         pass
     #f get_doc_string
-    def get_doc_string(self):
+    def get_doc_string(self) -> str:
         """
         Get documentation string for this configuration
         """
-        if self.doc is None: return None
+        if self.doc is None: return ""
         return self.doc.strip()
     #f write_makefile_entries
-    def write_makefile_entries(self, f, verbose : Callable[[str], None]):
+    def write_makefile_entries(self, f:IO[str], verbose:Callable[[str], None]) -> None:
         (tgt, tgt_filename) = self.dependency.new_makefile_stamp()
         sn = self.get_name()
         if self.git_repo_desc is None:
@@ -288,7 +297,7 @@ class Descriptor(object):
             pass
         pass
     #f prettyprint
-    def prettyprint(self, acc : str, pp) -> str:
+    def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "%s:" % (self.name))
         if self.wd   is not None: acc = pp(acc, "wd:     %s" % (self.wd), indent=1)
         if self.env  is not None:

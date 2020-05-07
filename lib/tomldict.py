@@ -1,7 +1,9 @@
 #a Imports
 import sys, copy
 import toml
-from typing import List, ClassVar
+from typing import Type, List, Callable, Mapping, Any, Dict, IO, Optional, MutableMapping
+RawTomlDict   = MutableMapping[str, Any]
+TDFN = Callable[['TomlDictValues', Any, str, Any],Any]
 
 #a Useful functions
 #f type_str
@@ -13,7 +15,7 @@ def type_str(t : type) -> str:
     return str(t)
 
 #f str_keys
-def str_keys(d) -> str:
+def str_keys(d:Mapping[str,Any]) -> str:
     return ", ".join([k for k in d.keys()])
 
 #v bool_options
@@ -49,20 +51,20 @@ class TomlDictValues(object):
     It provides mehods to access and extract the data in to an object (or namespace)
     """
     _other_attrs : List[str]
-    _dict_class  : ClassVar['TomlDict']
-    _parent      : ClassVar['TomlDictValues']
+    _dict_class  : Type['TomlDict']
+    _parent      : 'TomlDictValues'
     #f is_value_instance - class method - determine if an object is a TomlDictValues
     @classmethod
-    def is_value_instance(cls, obj) -> bool:
+    def is_value_instance(cls:Any, obj:Any) -> bool:
         return isinstance(obj,cls)
     #f __init__ - create TomlDictValues corresponding to a TomlDict
-    def __init__(self, dict_class, parent):
+    def __init__(self, dict_class:Type['TomlDict'], parent:'TomlDictValues') -> None:
         self._dict_class = dict_class
         self._parent = parent
         self._other_attrs = []
         pass
     #f Add_other_attr
-    def Add_other_attr(self, a, v):
+    def Add_other_attr(self, a:str, v:Any) -> None:
         self._other_attrs.append(a)
         setattr(self, a, v)
         pass
@@ -73,14 +75,14 @@ class TomlDictValues(object):
     def Get_other_attrs(self) -> List[str]:
         return self._other_attrs
     #f Get - get a value from its string name
-    def Get(self, a:str):
+    def Get(self, a:str) -> Any:
         return getattr(self, a)
     #f Set - set a value from its string name and any value type
-    def Set(self, a, v):
+    def Set(self, a:str, v:Any) -> None:
         setattr(self, a, v)
         pass
     #f Set_obj_properties - set object propertied according to the string keys
-    def Set_obj_properties(self, o, ks:List[str]) -> None:
+    def Set_obj_properties(self, o:Any, ks:List[str]) -> None:
         for k in ks:
             v = getattr(self,k)
             if v is not None:
@@ -89,7 +91,7 @@ class TomlDictValues(object):
             pass
         pass
     #f Iterate - iterate over all values (as described in the TomlDict class) invoking callback
-    def Iterate(self, callback, descend_hierarchy=True) -> None:
+    def Iterate(self, callback:Callable[['TomlDictValues',str,Any],None], descend_hierarchy:bool=True) -> None:
         avs = self.Get_attr_dict()
         for (x,value) in avs.items():
             if self.is_value_instance(value):
@@ -105,7 +107,7 @@ class TomlDictValues(object):
             pass
         pass
     #f Get_attr_dict - get dictionary of <str name> : <value>
-    def Get_attr_dict(self):
+    def Get_attr_dict(self) -> Dict[str,Any]:
         attrs = self.Get_fixed_attrs()
         attrs += self._other_attrs
         r = {}
@@ -114,7 +116,7 @@ class TomlDictValues(object):
             pass
         return r
     #f Prettyprint - print to stdout
-    def Prettyprint(self, prefix="", file=sys.stdout):
+    def Prettyprint(self, prefix:str="", file:IO[str]=sys.stdout) -> None:
         avs = self.Get_attr_dict()
         for (x,value) in avs.items():
             if self.is_value_instance(value):
@@ -139,7 +141,7 @@ class TomlDict(object):
 
     If the value function needs to return an error (because v cannot be handled) then it should use msg in the TomlError
     """
-    Wildcard = None
+    Wildcard : Optional[TDFN] = None
     #f _toml_fixed_attrs - classmethod - get attributes
     @classmethod
     def _toml_fixed_attrs(cls) -> List[str]:
@@ -147,7 +149,8 @@ class TomlDict(object):
         v = [x for x in attrs if ((x[0]>='a') and (x[0]<='z'))]
         return v
     #f __init__
-    def __init__(self, client):
+    __client : Any
+    def __init__(self, client:Any) -> None:
         self.__client = client
         pass
     #f All done
@@ -163,50 +166,56 @@ class TomlDictParser(object):
     """
     #f identity_fn - staticmethod - callback function that returns the value
     @staticmethod
-    def identity_fn(s,p,m,value):
+    def identity_fn(s:TomlDictValues, p:Any, m:str, value:Any) -> Any:
         return value
     #f from_dict_attr_value - staticmethod - return function to map value of type t through function fn
     @staticmethod
-    def from_dict_attr_value(t : type, fn=None):
-        if fn==None: fn=TomlDictParser.identity_fn
-        def f(self, parent, msg, value):
+    def from_dict_attr_value(t : type, fn:Optional[TDFN]=None) -> TDFN:
+        true_fn : TDFN = TomlDictParser.identity_fn
+        if fn is not None:
+            true_fn = fn
+            pass
+        def f(self:TomlDictValues, parent:Any, msg:str, value:Any) -> Any:
             if type(value)!=t: raise TomlError(msg, "Expected %s but got '%s'"%(type_str(t),str(value)))
-            return fn(self, parent, msg, value)
+            return true_fn(self, parent, msg, value)
         return f
     #f from_dict_attr_bool - classmethod - return function to map value to True/False through global bool_options dictionary
     @classmethod
-    def from_dict_attr_bool(cls):
-        def bool_of_str(self, parent, msg, value):
+    def from_dict_attr_bool(cls) -> TDFN:
+        def bool_of_str(self:TomlDictValues, parent:Any, msg:str, value:Any) -> bool:
             if value not in bool_options.keys():
                 raise TomlError(msg,"Boolean of '%s' is not one of the permitted options %s"%(value, str_keys(bool_options)))
             return bool_options[value]
         return cls.from_dict_attr_value(str,bool_of_str)
     #f from_dict_attr_list - staticmethod - return function to map a list of values through function fn to list of type 't'
     @staticmethod
-    def from_dict_attr_list(t, fn=None):
-        if fn==None: fn=TomlDictParser.identity_fn
-        def f(self, parent, msg, values):
+    def from_dict_attr_list(t : type, fn:Optional[TDFN]=None) -> TDFN:
+        true_fn : TDFN = TomlDictParser.identity_fn
+        if fn is not None:
+            true_fn = fn
+            pass
+        def f(self:TomlDictValues, parent:Any, msg:str, values:Any) -> Any:
             if type(values)!=list: raise TomlError(msg, "Expected list of %s but got '%s'"%(str(t),str(values)))
             result = []
             for v in values:
                 if type(v)!=t: raise TomlError(msg, "Expected %s but got '%s'"%(type_str(t),str(v)))
-                result.append(fn(self, parent, msg, v))
+                result.append(true_fn(self, parent, msg, v))
                 pass
             return result
         return f
     #f from_dict_attr_dict - staticmethod - return function to map a dictionary through a TomlDictParser class as a
     @staticmethod
-    def from_dict_attr_dict(t):
+    def from_dict_attr_dict(t:Type[TomlDict]) -> TDFN:
         """
         t must be a subclass of TomlDict
         """
-        def f(self, parent, msg, values):
+        def f(self:TomlDictValues, parent:Any, msg:str, values:Any) -> Any:
             if not isinstance(values,dict): raise TomlError(msg, "Expected dictionary but got '%s'"%(str(values)))
             return TomlDictParser.from_dict(t, parent, msg, values)
         return f
     #f from_dict - staticmethod - get TomlDictValues instance that parses d with TomlDictParser class cls
     @staticmethod
-    def from_dict(cls, handle, msg, d):
+    def from_dict(cls:Type[TomlDict], handle:Any, msg:str, d:RawTomlDict) -> TomlDictValues:
         values = TomlDictValues(dict_class=cls, parent=handle)
         attrs = cls._toml_fixed_attrs()
         rtd = copy.deepcopy(d)

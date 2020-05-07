@@ -1,10 +1,11 @@
 #a Imports
 from ..exceptions  import *
-from .base import Workflow
-from ..git import Repository as GitRepository
 from ..log import Log
 from ..options import Options
 from ..verbose import Verbose
+from typing import Any, Optional
+from .base import Workflow
+from ..git import Repository as GitRepository
 
 #a Classes
 #c Single workflow
@@ -29,15 +30,13 @@ class Single(Workflow):
     The grip repo state is updated with the cs of the post-merge, i.e. successfully pushed, repo
     """
     name = "single"
-    options: Options
-    git_repo: GitRepository
-    log: Log
-    verbose: Verbose
-    def install_hooks(self):
+    #f install_hooks
+    def install_hooks(self) -> None:
         raise Exception("install_hooks not implemented for %s"%self.name)
-    def status(self):
+    #f status
+    def status(self) -> bool:
         repo_string = self.get_repo_workflow_string()
-        reason = self.git_repo.is_modified(self.options, log=self.log)
+        reason = self.git_repo.is_modified()
         if reason is None:
             (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
             if cmp==0:
@@ -49,29 +48,32 @@ class Single(Workflow):
             else:
                 self.verbose.warning("%s is unmodified (%s) but an ancestor of 'upstream' (%s) - so needs a merge"%(repo_string, cs, cs_upstream))
                 pass
-            return
+            return True
         self.verbose.message("%s has %s"%(repo_string, reason.get_reason()))
-        if not self.verbose.is_verbose(): return
-        print(self.git_repo.status(self.options, log=self.log))
-        return
-    def commit(self):
-        reason = self.git_repo.is_modified(self.options, log=self.log)
+        if not self.verbose.is_verbose(): return True
+        print(self.git_repo.status())
+        return True
+    #f merge
+    def merge(self, **kawrgs:Any) -> bool:
+        reason = self.git_repo.is_modified()
+        if reason is not None:
+            raise WorkflowError("%s is modified (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
+        reason = self.git_repo.rebase(other_branch="upstream")
+        if reason is not None:
+            raise WorkflowError("%s failed to merge (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
+        return True
+    #f commit
+    def commit(self) -> bool:
+        reason = self.git_repo.is_modified()
         if reason is not None:
             self.verbose.message("%s is modified (%s) - attempting a commit"%(self.get_repo_workflow_string(), reason.get_reason()))
-            self.git_repo.commit(log=self.log)
+            self.git_repo.commit()
             pass
         is_upstreamed = self.check_git_repo_is_upstreamed()
         self.verbose.error("%s is not upstreamed - perhaps a grip merge is required."%(self.get_repo_workflow_string()))
         return is_upstreamed
-    def merge(self, force=False):
-        reason = self.git_repo.is_modified(self.options, log=self.log)
-        if reason is not None:
-            raise WorkflowError("%s is modified (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
-        reason = self.git_repo.rebase(self.options, other_branch="upstream", log=self.log)
-        if reason is not None:
-            raise WorkflowError("%s failed to merge (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
-        return True
-    def prepush(self):
+    #f prepush
+    def prepush(self) -> bool:
         """
         Before a branch can be pushed it must be a descendant of upstream
         Hence upstream hash must be an ancestor of WIP.
@@ -79,14 +81,22 @@ class Single(Workflow):
         Then a git push --dry-run can be performed - if that is okay, we are set
         """
         self.check_git_repo_is_descendant()
-        self.git_repo.push(dry_run=True, log=self.log, repo=self.git_repo.upstream_origin, ref="HEAD:%s"%(self.git_repo.upstream_push_branch))
+        upstream = self.git_repo.get_upstream()
+        if upstream is None:
+            raise WorkflowError("%s cannot be pushed, it has no upstream"%(self.get_repo_workflow_string()))
+        self.git_repo.push(dry_run=True, repo=upstream.get_origin(), ref="HEAD:%s"%(upstream.get_branch()))
         return True
-    def push(self):
+    #f push
+    def push(self) -> bool:
         """
         prepush MUST have been run recently
         If the push succeeds, then upstream must be at head
         """
-        self.git_repo.push(dry_run=False, log=self.log, repo=self.git_repo.upstream_origin, ref="HEAD:%s"%(self.git_repo.upstream_push_branch))
-        self.git_repo.change_branch_ref(log=self.log, branch_name="upstream", ref=self.get_branch_name())
+        upstream = self.git_repo.get_upstream()
+        if upstream is None:
+            raise WorkflowError("%s cannot be pushed, it has no upstream"%(self.get_repo_workflow_string()))
+        self.git_repo.push(dry_run=False, repo=upstream.get_origin(), ref="HEAD:%s"%(upstream.get_branch()))
+        self.git_repo.change_branch_ref(branch_name="upstream", ref=self.get_branch_name())
         return True
+    #f All done
     pass

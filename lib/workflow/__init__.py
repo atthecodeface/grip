@@ -12,7 +12,7 @@ def supported_workflows() -> List[str]:
         pass
     return d
 
-def get_workflow(name) -> Optional[Type[Workflow]]:
+def get_workflow(name:str) -> Optional[Type[Workflow]]:
     for w in Workflow.get_subclasses():
         if w.name==name: return w
         pass
