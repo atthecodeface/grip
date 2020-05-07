@@ -48,5 +48,5 @@ class reconfigure(lib.command.GripCommandBase):
     }
     def execute(self, prog, parser, command_name, options, args):
         self.get_grip_repo(path=os.path.abspath(os.getcwd()), ensure_configured=True)
-        self.grip_repo.reconfigure(options)
+        self.grip_repo.reconfigure()
         pass

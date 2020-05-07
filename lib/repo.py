@@ -1,15 +1,19 @@
 #a Imports
 import os, time
 from typing import Type, List, Dict, Iterable, Optional, Any
-from .git import Repository as GitRepo
+from .git import Repository as GitRepository
 from .descriptor import StageDependency as StageDependency
-from .descriptor import GripDescriptor as GripRepoDescriptor
+from .descriptor import RepositoryDescriptor
+from .descriptor import GripDescriptor
 from .config.file import ConfigFile as GripRepoConfig
 from .state.file  import StateFile as GripRepoState
 from .workflow import Workflow
 from .log import Log
 from .verbose import Verbose
 from .exceptions import *
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from .grip import Toplevel
 
 #a Classes
 #c Repository class
@@ -42,123 +46,138 @@ class Repository(object):
               - must be unmodified
               - may not need to be merged - that depends on workflow
     """
-    name      : str
-    toplevel  : Any # Cannot use Type['Toplevel'] as that would be recursive libraries
-    git_repo  : GitRepo
-    parent    : Optional[Type['Repository']]
-    workflow  : Workflow
-    subrepos  : List[Type['Repository']]
+    name       : str
+    toplevel   : Any # Cannot use Type['Toplevel'] as that would be recursive libraries
+    git_repo   : GitRepository
+    parent     : Optional['Repository']
+    workflow   : Workflow
+    subrepos   : List['Repository']
     #f __init__
-    # note that specifying parent to be Type['Repository'] breaks mypy in the subrepos.append(child)
-    def __init__(self, name:str, grip_repo, parent, git_repo:GitRepo, repo_desc:GripRepoDescriptor):
+    def __init__(self, name:str, grip_repo:'Toplevel', parent:Optional['Repository'], git_repo:GitRepository, workflow:Type[Workflow]):
         """
         """
         self.name = name
         self.toplevel = grip_repo
         self.parent = parent
         self.git_repo = git_repo
-        self.repo_desc = repo_desc
-        w : Type[Workflow] = repo_desc.workflow
-        self.workflow = w(grip_repo, git_repo)
+        self.workflow = workflow(grip_repo, git_repo)
         self.subrepos = []
         if parent: parent.add_child(self)
         pass
     #f add_child
-    def add_child(self, child : Type['Repository']):
+    def add_child(self, child : 'Repository') -> None:
         self.subrepos.append(child)
         pass
     #f iter_subrepos
-    def iter_subrepos(self) -> Iterable[Type['Repository']]:
+    def iter_subrepos(self) -> Iterable['Repository']:
         for s in self.subrepos:
             yield(s)
             pass
         pass
     #f install_hooks
-    def install_hooks(self):
+    def install_hooks(self) -> None:
         for sr in self.subrepos:
             sr.install_hooks()
             pass
         pass
     #f status
-    def status(self):
-        for sr in self.subrepos: sr.status()
+    def status(self) -> bool:
+        okay = True
+        for sr in self.subrepos:
+            okay = okay and sr.status()
+            pass
         try:
             s = "Getting status of repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
-            self.grip_repo.add_log_string(s)
-            self.workflow.status()
+            self.toplevel.add_log_string(s)
+            okay = okay and self.workflow.status()
             pass
         except Exception as e:
             raise(e)
-        pass
+        return okay
     #f commit
-    def commit(self):
-        for sr in self.subrepos: sr.commit()
+    def commit(self) -> bool:
+        okay = True
+        for sr in self.subrepos:
+            okay = okay and sr.commit()
+            pass
         try:
             s = "Commiting repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
-            self.grip_repo.add_log_string(s)
-            self.grip_repo.verbose.message(s)
-            okay = self.workflow.commit()
+            self.toplevel.add_log_string(s)
+            self.toplevel.verbose.message(s)
+            okay = okay and self.workflow.commit()
             if not okay: raise(Exception("Commit for repo '%s' not permitted"%self.name))
             cs = self.get_cs()
-            self.grip_repo.add_log_string("Repo '%s' at commit hash '%s'"%(self.name, cs))
+            self.toplevel.add_log_string("Repo '%s' at commit hash '%s'"%(self.name, cs))
             pass
         except Exception as e:
             raise(e)
-        pass
+        return okay
     #f fetch
-    def fetch(self):
-        for sr in self.subrepos: sr.fetch()
+    def fetch(self) -> bool:
+        okay = True
+        for sr in self.subrepos:
+            okay = okay and sr.fetch()
+            pass
         try:
             s = "Fetching repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
-            self.grip_repo.add_log_string(s)
-            self.grip_repo.verbose.info(s)
-            okay = self.workflow.fetch()
+            self.toplevel.add_log_string(s)
+            self.toplevel.verbose.info(s)
+            okay = okay and self.workflow.fetch()
             if not okay: raise(Exception("Fetch for repo '%s' not permitted"%self.name))
             pass
         except Exception as e:
             raise(e)
-        pass
+        return okay
     #f merge
-    def merge(self, force=False):
-        for sr in self.subrepos: sr.merge()
+    def merge(self, force:bool=False) -> bool:
+        okay = True
+        for sr in self.subrepos:
+            okay = okay and sr.merge(force=force)
+            pass
         try:
             s = "Merging repo '%s' with workflow '%s' (force %s)"%(self.name, self.workflow.name, str(force))
-            self.grip_repo.add_log_string(s)
-            self.grip_repo.verbose.info(s)
-            okay = self.workflow.merge(force=force)
+            self.toplevel.add_log_string(s)
+            self.toplevel.verbose.info(s)
+            okay = okay and self.workflow.merge(force=force)
             if not okay: raise(Exception("Merge for repo '%s' failed"%self.name))
             pass
         except Exception as e:
             raise(e)
-        pass
+        return okay
     #f prepush
-    def prepush(self):
-        for sr in self.subrepos: sr.prepush()
+    def prepush(self) -> bool:
+        okay = True
+        for sr in self.subrepos:
+            okay = okay and sr.prepush()
+            pass
         try:
             s = "Prepushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
-            self.grip_repo.add_log_string(s)
-            self.grip_repo.verbose.info(s)
-            okay = self.workflow.prepush()
+            self.toplevel.add_log_string(s)
+            self.toplevel.verbose.info(s)
+            okay = okay and self.workflow.prepush()
             if not okay: raise(Exception("Prepush for repo '%s' failed"%self.name))
             pass
         except Exception as e:
             raise(e)
-        pass
+        return okay
     #f push
-    def push(self):
-        for sr in self.subrepos: sr.push()
+    def push(self) -> bool:
+        okay = True
+        for sr in self.subrepos:
+            okay = okay and sr.push()
+            pass
         try:
             s = "Pushing repo '%s' with workflow '%s'"%(self.name, self.workflow.name)
-            self.grip_repo.add_log_string(s)
-            self.grip_repo.verbose.info(s)
-            okay = self.workflow.push()
+            self.toplevel.add_log_string(s)
+            self.toplevel.verbose.info(s)
+            okay = okay and self.workflow.push()
             if not okay: raise(Exception("Push for repo '%s' failed"%self.name))
             pass
         except Exception as e:
             raise(e)
-        pass
+        return okay
     #f get_cs
-    def get_cs(self):
+    def get_cs(self) -> str:
         return self.git_repo.get_cs()
     #f All done
     pass

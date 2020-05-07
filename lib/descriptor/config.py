@@ -8,7 +8,7 @@ from ..git import Url as GitUrl
 from .stage import StageTomlDict
 from .repo  import RepoDescTomlDict
 from .stage import Descriptor as StageDescriptor
-from .repo  import Descriptor as RepositoryDescriptor
+from .repo import Descriptor as RepositoryDescriptor
 
 from typing import TYPE_CHECKING
 from ..types import PrettyPrinter, Documentation, DocumentationEntry, MakefileStrings, EnvDict

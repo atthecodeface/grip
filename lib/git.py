@@ -142,7 +142,7 @@ class Repository(object):
     def git_command(self, **kwargs:Any) -> str:
         return cast(str,git_command(**kwargs))
     #f __init__
-    def __init__(self, path_str:str, git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
+    def __init__(self, path_str:Optional[str], git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
         """
         Create the object from a given path
 
@@ -375,7 +375,8 @@ class Repository(object):
         pass
     #f check_clone_permitted - check if can clone url to path
     @classmethod
-    def check_clone_permitted(cls, repo_url:str, dest:str, branch:str, log:Optional[Log]=None) -> bool:
+    def check_clone_permitted(cls, repo_url:str, dest:str, branch:Optional[str], log:Optional[Log]=None) -> bool:
+        if branch is None: branch="<none>"
         if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, dest))
         if os.path.exists(dest): raise UserError("Cannot clone to %s as it already exists"%(dest))
         dest_dir = os.path.dirname(dest)

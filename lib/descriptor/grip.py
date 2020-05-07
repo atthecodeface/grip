@@ -14,7 +14,7 @@ from .stage import Descriptor as StageDescriptor
 from .stage import StageTomlDict
 from .repo  import RepoDescTomlDict
 from .repo  import Descriptor as RepositoryDescriptor
-from .config import Descriptor as ConfigDescriptor
+from .config import Descriptor as ConfigurationDescriptor
 from .config import ConfigTomlDict
 
 from typing import TYPE_CHECKING
@@ -110,7 +110,7 @@ class Descriptor(object):
     name           : Optional[str]
     default_config : Optional[str]
     base_repos     : List[str]
-    configs        : Dict[str,ConfigDescriptor]
+    configs        : Dict[str,ConfigurationDescriptor]
     repos          : Dict[str,RepositoryDescriptor]
     stages         : Dict[str,StageDescriptor]
     re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
@@ -236,7 +236,7 @@ class Descriptor(object):
             pass
         self.configs = {}
         for config_name in self.values.configs:
-            self.configs[config_name] = ConfigDescriptor(config_name, self)
+            self.configs[config_name] = ConfigurationDescriptor(config_name, self)
             pass
         for (config_name, config_values) in self.values.config.items():
             if config_name not in self.configs:
@@ -290,6 +290,10 @@ class Descriptor(object):
             yield self.stages[n]
             pass
         pass
+    #f get_name - get name or ""
+    def get_name(self) -> str:
+        if self.name is None: return ""
+        return self.name
     #f get_configs - get names of configs
     def get_configs(self) -> List[str]:
         return list(self.configs.keys())
@@ -333,7 +337,7 @@ class Descriptor(object):
     def is_logging_enabled(self) -> bool:
         return self.logging
     #f select_config
-    def select_config(self, config_name:Optional[str]=None) -> Optional[ConfigDescriptor]:
+    def select_config(self, config_name:Optional[str]=None) -> Optional[ConfigurationDescriptor]:
         """
         Return a selected configuration
         """
