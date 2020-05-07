@@ -2,15 +2,13 @@
 import os, time
 from typing import Type, List, Dict, Iterable, Optional
 from .git import GitRepo, branch_upstream, branch_head
+from .log import Log
+from .verbose import Verbose
+from .exceptions import *
 from .descriptor.stage import Dependency as StageDependency
 from .descriptor.grip import Descriptor as GripRepoDescriptor
 from .config.file import ConfigFile as GripRepoConfig
 from .state.file import StateFile as GripRepoState
-from .workflow import Workflow
-from .workflows import workflows
-from .log import Log
-from .verbose import Verbose
-from .exceptions import *
 from .repo import Repository
 
 #a Classes

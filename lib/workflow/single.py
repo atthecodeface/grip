@@ -1,7 +1,7 @@
 #a Imports
-from .workflow import Workflow
-from .git import *
-from .exceptions  import *
+from .base import Workflow
+from ..git import *
+from ..exceptions  import *
 
 #a Classes
 #c Single workflow

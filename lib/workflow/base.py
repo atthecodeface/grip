@@ -1,7 +1,7 @@
 #a Imports
 from typing import Type, Dict, List, Sequence, Any
-from .options import Options
-from .git import *
+from ..options import Options
+from ..git import *
 
 #a Classes
 #c Workflow - base class for workflows

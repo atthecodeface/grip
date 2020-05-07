@@ -5,7 +5,7 @@ from typing import Optional, Dict, List, Tuple, Any, Iterator, Sequence, Union
 from ..exceptions import *
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
 from ..git import GitRepo
-from ..workflows import workflows
+from ..workflow import get_workflow, supported_workflows
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
 from .stage import Dependency as StageDependency
@@ -99,7 +99,6 @@ class Descriptor(object):
     configs        : Dict[str,ConfigDescriptor]
     repos          : Dict[str,RepoDescriptor]
     stages         : Dict[str,StageDescriptor]
-    supported_workflows = workflows()
     re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
     #f __init__
     def __init__(self, git_repo):
@@ -259,9 +258,10 @@ class Descriptor(object):
     def validate_workflow(self, workflow, user):
         if workflow is None:
             raise RepoDescError("'%s' is does not have a workflow specified"%(user))
-        if workflow not in self.supported_workflows:
-            raise RepoDescError("workflow '%s' used in %s is not in workflows supported by this version of grip (which are %s)"%(self.workflow, user, str_keys(self.supported_workflows)))
-        return self.supported_workflows[workflow]
+        w = get_workflow(workflow)
+        if w is None:
+            raise RepoDescError("workflow '%s' used in %s is not in workflows supported by this version of grip (which are %s)"%(workflow, user, supported_workflows()))
+        return w
     #f prettyprint
     def prettyprint(self, acc, pp):
         acc = pp(acc, "default_config: %s"%(self.default_config))

@@ -3,7 +3,6 @@ import os, sys, re, copy
 from typing import Optional, Dict, List, Tuple
 from .tomldict import TomlDict, TomlDictValues, TomlDictParser
 from .git import GitRepo
-from .workflows import workflows
 from .exceptions import *
 
 #a Exceptions

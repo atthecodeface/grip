@@ -2,7 +2,6 @@
 from typing import Optional, Type, List, Union, Any, Tuple, Sequence
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
 from ..git import GitRepo
-from ..workflows import workflows
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
 from .stage import Descriptor as StageDescriptor

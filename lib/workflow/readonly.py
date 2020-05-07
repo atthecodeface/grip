@@ -1,7 +1,7 @@
 #a Imports
-from .workflow import Workflow
-from .exceptions  import *
-from .git import branch_upstream
+from .base import Workflow
+from ..exceptions  import *
+from ..git import branch_upstream
 
 #a Classes
 #c Readonly workflow
