@@ -1,6 +1,8 @@
 #a Imports
 import toml
-from .tomldict import TomlDict, TomlDictParser
+from typing import Dict, Optional, Any
+from ..tomldict import TomlDict, TomlDictParser
+from ..exceptions import *
 
 #a Toml parser classes - description of a .grip/grip.toml file
 #c *..TomlDict subclasses to parse toml file contents
@@ -27,36 +29,6 @@ class GripStateTomlDict(TomlDict):
     pass
 
 #a Classes
-#c GitRepoStageDesc - What to do for a stage of a particular grip repo module
-class GitRepoStageDesc(object):
-    """
-    A GitRepoStageDesc has the data for a particular installation or build mechanism and dependencies for a git repo
-
-    It has a git_repo_desc (which it is for), a stage name (e.g. install, test, etc), and how to perform the stage
-    """
-    # stage = None # Install/test_install/precommit/?
-    # git_repo_desc = None # Git repo descr this is the <stage> of
-    wd   = None # Working directory to execute <exec> in (relative to repo desc path)
-    exec = None # Shell script to execute to perform the stage
-    env  = None # Environment to be exported in .grip/env
-    #f __init__
-    def __init__(self, git_repo_desc, stage_name, values):
-        self.git_repo_desc = git_repo_desc
-        self.stage_name = stage_name
-        self.wd    = values.wd
-        self.env   = values.env
-        self.exec  = values.exec
-        pass
-    #f prettyprint
-    def prettyprint(self, acc, pp):
-        acc = pp(acc, "%s:" % (self.stage_name))
-        if self.wd   is not None: acc = pp(acc, "wd:     %s" % (self.wd), indent=1)
-        if self.env  is not None: acc = pp(acc, "env:    %s" % (self.env), indent=1)
-        if self.exec is not None: acc = pp(acc, "exec:   %s" % (self.exec), indent=1)
-        return acc
-    #f All done
-    pass
-
 #c GitRepoState - state for a repo in a particular config
 class GitRepoState(object):
     """
@@ -113,7 +85,7 @@ class GripConfig(object):
     repos = [ list of repo names specific to the config]
     <repo>.<stage> = <toml of a GitRepoStageDesc>
     """
-    repos = {} # dictionary of <repo name> : <GitRepoState instance>
+    repos : Dict[str, GitRepoState] = {} # dictionary of <repo name> : <GitRepoState instance>
     #f __init__
     def __init__(self, name, values=None):
         self.name = name
@@ -172,16 +144,12 @@ class GripConfig(object):
     #f All done
     pass
 
-#c GripTomlError - exception used when reading the grip toml file
-class GripTomlError(Exception):
-    pass
-
-#c GripRepoState - complete description of a grip repo, from the grip toml file
-class GripRepoState(object):
+#c StateFile - complete description of a grip repo, from the grip toml file
+class StateFile(object):
     """
     """
     raw_toml_dict = None
-    configs = {}
+    configs : Dict[str, GripConfig] = {}
     #f __init__
     def __init__(self):
         self.configs = {}
@@ -228,7 +196,7 @@ class GripRepoState(object):
             pass
         pass
     #f toml_dict
-    def toml_dict(self):
+    def toml_dict(self) -> Dict[str,Any]:
         toml_dict = {}
         for (n,c) in self.configs.items():
             toml_dict[n] = c.toml_dict()
@@ -243,7 +211,7 @@ class GripRepoState(object):
             pass
         return acc
     #f select_config
-    def select_config(self, config_name=None, create_if_new=True):
+    def select_config(self, config_name=None, create_if_new=True) -> Optional[GripConfig]:
         """
         Return a selected configuration
         """
@@ -255,72 +223,3 @@ class GripRepoState(object):
     #f All done
     pass
 
-#a Unittest for GripRepoState class
-from .test_utils import UnitTestObject
-class GripRepoStateUnitTestBase(UnitTestObject):
-    state_toml = None
-    config_name = False
-    grs_assert = None
-    cfg_assert = None
-    exception_expected = None
-    def test_it(self):
-        if self.state_toml is not None:
-            grs = GripRepoState()
-            if self.exception_expected is not None:
-                self.assertRaises(self.exception_expected, grs.read_toml_string, self.state_toml)
-                pass
-            else:
-                grs.read_toml_string(self.state_toml)
-                pass
-            if self.grs_assert is not None:
-                self._test_obj_asserts(grs, self.grs_assert, "grip_repo_state")
-                pass
-            if self.config_name is not False:
-                cfg = grs.select_config(config_name=self.config_name)
-                if cfg is None:
-                    self.assertEqual(cfg, self.cfg_assert)
-                    pass
-                else:
-                    self._test_obj_asserts(cfg, self.cfg_assert, "config_desc")
-                    pass
-                pass
-            pass
-        pass
-    pass
-class GripRepoStateUnitTest1(GripRepoStateUnitTestBase):
-    state_toml = """cfga.repo1.changeset="1"\n"""
-    grs_assert = {"configs":{"cfga":{"repos":{"repo1":{"changeset":"1"}}}}}
-    pass
-class GripRepoStateUnitTest2(GripRepoStateUnitTestBase):
-    state_toml = """cfga.repo1.changeset="1"\ncfga.repo2.changeset="3"\n"""
-    grs_assert = {"configs":{"cfga":{"repos":{"repo2":{"changeset":"3"}}}}}
-    pass
-class GripRepoStateUnitTestComplex(GripRepoStateUnitTestBase):
-    state_toml = """
-    cfga.repo1.changeset="1"
-    cfga.repo2.changeset="3"
-    cfgb.repo3.changeset="apple"
-    cfgb.repo1.changeset="banana"
-    [cfgc]
-    repo1 = {changeset="4"}
-    repo2 = {changeset="7"}
-    """
-    pass
-class GripRepoStateUnitTest10(GripRepoStateUnitTestComplex):
-    grs_assert = {"configs":{"cfga":{"repos":{
-        "repo1":{"changeset":"1"},
-        "repo2":{"changeset":"3"},
-    }}}}
-    pass
-class GripRepoStateUnitTest11(GripRepoStateUnitTestComplex):
-    grs_assert = {"configs":{"cfgb":{"repos":{
-        "repo1":{"changeset":"banana"},
-        "repo3":{"changeset":"apple"},
-    }}}}
-    pass
-class GripRepoStateUnitTest12(GripRepoStateUnitTestComplex):
-    grs_assert = {"configs":{"cfgc":{"repos":{
-        "repo1":{"changeset":"4"},
-        "repo2":{"changeset":"7"},
-    }}}}
-    pass

@@ -8,3 +8,7 @@ test_lib:
 .PHONY:test_grip
 test_grip:
 	./test_grip.py
+
+.PHONY:check_types
+check_types:
+	mypy lib/*/*py lib/*.py

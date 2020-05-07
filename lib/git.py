@@ -1,5 +1,6 @@
 #a Imports
 import os, re, unittest
+from typing import Dict, Optional, Tuple
 import lib.oscommand, lib.verbose
 from .exceptions import *
 
@@ -10,7 +11,7 @@ branch_head = "HEAD"
 
 #a Useful functions
 #f git_command
-def git_command(options=None, cmd=None, **kwargs):
+def git_command(options=None, cmd=None, **kwargs) -> str:
     cmd="git %s"%(cmd)
     return lib.oscommand.command(options=options,
                                      cmd=cmd,
@@ -94,7 +95,7 @@ class GitRepo(object):
     git_repo_path_re       = re.compile( git_path_re )
     #f parse_git_url - classmethod to parse a URL to an object with host/user/port/path/protocol/repo_name properties
     @classmethod
-    def parse_git_url(cls, git_url):
+    def parse_git_url(cls, git_url) -> GitUrl:
         x = GitUrl()
         match  = cls.git_repo_url_re.fullmatch(git_url)
         if not match: match = cls.git_repo_host_path_re.fullmatch(git_url)
@@ -147,7 +148,7 @@ class GitRepo(object):
         (self.upstream_origin, self.upstream_push_branch) = self.get_branch_remote_and_merge(branch_upstream)
         pass
     #f get_branch_remote_and_merge
-    def get_branch_remote_and_merge(self, branch_name):
+    def get_branch_remote_and_merge(self, branch_name) -> Tuple[Optional[str], Optional[str]]:
         """
         For a given branch attempt to get remote and merge - i.e. where to fetch/push to
         """
@@ -168,19 +169,19 @@ class GitRepo(object):
             pass
         return (origin, push_branch)
     #f get_name
-    def get_name(self):
+    def get_name(self) -> str:
         return self.path
     #f get_git_url
     def get_git_url(self):
         return self.git_url
     #f get_git_url_string
-    def get_git_url_string(self):
+    def get_git_url_string(self) -> str:
         return self.git_url.git_url()
     #f get_path
-    def get_path(self):
+    def get_path(self) -> str:
         return self.path
     #f get_config
-    def get_config(self, config_path, log=None):
+    def get_config(self, config_path, log=None) -> str:
         config=".".join(config_path)
         output = git_command(cmd="config --get %s"%config,
                              log=log,
@@ -199,8 +200,8 @@ class GitRepo(object):
         if len(output.strip()) > 0: return output
         raise Exception("Failed to set upstream branch for git repo '%s' branch '%s'"%(self.get_name(), branch_name))
         # git branch
-    #f get_branch_name - get *A* branch name
-    def get_branch_name(self, ref="HEAD", log=None):
+    #f get_branch_name - get string branch name from a ref (a branch name)
+    def get_branch_name(self, ref="HEAD", log=None) -> str:
         """
         Get changeset of the git repo
 
@@ -439,41 +440,4 @@ class GitRepo(object):
         return filename
     #f All done
     pass
-
-#a Unittest for Repo class
-class RepoUnitTest(unittest.TestCase):
-    def _test_git_url(self, url, host=None, user=None, port=None, path=None, protocol=None, repo_name=None):
-        d = GitRepo.parse_git_url(url)
-        self.assertEqual(d.host,host,"Mismatch in host")
-        self.assertEqual(d.user,user,"Mismatch in user")
-        self.assertEqual(d.port,port,"Mismatch in port")
-        self.assertEqual(d.path,path,"Mismatch in path")
-        self.assertEqual(d.protocol,protocol,"Mismatch in protocol")
-        self.assertEqual(d.repo_name,repo_name,"Mismatch in repo_name")
-        pass
-    def _test_git_url_fails(self, *args):
-        self.assertRaises(Exception, GitRepo.parse_git_url, *args)
-        pass
-    def test_paths(self):
-        self._test_git_url("banana.git", host=None, user=None, port=None, path="banana.git", protocol=None, repo_name="banana")
-        self._test_git_url("/path/to/banana.git", host=None, user=None, port=None, path="/path/to/banana.git", protocol=None, repo_name="banana")
-        self._test_git_url("banana.git/", host=None, user=None, port=None, path="banana.git", protocol=None, repo_name="banana")
-        self._test_git_url("/path/to/banana.git/", host=None, user=None, port=None, path="/path/to/banana.git", protocol=None, repo_name="banana")
-        pass
-    def test_urls(self):
-        self._test_git_url("https://github.com/atthecodeface/grip.git", host="github.com", user=None, port=None, path="atthecodeface/grip.git", protocol="https", repo_name="grip")
-        self._test_git_url("http://atthecodeface@github.com/atthecodeface/cdl_hardware.git", host="github.com", user="atthecodeface", port=None, path="atthecodeface/cdl_hardware.git", protocol="http", repo_name="cdl_hardware")
-        self._test_git_url("ssh://login@server.com:12345/absolute/path/to/repository", host="server.com", user="login", port="12345", path="absolute/path/to/repository", protocol="ssh", repo_name="repository")
-        self._test_git_url("ssh://login@server.com:12345/absolute/path/to/repository/", host="server.com", user="login", port="12345", path="absolute/path/to/repository", protocol="ssh", repo_name="repository")
-        pass
-    def test_host_paths(self):
-        self._test_git_url("login@server.com:path/to/repository/from/home", host="server.com", user="login", port=None, path="path/to/repository/from/home", protocol=None, repo_name="home")
-        self._test_git_url("login@server.com:path/to/repository/from/home/", host="server.com", user="login", port=None, path="path/to/repository/from/home", protocol=None, repo_name="home")
-        pass
-    def test_mismatches(self):
-        self._test_git_url_fails("ssah://login@server.com:12345/absolute/path/to/repository")
-        self._test_git_url_fails("ssh://login@server.com:12345:otherportisnotallowed/absolute/path/to/repository")
-        pass
-    pass
-
 

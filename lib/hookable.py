@@ -1,3 +1,4 @@
+from typing import Dict
 class Hookable:
     """
     A class to which hooks may be added and where they may be invoked
@@ -9,7 +10,7 @@ class Hookable:
 
     Invoking a list of hooks due to a reason
     """
-    hooks = {}
+    hooks : Dict = {}
     hook_key = None
     #f add_hooks
     @classmethod
@@ -29,4 +30,4 @@ class Hookable:
                 pass
             pass
         pass
-    
+

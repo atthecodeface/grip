@@ -4,10 +4,11 @@ import argparse
 import traceback
 import lib.utils
 import lib.oscommand
+from typing import Type, Dict, List, Sequence, Any
 from .hookable import Hookable
 from .exceptions import *
 from .verbose import Verbose
-from .repo import GripRepo
+from .grip import Toplevel
 
 #a Classes
 #c Options
@@ -55,13 +56,13 @@ class GripCommandBase(Hookable):
     The docstring (this bit) is used for the help
     """
     #v Class properties
-    names = []
+    names : List[str] # Type['GripCommandBase']]= []
     base_options = {("-h", "--help")   :{"action":"store_true", "dest":"help",     "default":False, "help":"show the list of commands and options", },
                     ("-v", "--verbose"):{"action":"store_true", "dest":"verbose",  "default":False},
                     ("--show-log",)    :{"action":"store_true", "dest":"show_log", "default":False},
                     ("-Q", "--quiet")  :{"action":"store_true", "dest":"quiet",    "default":False},
                     }
-    command_options = {}
+    command_options : Dict[Sequence[str], Dict[str,Any]] = {}
 
     #f get_all
     @classmethod
@@ -143,7 +144,7 @@ class GripCommandBase(Hookable):
 
     #f get_grip_repo
     def get_grip_repo(self, **kwargs):
-        self.grip_repo = GripRepo(invocation=self.invocation, options=self.options, **kwargs)
+        self.grip_repo = Toplevel(invocation=self.invocation, options=self.options, **kwargs)
         self.add_logger(self.grip_repo.log)
         pass
 
@@ -224,7 +225,7 @@ class GripCommand(GripCommandBase):
     grip [options] <command> [<command options>] [<command arguments>]
 
     """
-    names = []
+    names : List[str] = []
     command_options = {("args",): {"nargs":argparse.REMAINDER, "help":'command to perform'},
                     }
 

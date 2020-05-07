@@ -1,10 +1,17 @@
 #a Imports
 import sys, os, re
 import subprocess
+from typing import Optional
 from .verbose import info
 
 #a OSCommand
 class OSCommand:
+    cmd : Optional[str]
+    cwd : Optional[str]
+    env : Optional[str]
+    include_rc : bool
+    exception_on_error : bool
+    #c NullOptions
     class NullOptions:
         verbose = False
         pass
@@ -18,7 +25,7 @@ class OSCommand:
             pass
         pass
         #f __str__
-        def __str__(self):
+        def __str__(self) -> str:
             return "Error in " + self.cmd.string_command_result()
         pass
     #f __init__
@@ -59,7 +66,7 @@ class OSCommand:
                                         )
         pass
     #f output_string
-    def output_string(self, s, max_lines=100):
+    def output_string(self, s, max_lines=100) -> str:
         sl = s.rstrip("\n").split("\n")
         if len(sl)==1: return sl[0]
         append = ""

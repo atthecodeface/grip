@@ -17,7 +17,7 @@ class clone(lib.command.GripCommandBase):
         repo_url     = options.repo_url.rstrip('/')
         checkoutname = options.checkoutname
         branch       = options.branch
-        grip_repo    = lib.repo.GripRepo.clone(options, repo_url, branch, path=None, dest=checkoutname, invocation=self.invocation)
+        grip_repo    = lib.grip.Toplevel.clone(options, repo_url, branch, path=None, dest=checkoutname, invocation=self.invocation)
         self.add_logger(grip_repo.log)
         #print(grip_repo.debug_repodesc())
         grip_repo.configure(config_name = options.config)

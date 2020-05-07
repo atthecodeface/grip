@@ -240,7 +240,7 @@ class Descriptor(object):
         # print("Resolve %s:%s:%s:%s"%(self,self.name,self.url,self.git_url))
         pass
     #f get_env_as_makefile_strings
-    def get_env_as_makefile_strings(self):
+    def get_env_as_makefile_strings(self) -> List[Tuple[str,str]]:
         return self.env.as_makefile_strings(include_parent=False)
     #f prettyprint
     def prettyprint(self, acc, pp):
