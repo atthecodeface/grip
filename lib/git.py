@@ -1,7 +1,10 @@
 #a Imports
 import os, re, unittest
-from typing import Dict, Optional, Tuple
-import lib.oscommand, lib.verbose
+from pathlib import Path
+from typing import Type, Dict, Optional, Tuple
+from .oscommand import command as os_command
+from .oscommand import OSCommandError
+from .options import Options
 from .exceptions import *
 
 #a Global branchnames
@@ -13,31 +16,59 @@ branch_head = "HEAD"
 #f git_command
 def git_command(options=None, cmd=None, **kwargs) -> str:
     cmd="git %s"%(cmd)
-    return lib.oscommand.command(options=options,
+    return os_command(options=options,
                                      cmd=cmd,
                                      **kwargs)
 
 #a Git url class
 class GitUrl:
-    host = None
-    user = None
-    port = None
-    path = None
-    path_dir = None
-    path_leaf = None
-    protocol = None
-    repo_name = None
-    def git_url(self):
+    #v Class properties for git url parsing
+    git_protocol_re  = r"(?P<protocol>ssh|git|http|https|ftp|ftps|file)"
+    git_user_host_re = r"((?P<user>([a-zA-Z0-9_]*))@|)(?P<host>[a-zA-Z0-9_.]+)"
+    git_opt_port_re  = r"(:(?P<port>([0-9]+))|)"
+    # git_path_re      = r"(?P<path>([a-zA-Z0-9~._\-/]+))"
+    git_path_re      = r"(?P<path>([^:]+))"
+    git_repo_url_re        = re.compile( git_protocol_re + r"://" + git_user_host_re + git_opt_port_re + r"/" + git_path_re )
+    git_repo_host_path_re  = re.compile( git_user_host_re + ":" + git_path_re )
+    git_repo_path_re       = re.compile( git_path_re )
+    #t Instance properties
+    host     : Optional[str] = None
+    user     : Optional[str] = None
+    port     : Optional[str] = None
+    protocol : Optional[str] = None
+    path      : Optional[str] = None
+    path_dir  : str
+    path_leaf : str
+    repo_name : str
+    #f __init__
+    def __init__(self, git_url:str):
+        match  = self.git_repo_url_re.fullmatch(git_url)
+        if not match: match = self.git_repo_host_path_re.fullmatch(git_url)
+        if not match: match = self.git_repo_path_re.fullmatch(git_url)
+        if not match: raise Exception("Failed to parse git URL '%s'"%git_url)
+        d = match.groupdict()
+        for k in ['protocol','host','user','port','path']:
+            if k in d:
+                if d[k]!="": setattr(self,k,d[k])
+                pass
+            pass
+        self.parse_path()
+        pass
+    #f as_string - return 'canonical' string of this url
+    def as_string(self) -> str:
+        assert self.path is not None
         if (self.protocol is not None) or (self.user is not None) or (self.port is not None):
-            url = self.host
+            assert self.host is not None
+            url : str = self.host
             if self.user is not None: url = self.user+"@"+url
             if self.port is not None: url = url+":"+self.port
             return "%s://%s/%s"%(self.protocol, url, self.path)
         if self.host is not None:
             url = self.host
             if self.user is not None: url = self.user+"@"+url
-            return "%%s/%s"%(url, self.path)
+            return "%s/%s"%(url, self.path)
         return self.path
+    #f parse_path
     def parse_path(self):
         (d,f) = os.path.split(self.path)
         if f=='': self.path = d
@@ -47,11 +78,15 @@ class GitUrl:
         self.repo_name = path_leaf
         if path_leaf[-4:]=='.git': self.repo_name=path_leaf[:-4]
         pass
-    def is_leaf(self):
+    #f is_leaf - return True if a file URL and no pathname
+    def is_leaf(self) -> bool:
         if self.host is not None: return False
         if self.path_dir != "": return False
         return True
-    def make_relative_to(self, abs_url):
+    #f make_relative_to - if .is_leaf() then make relative to another of these
+    def make_relative_to(self, abs_url:Type['GitUrl']) -> None:
+        assert self.host is None
+        assert self.path_dir == ""
         self.host     = abs_url.host
         self.user     = abs_url.user
         self.port     = abs_url.port
@@ -59,24 +94,10 @@ class GitUrl:
         self.path     = os.path.join(abs_url.path_dir, self.path_leaf)
         self.parse_path()
         pass
+    # __str__ - get human readable version
     def __str__(self):
         return "host %s user %s port %s path %s"%(self.host, self.user, self.port, self.path)
-    pass
-
-#a Git reasons
-class GitReason(Exception):
-    reason = "<unknown reason>"
-    def get_reason(self): return self.reason
-    def is_of(self, cls): return isinstance(self,cls)
-    pass
-class HowUnknownBranch(GitReason):
-    reason = "untracked files"
-    pass
-class HowUntrackedFiles(GitReason):
-    reason = "untracked files"
-    pass
-class HowFilesModified(GitReason):
-    reason = "modified files"
+    #f All done
     pass
 
 #a GitRepo class
@@ -84,32 +105,9 @@ class GitRepo(object):
     """
     A Git repo object for a git repository within the local filesystem
     """
-    #v Properties for git url parsing
-    git_protocol_re  = r"(?P<protocol>ssh|git|http|https|ftp|ftps|file)"
-    git_user_host_re = r"((?P<user>([a-zA-Z0-9_]*))@|)(?P<host>[a-zA-Z0-9_.]+)"
-    git_opt_port_re  = r"(:(?P<port>([0-9]+))|)"
-    git_path_re      = r"(?P<path>([a-zA-Z0-9~._\-/]+))"
-    git_path_re      = r"(?P<path>([^:]+))"
-    git_repo_url_re        = re.compile( git_protocol_re + r"://" + git_user_host_re + git_opt_port_re + r"/" + git_path_re )
-    git_repo_host_path_re  = re.compile( git_user_host_re + ":" + git_path_re )
-    git_repo_path_re       = re.compile( git_path_re )
-    #f parse_git_url - classmethod to parse a URL to an object with host/user/port/path/protocol/repo_name properties
-    @classmethod
-    def parse_git_url(cls, git_url) -> GitUrl:
-        x = GitUrl()
-        match  = cls.git_repo_url_re.fullmatch(git_url)
-        if not match: match = cls.git_repo_host_path_re.fullmatch(git_url)
-        if not match: match = cls.git_repo_path_re.fullmatch(git_url)
-        if not match:
-            raise Exception("Failed to parse git URL '%s'"%git_url)
-        d = match.groupdict()
-        for k in ['protocol','host','user','port','path']:
-            if k in d:
-                if d[k]!="": setattr(x,k,d[k])
-                pass
-            pass
-        x.parse_path()
-        return x
+    #t instance properties
+    git_url : GitUrl
+    path :str
     #f __init__
     def __init__(self, path, git_url=None, permit_no_remote=False, log=None):
         """
@@ -138,10 +136,10 @@ class GitRepo(object):
                 pass
             git_url = git_output.strip()
             if git_url=="":
-                git_url=None
+                git_url = None
                 pass
             else:
-                git_url = self.parse_git_url(git_url)
+                git_url = GitUrl(git_url)
                 pass
             pass
         self.git_url = git_url
@@ -176,7 +174,7 @@ class GitRepo(object):
         return self.git_url
     #f get_git_url_string
     def get_git_url_string(self) -> str:
-        return self.git_url.git_url()
+        return self.git_url.as_string()
     #f get_path
     def get_path(self) -> str:
         return self.path
@@ -390,7 +388,7 @@ class GitRepo(object):
         # git checkout --detach <changeset>
 
         """
-        url = cls.parse_git_url(repo_url)
+        url = GitUrl(repo_url)
         if dest is None: dest=url.repo_name
         git_options = []
         if branch is not None: git_options.append( "--branch %s"%branch )
@@ -404,7 +402,7 @@ class GitRepo(object):
                                      cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest),
                                      stderr_output_indicates_error=False)
             pass
-        except lib.oscommand.OSCommandError as e:
+        except OSCommandError as e:
             raise UserError("Failed to perform git clone - %s"%(e.cmd.error_output()))
             pass
         try:

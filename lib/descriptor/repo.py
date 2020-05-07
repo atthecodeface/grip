@@ -1,7 +1,7 @@
 #a Imports
 from typing import Optional, Type, List, Union, Any, Tuple, Sequence
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
-from ..git import GitRepo
+from ..git import GitRepo, GitUrl
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
 from .stage import Descriptor as StageDescriptor
@@ -72,8 +72,9 @@ class Descriptor(object):
     shallow  : int
     env      : GripEnv
     doc      : Optional[str]
-    # workflow :
-    # git_url  :
+    git_url  : GitUrl
+    from ..workflow import Workflow
+    workflow : Workflow
     # grip_config
     #f __init__
     def __init__(self, name, grip_repo_desc, values=None, clone=None):
@@ -135,7 +136,7 @@ class Descriptor(object):
         """
         """
         assert self.git_url is not None
-        return self.git_url.git_url()
+        return self.git_url.as_string()
     #f get_doc_string
     def get_doc_string(self) -> str:
         """
@@ -153,8 +154,8 @@ class Descriptor(object):
         r = [self.get_doc_string()]
         r_src = ""
         if self.path    is not None: r_src += "locally at '%s'" % (self.path)
-        if self.git_url is not None: r_src += " remote url '%s'" % (self.git_url.git_url())
-        elif self.url is not None:   r_src += " remote url(orig) '%s'" % (self.url)
+        if self.url     is not None: r_src += " remote url(orig) '%s'" % (self.url)
+        if self.git_url is not None: r_src += " remote url(parsed) '%s'" % (self.git_url.as_string())
         if self.branch  is not None: r_src += " branch '%s'" % (self.branch)
         r.append(r_src)
         r_stages = []
@@ -222,7 +223,7 @@ class Descriptor(object):
         self.path    = self.values.path
         self.doc     = self.values.doc
         try:
-            self.git_url = GitRepo.parse_git_url(self.url)
+            self.git_url = GitUrl(self.url)
             pass
         except:
             raise GripTomlError("for repo '%s' could not parse git url '%s'"%(self.name, self.url))

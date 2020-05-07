@@ -3,9 +3,12 @@ import sys, os, re
 import subprocess
 from typing import Optional
 from .verbose import info
+from .options import Options
 
 #a OSCommand
 class OSCommand:
+    #t Types of properties
+    options : Optional[Options]
     cmd : Optional[str]
     cwd : Optional[str]
     env : Optional[str]

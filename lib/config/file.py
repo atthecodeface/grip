@@ -27,6 +27,18 @@ class ConfigFile(object):
         self.grip_git_url = None
         self.branch = None
         pass
+    #f set_config_name
+    def set_config_name(self, s):
+        self.config = s
+        pass
+    #f set_grip_git_url
+    def set_grip_git_url(self, s):
+        self.grip_git_url = s
+        pass
+    #f set_branch_name
+    def set_branch_name(self, s):
+        self.branch = s
+        pass
     #f read_toml_file - read a config.toml file (should be a local configuration)
     def read_toml_file(self, grip_toml_filename):
         try:

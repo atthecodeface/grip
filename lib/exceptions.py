@@ -50,6 +50,22 @@ class SubrepoError(GripException):
     grip_type = "Subrepo"
     pass
 
+#a Git reasons - exceptions for git
+class GitReason(Exception):
+    reason = "<unknown reason>"
+    def get_reason(self): return self.reason
+    def is_of(self, cls): return isinstance(self,cls)
+    pass
+class HowUnknownBranch(GitReason):
+    reason = "unknown branch"
+    pass
+class HowUntrackedFiles(GitReason):
+    reason = "untracked files"
+    pass
+class HowFilesModified(GitReason):
+    reason = "modified files"
+    pass
+
 #a Exceptions
 #c GripTomlError - exception used when reading the grip toml file
 class GripTomlError(ConfigurationError):

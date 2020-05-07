@@ -43,7 +43,7 @@ class Repository(object):
               - may not need to be merged - that depends on workflow
     """
     name      : str
-    grip_repo : Any # Cannot use Type['Toplevel'] as that would be recursive libraries
+    toplevel  : Any # Cannot use Type['Toplevel'] as that would be recursive libraries
     git_repo  : GitRepo
     parent    : Optional[Type['Repository']]
     workflow  : Workflow
@@ -54,11 +54,12 @@ class Repository(object):
         """
         """
         self.name = name
-        self.grip_repo = grip_repo
+        self.toplevel = grip_repo
         self.parent = parent
         self.git_repo = git_repo
         self.repo_desc = repo_desc
-        self.workflow = repo_desc.workflow(grip_repo, git_repo, grip_repo.log, grip_repo.verbose)
+        w : Type[Workflow] = repo_desc.workflow
+        self.workflow = w(grip_repo, git_repo)
         self.subrepos = []
         if parent: parent.add_child(self)
         pass

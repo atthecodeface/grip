@@ -1,9 +1,10 @@
 #a Imports
 import os, time
 from typing import Type, List, Dict, Iterable, Optional
-from .git import GitRepo, branch_upstream, branch_head
+from .git import GitRepo, GitUrl, branch_upstream, branch_head
 from .log import Log
 from .verbose import Verbose
+from .options import Options
 from .exceptions import *
 from .descriptor.stage import Dependency as StageDependency
 from .descriptor.grip import Descriptor as GripRepoDescriptor
@@ -29,6 +30,14 @@ class Toplevel:
     makefile_stamps_dirname = "local.makefile_stamps"
     grip_makefile_filename = "local.grip_makefile"
     grip_makefile_env_filename = "local.grip_makefile.env"
+    #v Instance properties
+    log : Log
+    options : Options
+    verbose : Verbose
+    invocation : str
+    git_repo : Optional[GitRepo]
+    repo_config : Optional[GripRepoConfig]
+    grip_git_url : Optional[GitUrl]
     #f find_git_repo_of_grip_root
     @classmethod
     def find_git_repo_of_grip_root(cls, path, log=None):
@@ -40,7 +49,7 @@ class Toplevel:
         return git_repo
     #f clone - classmethod to create an instance after a git clone
     @classmethod
-    def clone(cls, options, repo_url, branch, path=None, dest=None):
+    def clone(cls, options, repo_url, branch, path=None, dest=None): # -> Type['Toplevel']
         dest_path = dest
         if path is not None:
             if dest_path is not None:
@@ -53,7 +62,7 @@ class Toplevel:
         repo = GitRepo.clone(options, repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path)
         return cls(repo)
     #f __init__
-    def __init__(self, git_repo=None, path=None, options=None, ensure_configured=False, invocation="", error_handler=None):
+    def __init__(self, git_repo:Optional[GitRepo]=None, path=None, options=None, ensure_configured=False, invocation="", error_handler=None):
         self.log=Log()
         self.options=options
         self.verbose=options.verbose
@@ -75,6 +84,7 @@ class Toplevel:
         self.config_state     = None
         self.repo_instance_tree = None
         self.read_desc_state_config(use_current_config=True, error_handler=error_handler)
+        assert self.repo_desc is not None
         if ensure_configured:
             if self.repo_desc_config is None:
                 raise ConfigurationError("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
@@ -216,9 +226,9 @@ class Toplevel:
         pass
     #f update_config
     def update_config(self):
-        self.repo_config.config       = self.repo_desc_config.name
-        self.repo_config.grip_git_url = self.grip_git_url.git_url()
-        self.repo_config.branch       = self.branch_name
+        self.repo_config.set_config_name(self.repo_desc_config.name)
+        self.repo_config.set_grip_git_url(self.grip_git_url.as_string())
+        self.repo_config.set_branch_name(self.branch_name)
         pass
     #f write_config
     def write_config(self):
