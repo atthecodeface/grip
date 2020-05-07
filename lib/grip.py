@@ -14,6 +14,10 @@ from .exceptions import *
 from .repo import Repository
 
 #a Classes
+#a GripRepository - subclass of Repository
+class GripRepository(Repository):
+    pass
+
 #a Toplevel grip repository class - this describes/contains the whole thing
 #c Toplevel class
 class Toplevel:
@@ -126,6 +130,13 @@ class Toplevel:
             self.branch_name = "WIP__%s_%s"%(base, time_str)
             pass
         pass
+    #f get_branch_name - get string branch name
+    def get_branch_name(self) -> str:
+        """
+        Get branch name
+        """
+        assert self.branch_name is not None
+        return self.branch_name
     #f read_desc_state_config - Read grip.toml, state.toml, local.config.toml
     def read_desc_state_config(self, use_current_config=False, error_handler=None):
         """

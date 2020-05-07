@@ -9,45 +9,9 @@ from .hookable import Hookable
 from .exceptions import *
 from .verbose import Verbose
 from .grip import Toplevel
+from .options import Options
 
 #a Classes
-#c Options
-class UnknownOption(Exception):pass
-class Options(object):
-    """
-    The argparse options must be a namespace, that is all
-
-    Hence this class is used for 'options'
-    """
-    verbose = False
-    help = False
-    show_log = False
-    quiet = False
-    def __init__(self):
-        pass
-    def has(self, n):
-        return hasattr(self,n)
-    def get(self, n, default=UnknownOption):
-        if self.has(n): return getattr(self,n)
-        if default is UnknownOption: raise UnknownOption("Option %s unknown"%n)
-        return default
-    def _validate(self):
-        if (type(self.verbose)==bool) or (type(self.quiet)==bool):
-            verbose = Verbose(level=Verbose.level_info)
-            if (type(self.verbose)==bool) and self.verbose:   verbose.set_level(Verbose.level_verbose)
-            elif (type(self.quiet)==bool) and self.quiet:   verbose.set_level(Verbose.level_warning)
-            else:              verbose.set_level(Verbose.level_info)
-            self.verbose = verbose
-            pass
-        elif type(self.verbose)==int:
-            self.verbose = Verbose(level=self.verbose)
-            pass
-        pass
-    def dump(self):
-        for k in dir(self):
-            print(k,self.get(k))
-            pass
-
 #c GripCommandBase
 class GripCommandBase(Hookable):
     """

@@ -1,4 +1,6 @@
 #a Imports
+from typing import Type, Dict, List, Sequence, Any
+from .options import Options
 from .git import *
 
 #a Classes
@@ -6,14 +8,18 @@ from .git import *
 class Workflow(object):
     name = "Base workflow class - must be subclassed"
     permitted = False
+    options : Options
     #f __init__
-    def __init__(self, grip_repo, git_repo, log, verbose):
-        self.grip_repo = grip_repo
-        self.git_repo = git_repo
-        self.options = self.grip_repo.options
-        self.log = log
-        self.verbose = verbose
+    def __init__(self, toplevel, git_repo):
+        self.toplevel = toplevel
+        self.git_repo  = git_repo
+        self.options = toplevel.options
+        self.log     = toplevel.log
+        self.verbose = toplevel.verbose
         pass
+    #f get_branch_name
+    def get_branch_name(self, **kwargs):
+        return self.toplevel.get_branch_name(**kwargs)
     #f install_hooks
     def install_hooks(self):
         """
@@ -82,7 +88,7 @@ class Workflow(object):
         raise Exception("push not implemented for workflow %s"%self.name)
     #f check_git_repo_is_descendant
     def check_git_repo_is_descendant(self):
-        cs_history = self.git_repo.get_cs_history(branch_name=self.grip_repo.branch_name, log=self.log)
+        cs_history = self.git_repo.get_cs_history(branch_name=self.toplevel.get_branch_name(), log=self.log)
         try:
             cs = self.git_repo.get_cs(branch_name=branch_upstream)
         except HowUnknownBranch as e:
