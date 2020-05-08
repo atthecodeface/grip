@@ -19,10 +19,14 @@ pip install toml
 """
 import sys, os, re
 import inspect
-grip_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+from typing import List
+
+frame = inspect.currentframe()
+assert frame is not None
+grip_dir = os.path.dirname(os.path.abspath(inspect.getfile(frame)))
 sys.path.append(grip_dir) # So the hooks can use lib.* too
 if "GRIP_HOOKS" in os.environ:
-    sys.path.append(os.environ["GRIP_HOOKS"].split(":"))
+    sys.path.extend(os.environ["GRIP_HOOKS"].split(":"))
     pass
 else:
     sys.path.append(os.path.dirname(grip_dir)) # Append ".." to the path if no explicit hooks path provided
@@ -34,26 +38,27 @@ from cmds import *
 
 grip_hooks = None
 try:
-    import grip_hooks
+    import grip_hooks # type:ignore
 except ModuleNotFoundError:
     pass
 
-if grip_hooks is not None:    
+if grip_hooks is not None:
     lib.repo.GripRepo.add_hooks(grip_hooks.hooks)
     lib.command.GripCommandBase.add_hooks(grip_hooks.hooks)
     pass
 
-def main(prog, globalargs):
+def main(prog:str, globalargs:List[str]) -> None:
     """
     The primary API to the Grip toolset
     """
-    cmd = lib.command.GripCommand(prog, None, None, globalargs)
-    (prog, parser, options, args) = cmd.parse_command(prog, None, None, None, globalargs)
+    cmd = lib.command.GripCommand(command_name=prog, parent=None, args=globalargs) # args for recording the invocation
+    parsed_cmd = cmd.parse_command(args=globalargs)
 
+    args = parsed_cmd.args
     if len(args)==0: args=["help"]
 
     # Invoke command with options
-    cmd.invoke(os.path.basename(prog), parser, args[0], options, args[1:])
+    cmd.invoke_subcommand(args[0], args[1:])
 
     # Done
     pass

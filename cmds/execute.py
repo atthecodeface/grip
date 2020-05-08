@@ -1,6 +1,9 @@
 import os, sys, argparse
-import lib.command
-class make(lib.command.GripCommandBase):
+from lib.command import GripCommandBase, ParsedCommand
+from lib.options import Options
+from typing import Optional, List
+
+class make(GripCommandBase):
     """
     Make something
     """
@@ -8,17 +11,20 @@ class make(lib.command.GripCommandBase):
     command_options = {
         ("args",):     {"nargs":argparse.REMAINDER, "help":'command to perform'},
     }
-    def execute(self, prog, parser, command_name, options, args):
+    class MakeOptions(Options):
+        args : List[str]
+    options : MakeOptions
+    def execute(self, cmd:ParsedCommand) -> Optional[int]:
         self.get_grip_repo(ensure_configured=True)
         os.chdir(self.grip_repo.path())
         args=["make","-f",self.grip_repo.grip_makefile_path()]
-        args.extend(options.args)
+        args.extend(self.options.args)
         self.grip_repo.verbose.info("Entering "+self.grip_repo.path())
         self.grip_repo.verbose.info("Executing "+" ".join(args))
         os.execvp("make",args)
-        pass
+        return None
 
-class shell(lib.command.GripCommandBase):
+class shell(GripCommandBase):
     """
     Execute a shell
     """
@@ -27,8 +33,12 @@ class shell(lib.command.GripCommandBase):
         ("--shell",):      {"help":"Shell to invoke, defaulting to bash", "default":"bash"},
         ("args",):         {"nargs":argparse.REMAINDER, "help":'additional arguments for bash'},
     }
-    def execute(self, prog, parser, command_name, options, args):
+    class ShellOptions(Options):
+        shell : str
+        args  : List[str]
+    options : ShellOptions
+    def execute(self, cmd:ParsedCommand) -> Optional[int]:
         self.get_grip_repo(ensure_configured=True)
-        self.grip_repo.invoke_shell(options.shell, options.args)
-        pass
+        self.grip_repo.invoke_shell(self.options.shell, self.options.args)
+        return 0
 

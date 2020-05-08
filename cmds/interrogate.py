@@ -1,8 +1,15 @@
+#a Import
 import os, sys, shlex
-import lib.command
 import lib.repo
 import lib.env
-class root(lib.command.GripCommandBase):
+from lib.command import GripCommandBase, ParsedCommand
+from lib.options import Options
+from lib.types   import Documentation, DocumentationHeadedContent
+from typing import Optional, Tuple, Any, cast
+
+#a Commands classes
+#c root
+class root(GripCommandBase):
     """
     Find the root of the grip repository
     """
@@ -10,63 +17,75 @@ class root(lib.command.GripCommandBase):
     command_options = {
         ("path",):      {"nargs":"?", "help":"file or directory within a grip repostiory whose root is to be found (default is working directory)", "default":None},
     }
-    def execute(self, prog, parser, command_name, options, args):
-        path = options.path
+    class RootOptions(Options):
+        path : Optional[str]
+    options : RootOptions
+    def execute(self, cmd:ParsedCommand) -> Optional[int]:
+        path = self.options.path
         if path is None:
             path = os.path.abspath(os.getcwd())
             pass
         if os.path.isfile(path): path=os.path.dirname(path)
         self.get_grip_repo(path=path)
         print(self.grip_repo.get_root(),end='')
-        pass
+        return 0
+    pass
 
-class env(lib.command.GripCommandBase):
+class env(GripCommandBase):
     """
     Returns the grip environment (what would be placed in the grip env shell file).
 
     This is suitable to be used with "eval `grip env`"
     """
     names = ["env"]
-    command_options = {
-    }
-    def execute(self, prog, parser, command_name, options, args):
+    # command_options = {}
+    def execute(self, cmd:ParsedCommand) -> Optional[int]:
         self.get_grip_repo(ensure_configured=True)
         for (k,v) in self.grip_repo.grip_env_iter():
             print('%s=%s; export %s'%(k,shlex.quote(v),k))
             pass
-        pass
+        return 0
+    pass
 
+#f show_documentation
 from lib.verbose import TermColors
-def show_doc(doc, indent=0):
+def show_documentation(doc:Documentation, indent:int=0) -> None:
     nl = False
     for d in doc:
         if nl: print()
         if type(d)==tuple:
-            (n,v)=d
+            # d must be DocumentationHeadedContent = Tuple[str, List[DocumentationEntry]]
+            # Help typing by asserting this
+            de = cast(DocumentationHeadedContent, d)
+            (n,v)=de
             pre_heading  = "\n"+(" "*indent)+TermColors.bold+TermColors.underline
             post_heading = TermColors.plain
             print("%s%s%s"%(pre_heading,n,post_heading))
-            show_doc(v, indent+1)
+            show_documentation(v, indent+1)
             nl = False
             pass
         else:
-            print(d)
+            # d must be str
+            # Help typing by asserting this
+            ds = cast(str, d)
+            print(ds)
             nl = False
             pass
         pass
     pass
 
-class doc(lib.command.GripCommandBase):
+#c doc
+class doc(GripCommandBase):
     """
     Prints the documentation
     """
     names = ["doc"]
-    command_options = {
-    }
-    def execute(self, prog, parser, command_name, options, args):
-        def f(e):
+    # command_options = {}
+    def execute(self, cmd:ParsedCommand) -> Optional[int]:
+        def f(e:Exception) -> Tuple[str]:
             print("Warning: %s"%str(e))
-            e.grip_env.get_root().add_values({e.key:""})
+            ge = cast(lib.env.GripEnvValueError, e)
+            ge.grip_env.get_root().add_values({ge.key:""})
             return ("",)
         self.get_grip_repo(ensure_configured=False, error_handler=lib.env.GripEnvValueError.error_handler(f))
         grip_repo_doc = self.grip_repo.get_doc()
@@ -77,18 +96,19 @@ class doc(lib.command.GripCommandBase):
             print("This is an unconfigured grip repository, with a name of '%s'"%(self.grip_repo.get_name()))
             print("It supports the following configurations: %s"%(" ".join(self.grip_repo.get_configurations())))
             pass
-        show_doc(grip_repo_doc)
-        pass
+        show_documentation(grip_repo_doc)
+        return 0
+    pass
 
-class status(lib.command.GripCommandBase):
+#c status
+class status(GripCommandBase):
     """
     Get status
     """
     names = ["status"]
-    command_options = {
-    }
-    def execute(self, prog, parser, command_name, options, args):
+    # command_options = {}
+    def execute(self, cmd:ParsedCommand) -> Optional[int]:
         self.get_grip_repo(path=os.path.abspath(os.getcwd()))
         self.grip_repo.status()
-        pass
+        return 0
     pass

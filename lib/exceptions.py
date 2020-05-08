@@ -1,7 +1,8 @@
 from typing import Callable, Any, Optional
 
 ErrorFn      = Callable[[Exception],Any]
-ErrorHandler = Optional[Callable[...,Any]]
+# ErrorHandler = Optional[Callable[...,Any]]
+ErrorHandler = Optional[ErrorFn]
 
 class GripException(Exception):
     grip_type = "Undefined grip"

@@ -60,7 +60,7 @@ class Toplevel:
         return git_repo
     #f clone - classmethod to create an instance after a git clone
     @classmethod
-    def clone(cls, repo_url:str, branch:str, path:Optional[str]=None, dest:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None)-> 'Toplevel':
+    def clone(cls, repo_url:str, branch:Optional[str], path:Optional[str]=None, dest:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None, invocation:str="")-> 'Toplevel':
         if options is None: options=Options()
         if log is None: log = Log()
         dest_path = dest
@@ -73,7 +73,7 @@ class Toplevel:
                 pass
             pass
         repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path, options=options, log=log)
-        return cls(repo, options=options, log=log)
+        return cls(repo, options=options, log=log, invocation=invocation)
     #f __init__
     def __init__(self, git_repo:Optional[GitRepo]=None, path:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None, ensure_configured:bool=False, invocation:str="", error_handler:ErrorHandler=None):
         if options is None: options=Options()

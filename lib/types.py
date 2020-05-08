@@ -4,7 +4,8 @@ class PrettyPrinter(Protocol):
     def __call__(self, __acc:Any, __s:str, indent:int=0)->Any: ...
     pass
 
-DocumentationEntry = Union [ str, Tuple[str, List[Any] ] ]
+DocumentationHeadedContent = Tuple[str, List[Any] ] # where Any is DocumentationEntry really
+DocumentationEntry = Union [ str, DocumentationHeadedContent ]
 Documentation = List[ DocumentationEntry ]
 MakefileStrings = List[Tuple[str,str]]
 EnvDict = Dict[str,str]

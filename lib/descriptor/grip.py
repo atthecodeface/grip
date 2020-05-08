@@ -132,7 +132,7 @@ class Descriptor(object):
         try:
             r = toml.loads(s)
             pass
-        except toml.decoder.TomlDecodeError as e:
+        except toml.decoder.TomlDecodeError as e: # type:ignore
             raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
         return r
     #f read_toml_strings

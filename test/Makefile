@@ -9,13 +9,19 @@ test_lib:
 test_grip:
 	./test_grip.py
 
+PYTHON_SRCS =
+PYTHON_SRCS += lib/*/*py
+PYTHON_SRCS += lib/*.py
+PYTHON_SRCS += cmds/*.py
+PYTHON_SRCS += grip
+
 .PHONY:check_types
 check_types:
-	mypy lib/*/*py lib/*.py
+	mypy ${PYTHON_SRCS}
 
 .PHONY:check_types_strict
 check_types_strict:
-	mypy --strict lib/*/*py lib/*.py
+	mypy --strict ${PYTHON_SRCS}
 
 .PHONY:check_types_stubgen
 check_types_stubgen:

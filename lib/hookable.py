@@ -26,6 +26,14 @@ class Hookable:
             cls.hooks[r] += f
             pass
         pass
+    #f class_invoke_hooks
+    @classmethod
+    def class_invoke_hooks(self, hookname:str, **kwargs:Any) -> None:
+        if hookname not in self.hooks: return
+        for fn in self.hooks[hookname]:
+            fn(self, **kwargs)
+            pass
+        pass
     #f invoke_hooks
     def invoke_hooks(self, hookname:str, **kwargs:Any) -> None:
         if hookname not in self.hooks: return
