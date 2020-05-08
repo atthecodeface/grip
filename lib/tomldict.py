@@ -52,13 +52,13 @@ class TomlDictValues(object):
     """
     _other_attrs : List[str]
     _dict_class  : Type['TomlDict']
-    _parent      : 'TomlDictValues'
+    _parent      : Optional['TomlDictValues']
     #f is_value_instance - class method - determine if an object is a TomlDictValues
     @classmethod
     def is_value_instance(cls:Any, obj:Any) -> bool:
         return isinstance(obj,cls)
     #f __init__ - create TomlDictValues corresponding to a TomlDict
-    def __init__(self, dict_class:Type['TomlDict'], parent:'TomlDictValues') -> None:
+    def __init__(self, dict_class:Type['TomlDict'], parent:Optional['TomlDictValues']=None) -> None:
         self._dict_class = dict_class
         self._parent = parent
         self._other_attrs = []
@@ -74,6 +74,14 @@ class TomlDictValues(object):
     #f Get_other_attrs
     def Get_other_attrs(self) -> List[str]:
         return self._other_attrs
+    #f Has - determine if we have an attribute
+    def Has(self, a:str) -> bool:
+        return hasattr(self, a)
+    #f IsNone - determine if we don't have an attribute or it is None
+    def IsNone(self, a:str) -> bool:
+        if not hasattr(self, a): return True
+        if getattr(self,a) is None: return True
+        return False
     #f Get - get a value from its string name
     def Get(self, a:str) -> Any:
         return getattr(self, a)
@@ -211,18 +219,18 @@ class TomlDictParser(object):
         """
         def f(self:TomlDictValues, parent:Any, msg:str, values:Any) -> Any:
             if not isinstance(values,dict): raise TomlError(msg, "Expected dictionary but got '%s'"%(str(values)))
-            return TomlDictParser.from_dict(t, parent, msg, values)
+            return TomlDictParser.from_dict(t, msg, values, parent=parent)
         return f
     #f from_dict - staticmethod - get TomlDictValues instance that parses d with TomlDictParser class cls
     @staticmethod
-    def from_dict(cls:Type[TomlDict], handle:Any, msg:str, d:RawTomlDict) -> TomlDictValues:
-        values = TomlDictValues(dict_class=cls, parent=handle)
+    def from_dict(cls:Type[TomlDict], msg:str, d:RawTomlDict, parent:Optional[TomlDictValues]=None) -> TomlDictValues:
+        values = TomlDictValues(dict_class=cls, parent=parent)
         attrs = cls._toml_fixed_attrs()
         rtd = copy.deepcopy(d)
         for x in attrs:
             if x in rtd:
                 values_fn = getattr(cls,x)
-                setattr(values, x, values_fn(values, handle, "%s.%s"%(msg,x), rtd[x]))
+                setattr(values, x, values_fn(values, parent, "%s.%s"%(msg,x), rtd[x]))
                 del(rtd[x])
                 pass
             else:
@@ -230,7 +238,7 @@ class TomlDictParser(object):
             pass
         if cls.Wildcard is not None:
             for x in rtd:
-                v = cls.Wildcard(values, handle, "%s.%s"%(msg,x), rtd[x])
+                v = cls.Wildcard(values, parent, "%s.%s"%(msg,x), rtd[x])
                 values.Add_other_attr(x,v)
                 pass
             rtd = {}

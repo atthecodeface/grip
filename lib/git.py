@@ -212,6 +212,12 @@ class Repository(object):
             raise UserError("Failed to perform git clone - %s"%(e.cmd.error_output()))
             pass
         if bare: return cls(dest, git_url=repo_url, log=log)
+        (rc,std) = global_git_command(options=options, log=log, cwd=dest, cmd="rev-parse --verify --quiet %s^{commit}"%branch_upstream,
+                                      exception_on_error=False, include_rc=True)
+        if rc==0:
+            if log: log.add_entry_string("Already has branch '%s' - delete it before it causes trouble"%branch_upstream)
+            global_git_command(options=options, log=log, cwd=dest, cmd="branch --delete %s"%branch_upstream)
+            pass
         try:
             # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
             global_git_command(options=options, log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)

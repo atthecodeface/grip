@@ -169,7 +169,7 @@ class StateFile(object):
     #f read_toml_dict
     def read_toml_dict(self, toml_dict:RawTomlDict) -> None:
         self.raw_toml_dict = toml_dict
-        values = TomlDictParser.from_dict(GripStateTomlDict, self, "", self.raw_toml_dict)
+        values = TomlDictParser.from_dict(GripStateTomlDict, "", self.raw_toml_dict)
         self.build_from_values(values)
         pass
     #f read_toml_file

@@ -42,12 +42,8 @@ class ConfigFile(object):
         pass
     #f read_toml_file - read a config.toml file (should be a local configuration)
     def read_toml_file(self, grip_toml_filename:str) -> None:
-        try:
-            toml_dict = toml.load(grip_toml_filename)
-            return self.read_toml_dict(toml_dict)
-        except FileNotFoundError:
-            pass
-        pass
+        toml_dict = toml.load(grip_toml_filename)
+        return self.read_toml_dict(toml_dict)
     #f read_toml_string - test only, generate from a string
     def read_toml_string(self, grip_toml_string:str) -> None:
         """
@@ -57,7 +53,7 @@ class ConfigFile(object):
     #f read_toml_dict - parse a toml_dict and build the config from that
     def read_toml_dict(self, toml_dict:RawTomlDict) -> None:
         self.raw_toml_dict = toml_dict
-        values = TomlDictParser.from_dict(GripConfigTomlDict, self, "", self.raw_toml_dict)
+        values = TomlDictParser.from_dict(GripConfigTomlDict, "", self.raw_toml_dict)
         self.build_from_values(values)
         pass
     #f toml_dict - get dictionary of values for (e.g.) output to file

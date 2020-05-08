@@ -53,9 +53,14 @@ class FileSystem(object):
     """
     path : str
     #f __init__
-    def __init__(self) -> None:
-        self.tmp_dir = tempfile.TemporaryDirectory(suffix=".grip_test_dir")
-        self.path = self.tmp_dir.name
+    def __init__(self, use_dir:Optional[str]=None) -> None:
+        if use_dir is None:
+            self.tmp_dir = tempfile.TemporaryDirectory(suffix=".grip_test_dir")
+            self.path = self.tmp_dir.name
+            pass
+        else:
+            self.path = use_dir
+            pass
         pass
     #f cleanup
     def cleanup(self) -> None:
@@ -94,8 +99,19 @@ class FileSystem(object):
     #f All done
     pass
 
+#c Base loggable class
+class Loggable(object):
+    #f add_log_string
+    def add_log_string(self, s:str) -> None:
+        print(s)
+        return test_logger.add_entry_string(s)
+    #f log_flush
+    def log_flush(self) -> None:
+        return test_logger.tidy(reset=True)
+    pass
+
 #c Git repo building class
-class GitRepoBuild(object):
+class GitRepoBuild(Loggable):
     readme_text = """
     This is a simple test git repo
     """
@@ -144,13 +160,6 @@ class GitRepoBuild(object):
         self.add_log_string("Appending to file %s"%str([self.name]+paths))
         self.fs.append_to_file([self.name]+paths, **kwargs)
         pass
-    #f add_log_string
-    def add_log_string(self, s:str) -> None:
-        print(s)
-        return test_logger.add_entry_string(s)
-    #f log_flush
-    def log_flush(self) -> None:
-        return test_logger.tidy(reset=True)
     #f git_command
     def git_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cwd = self.path
@@ -195,9 +204,9 @@ class GripRepoBuild(GitRepoBuild):
     def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cwd = self.path
         if wd is not None: cwd = os.path.join(self.path, wd)
-        print("Test running grip command in wd '%s' of '%s'"%(cwd, cmd))
+        self.add_log_string("Test running grip command in wd '%s' of '%s'"%(cwd, cmd))
         return os_command(options=self.options,
-                          cmd="%s %s"%(self.grip_exec, cmd),
+                          cmd="%s --show-log --verbose %s"%(self.grip_exec, cmd),
                           cwd=cwd,
                           **kwargs)
 
@@ -206,6 +215,7 @@ class GripRepoBuild(GitRepoBuild):
 
 #c Basic grip test case
 class Test(unittest.TestCase):
+    #v class properties
     cls_fs : ClassVar[FileSystem]
     cls_d1      : ClassVar[GitRepoBuild]
     cls_d1_bare : ClassVar[GitRepoBuild]
@@ -213,6 +223,7 @@ class Test(unittest.TestCase):
     cls_d2_bare : ClassVar[GitRepoBuild]
     cls_g       : ClassVar[GripRepoBuild]
     cls_g_bare  : ClassVar[GitRepoBuild]
+    #v setUpClass - invoked for all tests to use
     @classmethod
     def setUpClass(cls) -> None:
         try:
@@ -228,6 +239,7 @@ class Test(unittest.TestCase):
             test_logger.tidy()
             raise
         pass
+    #v tearDownClass - invoked when all tests completed
     @classmethod
     def tearDownClass(cls) -> None:
         try:
@@ -237,6 +249,7 @@ class Test(unittest.TestCase):
             raise
         test_logger.tidy()
         pass
+    #f test_git_clone
     def test_git_clone(self) -> None:
         fs = FileSystem()
         d2 = GitRepoBuild("grip_repo_one_clone",fs,clone=self.cls_d1_bare.path)
@@ -245,6 +258,7 @@ class Test(unittest.TestCase):
         d2.git_command_allow_stderr("push", )
         fs.cleanup()
         pass
+    #f test_grip_interrogate
     def test_grip_interrogate(self) -> None:
         fs = FileSystem()
         g = GripRepoBuild("grip_repo_one_clone",fs,clone=self.cls_g_bare.path)
@@ -262,8 +276,9 @@ class Test(unittest.TestCase):
         self.assertEqual(grip_root, checkout_path, "Output of grip root and the actual checkout git path should match")
         fs.cleanup()
         pass
+    #f test_grip_configure
     def test_grip_configure(self) -> None:
-        fs = FileSystem()
+        fs = FileSystem() # "test_configure")
         g = GripRepoBuild("grip_repo_one_clone",fs,clone=self.cls_g_bare.path)
         g.grip_command("configure")
         #print(os_command(options=g.options, cmd="cat .grip/grip.toml", cwd=g.path))

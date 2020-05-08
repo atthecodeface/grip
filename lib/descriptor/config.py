@@ -51,12 +51,14 @@ class ConfigTomlDict(TomlDict):
 #c DescriptorValues - namespace that contains values from the TomlDict
 class DescriptorValues(object):
     repos: List[str] = []
-    env:   TomlDictValues
+    env:   TomlDictValues = None # type: ignore
     doc:   Optional[str]
     stage: TomlDictValues
     #f __init__
     def __init__(self, values:TomlDictValues):
         values.Set_obj_properties(self, values.Get_fixed_attrs())
+        if values.IsNone("env"):   self.env   = TomlDictValues(EnvTomlDict)
+        if values.IsNone("stage"): self.stage = TomlDictValues(StageConfigTomlDict)
         pass
 
 #c Descriptor - a set of GripRepoDesc's for a configuration of the grip repo

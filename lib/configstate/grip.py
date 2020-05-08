@@ -81,8 +81,10 @@ class GripConfigStateBase(object):
         try:
             self.config_file.read_toml_file(self.config_toml_filename)
             self._is_configured = True
-        except:
-            raise
+        except Exception as e:
+            self._is_configured = False
+            self.base.add_log_string("Failed to read file: '%s'"%(str(e)))
+            pass
         pass
     #f read_desc_state - Read grip.toml, state.toml
     def read_desc_state(self) -> None:
@@ -109,6 +111,17 @@ class GripConfigStateInitial(GripConfigStateBase):
     """
     An initial pass, getting initial_repo_desc, optional state_file, optional config_file
     """
+    config_name : str
+    #f choose_configuration
+    def choose_configuration(self, config_name:Optional[str]) -> str:
+        config = self.initial_repo_desc.select_config(config_name)
+        if config is None:
+            if config_name is None:
+                raise UserError("Could not select default grip config - bad configuration")
+            raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
+        self.config_name = config.name
+        self.config_file.set_config_name(self.config_name)
+        return self.config_name
     pass
 
 #c GripConfigStateUnconfigured

@@ -172,7 +172,7 @@ class Descriptor(object):
                     pass
                 pass
             pass
-        values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
+        values = TomlDictParser.from_dict(GripFileTomlDict, "", self.raw_toml_dict)
         # values.Prettyprint()
         values = cast(GripFileTomlDictValues, values)
         self.build_from_values(values)
@@ -182,7 +182,7 @@ class Descriptor(object):
         """
         Create the description and validate it from the grip_toml_string contents
         """
-        values = TomlDictParser.from_dict(GripFileTomlDict, self, "", self.raw_toml_dict)
+        values = TomlDictParser.from_dict(GripFileTomlDict, "", self.raw_toml_dict)
         values = cast(GripFileTomlDictValues, values)
         # values.Prettyprint()
         self.build_from_values(values)

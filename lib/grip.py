@@ -107,7 +107,9 @@ class Toplevel(GripBase):
                 if self.initial_config_state.config_file.config is not None:
                     base += "_" + self.initial_config_state.config_file.config
                     pass
-                self.set_branch_name("WIP__%s_%s"%(base, time_str))
+                branch_name = "WIP__%s_%s"%(base, time_str)
+                self.set_branch_name(branch_name)
+                self.verbose.message("New branch name '%s'"%(branch_name))
                 pass
             else:
                 self.set_branch_name(self.initial_config_state.config_file.branch)
@@ -169,15 +171,13 @@ class Toplevel(GripBase):
     def configure(self, config_name:Optional[str]=None) -> None:
         if self.is_configured():
             raise UserError("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
-        config = self.initial_config_state.initial_repo_desc.select_config(config_name)
-        if config is None:
-            if config_name is None: config_name = "<default config>"
-            raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
+        self.initial_config_state.choose_configuration(config_name)
+        self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
         self.configure_toplevel_repo()
         self.check_clone_permitted()
-        self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
         self.clone_subrepos()
         self.configured_config_state.read_desc()
+        self.create_subrepos()
         self._is_configured = True
         self.update_state()
         self.write_state()
@@ -209,14 +209,15 @@ class Toplevel(GripBase):
         has_upstream   = self.git_repo.has_cs(branch_name=branch_upstream)
         has_wip_branch = self.git_repo.has_cs(branch_name=self.branch_name)
         if has_upstream and has_wip_branch: return
-        if has_upstream:
-            raise Exception("Grip repository git repo has branch '%s' but not the WIP branch '%s' - try a proper clone"%(branch_upstream, self.branch_name))
-        if has_wip_branch:
-            raise Exception("Grip repository git repo does not have branch '%s' but *has* not the WIP branch '%s' - try a proper clone"%(branch_upstream, self.branch_name))
         cs = self.git_repo.get_cs(branch_head)
-        self.verbose.message("Setting branches '%s' and '%s' to point at current head"%(branch_upstream, self.branch_name))
-        self.git_repo.change_branch_ref(branch_name=branch_upstream, ref=cs)
-        self.git_repo.change_branch_ref(branch_name=self.branch_name, ref=cs)
+        if not has_upstream:
+            self.verbose.warning("Expected subrepo to already have upstream branch '%s'; will create one"%(branch_upstream))
+            self.git_repo.change_branch_ref(branch_name=branch_upstream, ref=cs)
+            pass
+        if not has_wip_branch:
+            self.verbose.message("Setting branches '%s' and '%s' to point at current head"%(branch_upstream, self.branch_name))
+            self.git_repo.change_branch_ref(branch_name=self.branch_name, ref=cs)
+            pass
         self.git_repo.set_upstream_of_branch(branch_name=branch_upstream, remote=remote)
         pass
     #f reconfigure
@@ -264,7 +265,6 @@ class Toplevel(GripBase):
                           options = self.options,
                           log = self.log )
             pass
-        self.create_subrepos()
         pass
     #f create_subrepos - create python objects that correspond to the checked-out subrepos
     def create_subrepos(self) -> None:
