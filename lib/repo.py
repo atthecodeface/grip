@@ -5,8 +5,8 @@ from .git import Repository as GitRepository
 from .descriptor import StageDependency as StageDependency
 from .descriptor import RepositoryDescriptor
 from .descriptor import GripDescriptor
-from .config.file import ConfigFile as GripRepoConfig
-from .state.file  import StateFile as GripRepoState
+from .configstate import ConfigFile as GripRepoConfig
+from .configstate import StateFile as GripRepoState
 from .workflow import Workflow
 from .log import Log
 from .verbose import Verbose

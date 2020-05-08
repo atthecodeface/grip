@@ -12,9 +12,9 @@ from .descriptor import StageDependency as StageDependency
 from .descriptor import RepositoryDescriptor
 from .descriptor import ConfigurationDescriptor
 from .descriptor import GripDescriptor as GripRepoDescriptor
-from .config.file import ConfigFile as GripConfig
-from .state.file import StateFile as GripState
-from .state.file import GripConfig as GripStateConfig
+from .configstate import ConfigFile as GripConfig
+from .configstate import StateFile as GripState
+from .configstate import StateFileConfig as GripStateConfig
 from .repo import Repository
 
 from .types import PrettyPrinter, Documentation, MakefileStrings, EnvDict
