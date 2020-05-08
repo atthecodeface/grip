@@ -15,8 +15,8 @@ branch_remote_of_upstream = "%s@{upstream}"%branch_upstream
 branch_head = "HEAD"
 
 #a Useful functions
-#f git_command
-def git_command(options:Optional[Options]=None, cmd:str="", **kwargs:Any) -> OSCommand.Result:
+#f global_git_command
+def global_git_command(options:Optional[Options]=None, cmd:str="", **kwargs:Any) -> OSCommand.Result:
     return os_command(options=options, cmd="git %s"%(cmd), **kwargs)
 
 #a Classes
@@ -140,7 +140,7 @@ class Repository(object):
 
     #f git_command
     def git_command(self, **kwargs:Any) -> str:
-        return cast(str,git_command(**kwargs))
+        return cast(str,self.git_command_result(**kwargs))
     #f __init__
     def __init__(self, path_str:Optional[str], git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
         """
@@ -174,6 +174,68 @@ class Repository(object):
         self.url = Url(git_url)
         self.upstream = self.get_branch_remote_and_merge(branch_upstream)
         pass
+    #f check_clone_permitted - check if can clone url to path
+    @classmethod
+    def check_clone_permitted(cls, repo_url:str, dest:str, branch:Optional[str], log:Optional[Log]=None) -> bool:
+        if branch is None: branch="<none>"
+        if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, dest))
+        if os.path.exists(dest): raise UserError("Cannot clone to %s as it already exists"%(dest))
+        dest_dir = os.path.dirname(dest)
+        if not os.path.exists(dest_dir): raise UserError("Cannot clone to %s as the parent directory does not exist"%(dest))
+        return True
+    #f clone - clone from a Git URL (of a particular branch to a destination directory)
+    @classmethod
+    def clone(cls, repo_url:str, new_branch_name:str, branch:Optional[str]=None, dest:Optional[str]=None, bare:bool=False, depth:Optional[int]=None, changeset:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None) -> 'Repository':
+        """
+        Clone a branch of a repo_url into a checkout directory
+        bare checkouts are used in testing only
+
+        # git clone --depth 1 --single-branch --branch <name> --no-checkout
+        # git checkout --detach <changeset>
+
+        """
+        url = Url(repo_url)
+        if dest is None: dest=url.repo_name
+        git_options = []
+        if branch is not None: git_options.append( "--branch %s"%branch )
+        if (bare is not None) and bare: git_options.append( "--bare") # For TEST only
+        if changeset is not None: git_options.append( "--no-checkout")
+        if depth is not None:   git_options.append( "--depth %s"%(depth))
+        if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
+        try:
+            git_output = global_git_command(options=options,
+                                     log=log,
+                                     cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest),
+                                     stderr_output_indicates_error=False)
+            pass
+        except OSCommandError as e:
+            raise UserError("Failed to perform git clone - %s"%(e.cmd.error_output()))
+            pass
+        if bare: return cls(dest, git_url=repo_url, log=log)
+        try:
+            # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
+            global_git_command(options=options, log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)
+            pass
+        except:
+            # If the branch move failed then just create the branch at this head
+            global_git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
+            pass
+        if changeset is None:
+            global_git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
+            pass
+        else:
+            try:
+                global_git_command(options=options, log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
+                pass
+            except:
+                raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
+            pass
+        git_output = global_git_command(options=options,
+                                 log=log,
+                                 cwd = dest,
+                                 cmd = "checkout %s" % new_branch_name,
+                                 stderr_output_indicates_error=False)
+        return cls(dest, git_url=repo_url, log=log, options=options)
     #f get_upstream - get Remote corresponding to the upstream
     def get_upstream(self) -> Optional[Remote]:
         return self.upstream
@@ -373,68 +435,6 @@ class Repository(object):
         """
         self.git_command(cmd="checkout %s"%(changeset), stderr_output_indicates_error=False)
         pass
-    #f check_clone_permitted - check if can clone url to path
-    @classmethod
-    def check_clone_permitted(cls, repo_url:str, dest:str, branch:Optional[str], log:Optional[Log]=None) -> bool:
-        if branch is None: branch="<none>"
-        if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, dest))
-        if os.path.exists(dest): raise UserError("Cannot clone to %s as it already exists"%(dest))
-        dest_dir = os.path.dirname(dest)
-        if not os.path.exists(dest_dir): raise UserError("Cannot clone to %s as the parent directory does not exist"%(dest))
-        return True
-    #f clone - clone from a Git URL (of a particular branch to a destination directory)
-    @classmethod
-    def clone(cls, repo_url:str, new_branch_name:str, branch:Optional[str]=None, dest:Optional[str]=None, bare:bool=False, depth:Optional[int]=None, changeset:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None) -> 'Repository':
-        """
-        Clone a branch of a repo_url into a checkout directory
-        bare checkouts are used in testing only
-
-        # git clone --depth 1 --single-branch --branch <name> --no-checkout
-        # git checkout --detach <changeset>
-
-        """
-        url = Url(repo_url)
-        if dest is None: dest=url.repo_name
-        git_options = []
-        if branch is not None: git_options.append( "--branch %s"%branch )
-        if (bare is not None) and bare: git_options.append( "--bare") # For TEST only
-        if changeset is not None: git_options.append( "--no-checkout")
-        if depth is not None:   git_options.append( "--depth %s"%(depth))
-        if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
-        try:
-            git_output = git_command(options=options,
-                                     log=log,
-                                     cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest),
-                                     stderr_output_indicates_error=False)
-            pass
-        except OSCommandError as e:
-            raise UserError("Failed to perform git clone - %s"%(e.cmd.error_output()))
-            pass
-        try:
-            # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
-            git_command(options=options, log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)
-            pass
-        except:
-            # If the branch move failed then just create the branch at this head
-            git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
-            pass
-        if changeset is None:
-            git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
-            pass
-        else:
-            try:
-                git_command(options=options, log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
-                pass
-            except:
-                raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
-            pass
-        git_output = git_command(options=options,
-                                 log=log,
-                                 cwd = dest,
-                                 cmd = "checkout %s" % new_branch_name,
-                                 stderr_output_indicates_error=False)
-        pass
-        return cls(dest, git_url=repo_url, log=log)
     #f filename - get filename of full path relative to repo in file system
     def filename(self, paths:Union[List[str],str]=[]) -> str:
         if type(paths)!=list:

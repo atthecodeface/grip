@@ -1,19 +1,26 @@
-test_all: test_lib test_grip
+GRIP_DIR=$(abspath $(CURDIR))
+
+TESTS_DIR = ${GRIP_DIR}/test
+
+TESTS_PYTHONPATH = ${GRIP_DIR}:${PYTHONPATH}
+TESTS_ENV = PYTHONPATH=${TESTS_PYTHONPATH} GRIP_DIR=${GRIP_DIR}
+test_all: check_types_strict test_grip
 
 .PHONY:test_lib
 test_lib:
-	./test_lib.py
+	${TESTS_ENV} ${TESTS_DIR}/test_lib.py
 
 
 .PHONY:test_grip
 test_grip:
-	./test_grip.py
+	${TESTS_ENV} ${TESTS_DIR}/test_grip.py
 
 PYTHON_SRCS =
-PYTHON_SRCS += lib/*/*py
-PYTHON_SRCS += lib/*.py
-PYTHON_SRCS += cmds/*.py
-PYTHON_SRCS += grip
+PYTHON_SRCS += ${GRIP_DIR}/lib/*/*py
+PYTHON_SRCS += ${GRIP_DIR}/lib/*.py
+PYTHON_SRCS += ${GRIP_DIR}/cmds/*.py
+PYTHON_SRCS += ${GRIP_DIR}/grip
+PYTHON_SRCS += ${GRIP_DIR}/test/test_grip.py
 
 .PHONY:check_types
 check_types:

@@ -7,47 +7,76 @@ Unittest harness to run test cases from lib directory
 import os, re, inspect, sys, unittest
 import tempfile
 
-grip_test_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-grip_dir      = os.path.dirname(grip_test_dir)
-sys.path.append(grip_dir)
-
-from lib.git       import GitRepo, git_command
-from lib.oscommand import command as os_command
+from lib.oscommand import command as lib_os_command
+from lib.log       import Log
+from lib.options   import Options
+from lib.git       import Repository as GitRepo
 from types import SimpleNamespace
 
+from typing import List, Callable, Optional, Any, ClassVar, cast
+def os_command(options:Options, **kwargs:Any) -> str : return cast(str,lib_os_command(options,**kwargs))
+ContentFn = Optional[Callable[...,Any]]
+PathList = List[str]
+
+grip_dir      = os.environ["GRIP_DIR"]
+sys.path.append(grip_dir)
+
 #a Test classes
+#c TestLog class
+class TestLog(Log):
+    def __init__(self) -> None:
+        Log.__init__(self)
+        self.filename = "test.log"
+        with open(self.filename,"w") as f: pass
+        pass
+    #f log_to_logfile
+    def log_to_logfile(self) -> None:
+        """
+        Invoked to append the log to the local logfile
+        """
+        print("Tidying logfile")
+        with open(self.filename,"a") as f:
+            print("",file=f)
+            print("*"*80,file=f)
+            self.dump(f)
+            pass
+        pass
+    pass
+test_logger = TestLog()
+test_logger.set_tidy(test_logger.log_to_logfile)
+
 #c 'file system' class
 class FileSystem(object):
     """
     A class for tests to use as a filesystem - include methods such as 'make_dir', 'create_file', and 'open'
     The class generates a temp directory which should be removed by calling 'cleanup'
     """
-    tmp_dir = None
+    path : str
     #f __init__
-    def __init__(self):
+    def __init__(self) -> None:
         self.tmp_dir = tempfile.TemporaryDirectory(suffix=".grip_test_dir")
         self.path = self.tmp_dir.name
         pass
     #f cleanup
-    def cleanup(self):
-        if self.tmp_dir is not None:
+    def cleanup(self) -> None:
+        if hasattr(self,"tmp_dir"):
             self.tmp_dir.cleanup()
-            self.tmp_dir = None
-            self.path = None
+            del(self.tmp_dir)
+            del(self.path)
             pass
         pass
     #f abspath
-    def abspath(self, paths):
+    def abspath(self, paths:PathList) -> str:
         path = self.path
         for p in paths: path=os.path.join(path, p)
         return path
     #f make_dir
-    def make_dir(self, paths):
+    def make_dir(self, paths:PathList, **kwargs:Any) -> None:
         path = self.abspath(paths)
         os.mkdir(path)
         pass
     #f create_file
-    def create_file(self, paths, content_fn=None, content=None):
+    def create_file(self, paths:PathList, content_fn:ContentFn=None, content:Optional[str]=None) -> None:
         path = self.abspath(paths)
         with open(path,"w") as f:
             if content is not None: f.write(content)
@@ -55,7 +84,7 @@ class FileSystem(object):
             pass
         pass
     #f append_to_file
-    def append_to_file(self, paths, content_fn=None, content=None):
+    def append_to_file(self, paths:PathList, content_fn:ContentFn=None, content:Optional[str]=None) -> None:
         path = self.abspath(paths)
         with open(path,"w+") as f:
             if content is not None: f.write(content)
@@ -71,11 +100,11 @@ class GitRepoBuild(object):
     This is a simple test git repo
     """
     #f __init__
-    def __init__(self, name, fs, parent_dirs=[], clone=None, bare=False, init_content_fn=None):
+    def __init__(self, name:str, fs:FileSystem, parent_dirs:List[str]=[], clone:Optional[str]=None, bare:bool=False, init_content_fn:ContentFn=None, branch_name:str="master") -> None:
         self.name = name
         self.path = fs.abspath(parent_dirs+[name])
         self.fs = fs
-        self.options = SimpleNamespace()
+        self.options = Options()
         self.options.verbose = False
         if clone is None:
             self.fs.make_dir([self.name])
@@ -88,38 +117,48 @@ class GitRepoBuild(object):
                 self.git_command(cmd="add Readme.txt")
                 pass
             self.git_command(cmd="commit -m Init -a")
-            self.git_repo = GitRepo(path=self.path, permit_no_remote=True)
+            self.git_repo = GitRepo(log=test_logger, path_str=self.path, permit_no_remote=True)
             pass
         else:
-            self.git_repo = GitRepo.clone(self.options,repo_url=clone,dest=self.path, bare=bare)
+            self.git_repo = GitRepo.clone(log=test_logger, options=self.options, repo_url=clone, dest=self.path, bare=bare, new_branch_name=branch_name)
+            if not bare:
+                upstream =self.git_repo.get_upstream()
+                if upstream is not None: self.git_repo.set_upstream_of_branch(branch_name, upstream)
             pass
         pass
     #f bare_clone
-    def bare_clone(self):
+    def bare_clone(self) -> 'GitRepoBuild':
         return  self.__class__("%s.git"%(self.name),self.fs, clone=self.path, bare=True)
     #f make_dir
-    def make_dir(self, paths, *args, **kwargs):
-        print("Making directory %s"%str([self.name]+paths))
-        self.fs.make_dir([self.name]+paths, *args, **kwargs)
+    def make_dir(self, paths:PathList, **kwargs:Any) -> None:
+        self.add_log_string("Making directory %s"%str([self.name]+paths))
+        self.fs.make_dir([self.name]+paths, **kwargs)
         pass
     #f create_file
-    def create_file(self, paths, *args, **kwargs):
-        print("Creating file %s"%str([self.name]+paths))
-        self.fs.create_file([self.name]+paths, *args, **kwargs)
+    def create_file(self, paths:PathList, **kwargs:Any) -> None:
+        self.add_log_string("Creating file %s"%str([self.name]+paths))
+        self.fs.create_file([self.name]+paths, **kwargs)
         pass
     #f append_to_file
-    def append_to_file(self, paths, *args, **kwargs):
-        print("Appending to file %s"%str([self.name]+paths))
-        self.fs.append_to_file([self.name]+paths, *args, **kwargs)
+    def append_to_file(self, paths:PathList, **kwargs:Any) -> None:
+        self.add_log_string("Appending to file %s"%str([self.name]+paths))
+        self.fs.append_to_file([self.name]+paths, **kwargs)
         pass
+    #f add_log_string
+    def add_log_string(self, s:str) -> None:
+        print(s)
+        return test_logger.add_entry_string(s)
+    #f log_flush
+    def log_flush(self) -> None:
+        return test_logger.tidy(reset=True)
     #f git_command
-    def git_command(self, cmd, wd=None, **kwargs):
+    def git_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cwd = self.path
         if wd is not None: cwd = os.path.join(self.path, wd)
-        print("Test running git command in wd '%s' of '%s'"%(cwd, cmd))
-        return git_command(self.options, cmd=cmd, cwd=cwd, **kwargs)
+        self.add_log_string("Test running git command in wd '%s' of '%s'"%(cwd, cmd))
+        return os_command(self.options, cmd="git %s"%cmd, cwd=cwd, log=test_logger, **kwargs)
     #f git_command_allow_stderr
-    def git_command_allow_stderr(self, cmd, **kwargs):
+    def git_command_allow_stderr(self, cmd:str, **kwargs:Any) -> str:
         return self.git_command(cmd=cmd, stderr_output_indicates_error=False, **kwargs)
     pass
 
@@ -141,19 +180,19 @@ class GripRepoBuild(GitRepoBuild):
     d2 = {{ url="{fs_path}/d_2.git", branch="master", path="%D2ENV%" }}
     """
     #f __init__
-    def __init__(self, name, fs, **kwargs):
+    def __init__(self, name:str, fs:FileSystem, **kwargs:Any) -> None:
         global grip_dir
         GitRepoBuild.__init__(self, name, fs, init_content_fn=self.init_content, **kwargs)
         self.grip_exec = "%s/grip"%(grip_dir)
         pass
     #f init_content
-    def init_content(self, git_repo):
+    def init_content(self, git_repo:GitRepoBuild) -> None:
         git_repo.make_dir([".grip"])
         git_repo.create_file([".grip","grip.toml"], content=self.grip_toml.format(fs_path=self.fs.path))
         git_repo.git_command(wd=".grip", cmd="add grip.toml")
         pass
     #f grip_command
-    def grip_command(self, cmd, wd=None, **kwargs):
+    def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cwd = self.path
         if wd is not None: cwd = os.path.join(self.path, wd)
         print("Test running grip command in wd '%s' of '%s'"%(cwd, cmd))
@@ -165,24 +204,40 @@ class GripRepoBuild(GitRepoBuild):
         pass
     pass
 
-#c Basic gript test case
+#c Basic grip test case
 class Test(unittest.TestCase):
+    cls_fs : ClassVar[FileSystem]
+    cls_d1      : ClassVar[GitRepoBuild]
+    cls_d1_bare : ClassVar[GitRepoBuild]
+    cls_d2      : ClassVar[GitRepoBuild]
+    cls_d2_bare : ClassVar[GitRepoBuild]
+    cls_g       : ClassVar[GripRepoBuild]
+    cls_g_bare  : ClassVar[GitRepoBuild]
     @classmethod
-    def setUpClass(cls):
-        fs = FileSystem()
-        cls.cls_fs = fs
-        cls.cls_d1       = GitRepoBuild("d_1",fs,[])
-        cls.cls_d1_bare  = cls.cls_d1.bare_clone()
-        cls.cls_d2       = GitRepoBuild("d_2",fs,[])
-        cls.cls_d2_bare  = cls.cls_d2.bare_clone()
-        cls.cls_g       = GripRepoBuild("grip_1",fs)
-        cls.cls_g_bare  = cls.cls_g.bare_clone()
+    def setUpClass(cls) -> None:
+        try:
+            fs = FileSystem()
+            cls.cls_fs = fs
+            cls.cls_d1       = GitRepoBuild("d_1",fs,[])
+            cls.cls_d1_bare  = cls.cls_d1.bare_clone()
+            cls.cls_d2       = GitRepoBuild("d_2",fs,[])
+            cls.cls_d2_bare  = cls.cls_d2.bare_clone()
+            cls.cls_g       = GripRepoBuild("grip_1",fs)
+            cls.cls_g_bare  = cls.cls_g.bare_clone()
+        except:
+            test_logger.tidy()
+            raise
         pass
     @classmethod
-    def tearDownClass(cls):
-        cls.cls_fs.cleanup()
+    def tearDownClass(cls) -> None:
+        try:
+            cls.cls_fs.cleanup()
+        except:
+            test_logger.tidy()
+            raise
+        test_logger.tidy()
         pass
-    def test_git_clone(self):
+    def test_git_clone(self) -> None:
         fs = FileSystem()
         d2 = GitRepoBuild("grip_repo_one_clone",fs,clone=self.cls_d1_bare.path)
         d2.append_to_file(["Readme.txt"], content="Appended text")
@@ -190,7 +245,7 @@ class Test(unittest.TestCase):
         d2.git_command_allow_stderr("push", )
         fs.cleanup()
         pass
-    def test_grip_interrogate(self):
+    def test_grip_interrogate(self) -> None:
         fs = FileSystem()
         g = GripRepoBuild("grip_repo_one_clone",fs,clone=self.cls_g_bare.path)
         g.grip_command("configure")
@@ -207,7 +262,7 @@ class Test(unittest.TestCase):
         self.assertEqual(grip_root, checkout_path, "Output of grip root and the actual checkout git path should match")
         fs.cleanup()
         pass
-    def test_grip_configure(self):
+    def test_grip_configure(self) -> None:
         fs = FileSystem()
         g = GripRepoBuild("grip_repo_one_clone",fs,clone=self.cls_g_bare.path)
         g.grip_command("configure")

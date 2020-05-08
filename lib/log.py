@@ -15,6 +15,10 @@ class Log:
         self.entries = []
         self.tidy_fn = None
         pass
+    #f reset
+    def reset(self) -> None:
+        self.entries = []
+        pass
     #f add_entry
     def add_entry(self, log_fn:T, **kwargs:Any) -> None:
         self.entries.append((log_fn,kwargs))
@@ -29,8 +33,9 @@ class Log:
         self.tidy_fn = tidy_fn
         pass
     #f tidy
-    def tidy(self) -> None:
+    def tidy(self, reset:bool=True) -> None:
         if self.tidy_fn: self.tidy_fn()
+        if reset: self.reset()
         pass
     #f iter - iterate over entries
     def iter(self) -> Iterable[Entry]:
