@@ -23,12 +23,10 @@ class GripBase:
     log         : Log
     options     : Options
     verbose     : Verbose
-    git_repo    : Optional[GitRepository]
+    git_repo    : GitRepository
     branch_name : Optional[str]
     #f __init__
-    def __init__(self, options:Optional[Options]=None, log:Optional[Log]=None, git_repo:Optional[GitRepository]=None, branch_name:Optional[str]=None):
-        if options is None: options=Options()
-        if log is None: log = Log()
+    def __init__(self, options:Options, log:Log, git_repo:GitRepository, branch_name:Optional[str]=None):
         self.log=log
         self.options=options
         self.verbose=options.get_verbose_fn()
@@ -71,10 +69,6 @@ class GripBase:
         """
         assert self.branch_name is not None
         return self.branch_name
-    #f set_git_repo
-    def set_git_repo(self, git_repo:GitRepository) -> None:
-        self.git_repo = git_repo
-        pass
     #f get_git_repo - get git repo
     def get_git_repo(self) -> GitRepository:
         assert self.git_repo is not None

@@ -14,6 +14,7 @@ sys.path.append(grip_dir)
 from lib.git       import GitRepo, git_command
 from lib.oscommand import command as os_command
 from types import SimpleNamespace
+
 #a Test classes
 #c 'file system' class
 class FileSystem(object):
@@ -160,7 +161,7 @@ class GripRepoBuild(GitRepoBuild):
                           cmd="%s %s"%(self.grip_exec, cmd),
                           cwd=cwd,
                           **kwargs)
-        
+
         pass
     pass
 

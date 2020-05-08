@@ -12,10 +12,11 @@ from .git import Url as GitUrl
 from .descriptor import StageDependency as StageDependency
 from .descriptor import RepositoryDescriptor
 from .descriptor import ConfigurationDescriptor
-from .descriptor import GripDescriptor as GripRepoDescriptor
+from .descriptor import GripDescriptor as GripDescriptor
 from .configstate import ConfigFile as GripConfig
 from .configstate import StateFile as GripState
 from .configstate import StateFileConfig as GripStateConfig
+from .configstate import GripConfigStateInitial, GripConfigStateConfigured
 from .repo import Repository
 
 from .types import PrettyPrinter, Documentation, MakefileStrings, EnvDict
@@ -28,31 +29,21 @@ class GripRepository(Repository):
 #a Toplevel grip repository class - this describes/contains the whole thing
 #c Toplevel class
 class Toplevel(GripBase):
-    #v Static properties
-    grip_dir_name = ".grip"
-    grip_toml_filename   = "grip.toml"
-    state_toml_filename  = "state.toml"
-    config_toml_filename = "local.config.toml"
-    grip_env_filename    = "local.env.sh"
-    grip_log_filename    = "local.log"
-    makefile_stamps_dirname = "local.makefile_stamps"
-    grip_makefile_filename = "local.grip_makefile"
-    grip_makefile_env_filename = "local.grip_makefile.env"
     #v Instance properties
-    log : Log
-    options : Options
-    verbose : Verbose
     invocation : str
-    git_repo : GitRepo
-    repo_desc:   GripRepoDescriptor
-    repo_desc_config : Optional[ConfigurationDescriptor]
-    repo_config      : Optional[GripConfig]
-    repo_state   : GripState
-    config_state : GripStateConfig
-    grip_git_url : Optional[GitUrl]
+    # repo_desc:   GripRepoDescriptor
+    # repo_desc_config : Optional[ConfigurationDescriptor] - configured_config_state.config_desc
+    # repo_config      : Optional[GripConfig]
+    # repo_state   : GripState
+    # config_state : GripStateConfig
+    # grip_git_url : Optional[GitUrl]
+    intial_config_state     : GripConfigStateInitial
+    configured_config_state : GripConfigStateConfigured
+    repo_instance_tree      : GripRepository
+    _is_configured : bool
     #f find_git_repo_of_grip_root
     @classmethod
-    def find_git_repo_of_grip_root(cls, path:Optional[str], options:Optional[Options]=None, log:Optional[Log]=None) -> GitRepo:
+    def find_git_repo_of_grip_root(cls, path:Optional[str], options:Options, log:Log) -> GitRepo:
         git_repo = GitRepo(path, permit_no_remote=True, options=options, log=log)
         path = git_repo.get_path()
         if not os.path.isdir(os.path.join(path,".grip")):
@@ -73,16 +64,13 @@ class Toplevel(GripBase):
                 dest_path = path
                 pass
             pass
-        repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path, options=options, log=log)
-        return cls(repo, options=options, log=log, invocation=invocation)
+        git_repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path, options=options, log=log)
+        return cls(git_repo=git_repo, options=options, log=log, invocation=invocation)
     #f __init__
-    def __init__(self, git_repo:Optional[GitRepo]=None, path:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None, ensure_configured:bool=False, invocation:str="", error_handler:ErrorHandler=None):
-        GripBase.__init__(self, options=options, log=log, git_repo=None, branch_name=None)
-        self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
-        self.log.add_entry_string(self.invocation)
+    def __init__(self, options:Options, log:Log, git_repo:Optional[GitRepo]=None, path:Optional[str]=None, ensure_configured:bool=False, invocation:str="", error_handler:ErrorHandler=None):
         if git_repo is None:
             try:
-                git_repo = Toplevel.find_git_repo_of_grip_root(path, options=self.options, log=self.log)
+                git_repo = Toplevel.find_git_repo_of_grip_root(path, options=options, log=log)
                 pass
             except Exception as e:
                 print(str(e))
@@ -91,19 +79,20 @@ class Toplevel(GripBase):
             pass
         if git_repo is None:
             raise NotGripError("Not within a git repository, so not within a grip repository either")
-        self.set_git_repo(git_repo)
-        self.repo_config      = None
-        self.repo_desc_config = None
-        self.read_desc_state_config(use_current_config=True, error_handler=error_handler)
-        if ensure_configured:
-            if self.repo_desc_config is None:
-                raise ConfigurationError("Unconfigured (or misconfigured) grip repository - has this grip repo been configured yet?")
+        GripBase.__init__(self, options=options, log=log, git_repo=git_repo, branch_name=None)
+        self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
+        self.log.add_entry_string(self.invocation)
+        self.initial_config_state = GripConfigStateInitial(self)
+        self.initial_config_state.read_desc_state()
+        self._is_configured = False
+        if self.initial_config_state.is_configured():
+            self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
+            self.configured_config_state.read_desc(error_handler=error_handler)
+            self._is_configured = True
             pass
-        self.grip_git_url = None
-        if self.grip_git_url is None:      self.grip_git_url = git_repo.get_git_url()
-        if self.grip_git_url is not None:
-            self.repo_desc.resolve_git_urls(self.grip_git_url)
-            pass
+        if ensure_configured and not self._is_configured:
+            raise Exception("Die:ensure_configured and not self._is_configured:")
+        self.make_branch_name()
         pass
     #f make_branch_name
     def make_branch_name(self) -> None:
@@ -111,126 +100,49 @@ class Toplevel(GripBase):
         Set branch name; if not configured, then generate a new name
         If configured then use the branch name in the local config state
         """
-        if self.repo_config is not None:
-            assert self.repo_config.branch is not None
-            self.set_branch_name(self.repo_config.branch)
-            pass
         if self.branch_name is None:
-            time_str = time.strftime("%Y_%m_%d_%H_%M_%S")
-            base = self.repo_desc.get_name()
-            if self.repo_config is not None and self.repo_config.config is not None:
-                base += "_" + self.repo_config.config
+            if self.initial_config_state.config_file.branch is None:
+                time_str = time.strftime("%Y_%m_%d_%H_%M_%S")
+                base = self.initial_config_state.initial_repo_desc.get_name()
+                if self.initial_config_state.config_file.config is not None:
+                    base += "_" + self.initial_config_state.config_file.config
+                    pass
+                self.set_branch_name("WIP__%s_%s"%(base, time_str))
                 pass
-            self.set_branch_name("WIP__%s_%s"%(base, time_str))
-            pass
-        pass
-    #f read_desc_state_config - Read grip.toml, state.toml, local.config.toml
-    def read_desc_state_config(self, use_current_config:bool=False, error_handler:ErrorHandler=None) -> None:
-        """
-        Read the .grip/grip.toml grip description file, the
-        .grip/state.toml grip state file, and any
-        .grip/local.config.toml file.
-
-        If use_current_config is True then first read the grip description solely from .grip/grip.toml
-        and then read the state and config.
-        Then restart reading the .grip/grip.toml and any <subrepo>/grip.toml files as the grip description,
-        then rebuild state and config
-        """
-        if use_current_config:
-            self.read_desc_state_config(use_current_config=False, error_handler=error_handler)
-            pass
-        subrepos : List[RepositoryDescriptor] = []
-        if use_current_config and (self.repo_desc_config is not None):
-            for r in self.repo_desc_config.iter_repos():
-                subrepos.append(r)
+            else:
+                self.set_branch_name(self.initial_config_state.config_file.branch)
                 pass
-            pass
-        self.read_desc(subrepos=subrepos, validate=use_current_config, error_handler=error_handler)
-        self.read_state(error_handler=error_handler)
-        self.read_config(error_handler=error_handler)
-        pass
-    #f read_desc - Create GripRepoDescriptor and read grip.toml (and those of subrepos)
-    def read_desc(self, subrepos:List[RepositoryDescriptor]=[], validate:bool=True, error_handler:ErrorHandler=None) -> None:
-        """
-        subrepos is a list of GitRepoDesc whose 'grip.toml' files should also be read if possible
-        """
-        self.add_log_string("Reading grip.toml file '%s'"%self.grip_path(self.grip_toml_filename))
-        self.repo_desc = GripRepoDescriptor(git_repo=self.git_repo)
-        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepo_descs=subrepos, error_handler=error_handler)
-        if validate:
-            print("Validating and resolving")
-            self.repo_desc.validate(error_handler=error_handler)
-            self.repo_desc.resolve(error_handler=error_handler)
-            if self.repo_desc.is_logging_enabled() and self.log:
-                self.log.set_tidy(self.log_to_logfile)
-                pass
-            self.make_branch_name()
-            pass
-        else:
-            print("Resolving")
-            self.repo_desc.resolve(error_handler=error_handler)
-            pass
-        pass
-    #f read_state - Read state.toml
-    def read_state(self, error_handler:ErrorHandler=None) -> None:
-        self.add_log_string("Reading state file '%s'"%self.grip_path(self.state_toml_filename))
-        self.repo_state = GripState()
-        self.repo_state.read_toml_file(self.grip_path(self.state_toml_filename))
-        pass
-    #f read_config - Create GripConfig and read local.config.toml; set self.repo_config.config (GripConfig of config)
-    def read_config(self, error_handler:ErrorHandler=None) -> None:
-        self.add_log_string("Reading local configuration state file '%s'"%self.grip_path(self.config_toml_filename))
-        self.repo_desc_config = None
-        self.repo_config = GripConfig()
-        self.repo_config.read_toml_file(self.grip_path(self.config_toml_filename))
-        if self.repo_config.config is not None:
-            config_name = self.repo_config.config
-            config = self.repo_desc.select_config(config_name)
-            if config is None: raise ConfigurationError("Read config.toml indicating grip configuration is '%s' but that is not in the grip.toml description"%config_name)
-            self.repo_desc_config = config
-            config_state = self.repo_state.select_config(self.repo_desc_config.name, create_if_new=True)
-            # config_state cannot be none if we use create_if_new - this fixes type checking
-            assert config_state is not None
-            self.config_state = config_state
             pass
         pass
     #f update_state
     def update_state(self) -> None:
-        # Should only update_state after create_subrepos
-        # assert self.repo_instance_tree exists...
-        for r in self.repo_instance_tree.iter_subrepos():
-            self.config_state.update_repo_state(r.name, changeset=r.get_cs())
-            pass
+        self.configured_config_state.update_state(self.repo_instance_tree)
         pass
     #f write_state
     def write_state(self) -> None:
-        self.add_log_string("Writing state file '%s'"%self.grip_path(self.state_toml_filename))
-        self.repo_state.write_toml_file(self.grip_path(self.state_toml_filename))
+        self.configured_config_state.write_state()
         pass
     #f update_config
     def update_config(self) -> None:
-        assert self.repo_config is not None
-        assert self.repo_desc_config is not None
-        assert self.grip_git_url is not None
-        assert self.branch_name is not None
-        self.repo_config.set_config_name(self.repo_desc_config.name)
-        self.repo_config.set_grip_git_url(self.grip_git_url.as_string())
-        self.repo_config.set_branch_name(self.branch_name)
+        self.configured_config_state.update_config()
         pass
     #f write_config
     def write_config(self) -> None:
-        assert self.repo_config is not None
-        self.add_log_string("Writing local configuration state file '%s'"%self.grip_path(self.config_toml_filename))
-        self.repo_config.write_toml_file(self.grip_path(self.config_toml_filename))
+        self.configured_config_state.write_config()
         pass
-    #f debug_repodesc
-    def debug_repodesc(self) -> str:
+    #f get_repo_desc
+    def get_repo_desc(self) -> GripDescriptor:
+        if self.is_configured():
+            return self.configured_config_state.full_repo_desc
+        return self.initial_config_state.initial_repo_desc
+    #f debug_repo_desc
+    def debug_repo_desc(self) -> str:
         def p(acc:str, s:str, indent:int=0) -> str:
             return acc+"\n"+("  "*indent)+s
-        return cast(str,self.repo_desc.prettyprint("",p))
+        return cast(str,self.get_repo_desc().prettyprint("",p))
     #f get_name
     def get_name(self) -> str:
-        return self.repo_desc.get_name()
+        return self.get_repo_desc().get_name()
     #f get_doc
     def get_doc(self) -> Documentation:
         """
@@ -240,36 +152,33 @@ class Toplevel(GripBase):
         List should always start with (None, repo.doc) if there is repo doc
         """
         if self.is_configured():
-            assert self.repo_desc_config is not None # because it is configured
-            return self.repo_desc_config.get_doc()
-        return self.repo_desc.get_doc()
+            return self.configured_config_state.config_desc.get_doc()
+        return self.initial_config_state.initial_repo_desc.get_doc()
     #f get_configurations
     def get_configurations(self) -> List[str]:
-        return self.repo_desc.get_configs()
+        return self.get_repo_desc().get_configs()
     #f is_configured
     def is_configured(self) -> bool:
-        return self.repo_desc_config is not None
+        return self._is_configured
     #f get_config_name
     def get_config_name(self) -> str:
         if self.is_configured():
-            assert self.repo_desc_config is not None # because it is configured
-            return self.repo_desc_config.get_name()
+            return self.configured_config_state.config_name
         raise Exception("Repo is not configured so has no config name")
     #f configure
     def configure(self, config_name:Optional[str]=None) -> None:
-        if self.repo_desc_config is not None:
+        if self.is_configured():
             raise UserError("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
-        config = self.repo_desc.select_config(config_name)
-        if config is None: raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
-        # print(config)
-        self.repo_desc_config = config
+        config = self.initial_config_state.initial_repo_desc.select_config(config_name)
+        if config is None:
+            if config_name is None: config_name = "<default config>"
+            raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
         self.configure_toplevel_repo()
         self.check_clone_permitted()
-        config_state = self.repo_state.select_config(self.repo_desc_config.name, create_if_new=True)
-        # config_state cannot be none if we use create_if_new - this fixes type checking
-        assert config_state is not None
-        self.config_state = config_state
+        self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
         self.clone_subrepos()
+        self.configured_config_state.read_desc()
+        self._is_configured = True
         self.update_state()
         self.write_state()
         self.update_config()
@@ -312,11 +221,12 @@ class Toplevel(GripBase):
         pass
     #f reconfigure
     def reconfigure(self) -> None:
-        if self.repo_desc_config is None:
+        if not self.is_configured():
             raise Exception("Grip repository is not properly configured - cannot reconfigure unless it has been")
         self.create_subrepos()
-        for r in self.repo_desc_config.iter_repos():
-            r_state = self.config_state.get_repo_state(self.repo_desc_config, r.name)
+
+        for r in self.configured_config_state.config_desc.iter_repos():
+            r_state = self.configured_config_state.state_file_config.get_repo_state(self.configured_config_state.config_desc, r.name)
         self.update_state()
         self.write_state()
         self.update_config()
@@ -326,9 +236,7 @@ class Toplevel(GripBase):
         pass
     #f check_clone_permitted
     def check_clone_permitted(self) -> None:
-        assert self.repo_desc_config is not None
-        for r in self.repo_desc_config.iter_repos():
-            # r : RepositoryDescriptor
+        for r in self.configured_config_state.config_desc.iter_repos():
             dest = self.git_repo.filename([r.path])
             if not GitRepo.check_clone_permitted(r.url, branch=r.branch, dest=dest, log=self.log):
                 raise UserError("Not permitted to clone '%s' to  '%s"%(r.url, dest))
@@ -337,12 +245,11 @@ class Toplevel(GripBase):
     #f clone_subrepos - git clone the subrepos to the correct changesets
     def clone_subrepos(self, force_shallow:bool=False) -> None:
         assert self.branch_name is not None
-        assert self.repo_desc_config is not None
         # Clone all subrepos to the correct paths from url / branch at correct changeset
         # Use shallow if required
-        for r in self.repo_desc_config.iter_repos():
+        for r in self.configured_config_state.config_desc.iter_repos():
             # r : RepositoryDescriptor
-            r_state = self.config_state.get_repo_state(self.repo_desc_config, r.name)
+            r_state = self.configured_config_state.state_file_config.get_repo_state(self.configured_config_state.config_desc, r.name)
             assert r_state is not None
             dest = self.git_repo.filename([r.path])
             self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))
@@ -361,9 +268,8 @@ class Toplevel(GripBase):
         pass
     #f create_subrepos - create python objects that correspond to the checked-out subrepos
     def create_subrepos(self) -> None:
-        assert self.repo_desc_config is not None
-        self.repo_instance_tree = Repository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, workflow=self.repo_desc.workflow )
-        for rd in self.repo_desc_config.iter_repos():
+        self.repo_instance_tree = GripRepository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, workflow=self.configured_config_state.full_repo_desc.workflow )
+        for rd in self.configured_config_state.config_desc.iter_repos():
             # rd : RepositoryDescriptor
             try:
                 gr = GitRepo(path_str=self.git_repo.filename([rd.path]), options=self.options, log=self.log)
@@ -390,7 +296,6 @@ class Toplevel(GripBase):
         Create makefile.env and makefile
         Delete makefile stamps
         """
-        assert self.repo_desc_config is not None # because it is configured
         StageDependency.set_makefile_path_fn(self.get_makefile_stamp_path)
         self.add_log_string("Cleaning makefile stamps directory '%s'"%self.grip_path(self.makefile_stamps_dirname))
         makefile_stamps = self.grip_path(self.makefile_stamps_dirname)
@@ -403,10 +308,10 @@ class Toplevel(GripBase):
         with open(self.grip_path(self.grip_makefile_env_filename),"w") as f:
             print("GQ=@",file=f)
             print("GQE=@echo",file=f)
-            for (n,v) in self.repo_desc_config.get_env_as_makefile_strings():
+            for (n,v) in self.configured_config_state.config_desc.get_env_as_makefile_strings():
                 print("%s=%s"%(n,v),file=f)
                 pass
-            for r in self.repo_desc_config.iter_repos():
+            for r in self.configured_config_state.config_desc.iter_repos():
                 for (n,v) in r.get_env_as_makefile_strings():
                     print("# REPO %s wants %s=%s"%(r.name, n,v),file=f)
                     pass
@@ -421,7 +326,7 @@ class Toplevel(GripBase):
                 self.add_log_string(s)
                 self.verbose.info(s)
                 pass
-            self.repo_desc_config.write_makefile_entries(f, verbose=log_and_verbose)
+            self.configured_config_state.config_desc.write_makefile_entries(f, verbose=log_and_verbose)
             pass
         # clean out make stamps
         pass
@@ -436,8 +341,7 @@ class Toplevel(GripBase):
         """
         Get immutable environment dictionary (not including OS environment)
         """
-        assert self.repo_desc_config is not None # because it is configured
-        return self.repo_desc_config.get_env()
+        return self.configured_config_state.config_desc.get_env()
     #f grip_env_iter
     def grip_env_iter(self) -> Iterable[Tuple[str,str]]:
         """

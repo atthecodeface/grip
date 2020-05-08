@@ -116,9 +116,10 @@ class GripCommandBase(Hookable):
         return ParsedCommand(self, self.options.get("args",default=[]))
 
     #f get_grip_repo
-    def get_grip_repo(self, **kwargs:Any) -> None:
-        self.grip_repo = Toplevel(invocation=self.invocation, options=self.options, **kwargs)
-        self.add_logger(self.grip_repo.log)
+    def get_grip_repo(self, log:Optional[Log]=None, **kwargs:Any) -> None:
+        if log is None: log = Log()
+        self.add_logger(log)
+        self.grip_repo = Toplevel(log=log, invocation=self.invocation, options=self.options, **kwargs)
         pass
 
     #f add_logger
