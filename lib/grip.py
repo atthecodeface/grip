@@ -1,13 +1,14 @@
 #a Imports
 import os, time
+from .verbose import Verbose
+from .options import Options
+from .log import Log
+from .exceptions import *
+from .base       import GripBase
 from typing import Type, List, Dict, Iterable, Optional, Any, Tuple, cast
 from .git import branch_upstream, branch_head
 from .git import Repository as GitRepo
 from .git import Url as GitUrl
-from .log import Log
-from .verbose import Verbose
-from .options import Options
-from .exceptions import *
 from .descriptor import StageDependency as StageDependency
 from .descriptor import RepositoryDescriptor
 from .descriptor import ConfigurationDescriptor
@@ -26,7 +27,7 @@ class GripRepository(Repository):
 
 #a Toplevel grip repository class - this describes/contains the whole thing
 #c Toplevel class
-class Toplevel:
+class Toplevel(GripBase):
     #v Static properties
     grip_dir_name = ".grip"
     grip_toml_filename   = "grip.toml"
@@ -76,11 +77,7 @@ class Toplevel:
         return cls(repo, options=options, log=log, invocation=invocation)
     #f __init__
     def __init__(self, git_repo:Optional[GitRepo]=None, path:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None, ensure_configured:bool=False, invocation:str="", error_handler:ErrorHandler=None):
-        if options is None: options=Options()
-        if log is None: log = Log()
-        self.log=log
-        self.options=options
-        self.verbose=options.get_verbose_fn()
+        GripBase.__init__(self, options=options, log=log, git_repo=None, branch_name=None)
         self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
         self.log.add_entry_string(self.invocation)
         if git_repo is None:
@@ -94,7 +91,7 @@ class Toplevel:
             pass
         if git_repo is None:
             raise NotGripError("Not within a git repository, so not within a grip repository either")
-        self.git_repo = git_repo
+        self.set_git_repo(git_repo)
         self.repo_config      = None
         self.repo_desc_config = None
         self.read_desc_state_config(use_current_config=True, error_handler=error_handler)
@@ -108,39 +105,15 @@ class Toplevel:
             self.repo_desc.resolve_git_urls(self.grip_git_url)
             pass
         pass
-    #f log_to_logfile
-    def log_to_logfile(self) -> None:
-        """
-        Invoked to append the log to the local logfile
-        """
-        with open(self.grip_path(self.grip_log_filename),"a") as f:
-            print("",file=f)
-            print("*"*80,file=f)
-            self.log.dump(f)
-            pass
-        pass
-    #f add_log_string
-    def add_log_string(self, s:str) -> None:
-        if self.log: self.log.add_entry_string(s)
-        pass
-    #f path
-    def path(self, filenames:List[str]=[]) -> str:
-        return self.git_repo.filename(filenames)
-    #f grip_path
-    def grip_path(self, filename:str) -> str:
-        return self.path([self.grip_dir_name, filename])
-    #f grip_makefile_path
-    def grip_makefile_path(self) -> str:
-        return self.grip_path(self.grip_makefile_filename)
-    #f set_branch_name
-    def set_branch_name(self) -> None:
+    #f make_branch_name
+    def make_branch_name(self) -> None:
         """
         Set branch name; if not configured, then generate a new name
         If configured then use the branch name in the local config state
         """
-        self.branch_name = None
         if self.repo_config is not None:
-            self.branch_name = self.repo_config.branch
+            assert self.repo_config.branch is not None
+            self.set_branch_name(self.repo_config.branch)
             pass
         if self.branch_name is None:
             time_str = time.strftime("%Y_%m_%d_%H_%M_%S")
@@ -148,16 +121,9 @@ class Toplevel:
             if self.repo_config is not None and self.repo_config.config is not None:
                 base += "_" + self.repo_config.config
                 pass
-            self.branch_name = "WIP__%s_%s"%(base, time_str)
+            self.set_branch_name("WIP__%s_%s"%(base, time_str))
             pass
         pass
-    #f get_branch_name - get string branch name
-    def get_branch_name(self, **kwargs:Any) -> str:
-        """
-        Get branch name
-        """
-        assert self.branch_name is not None
-        return self.branch_name
     #f read_desc_state_config - Read grip.toml, state.toml, local.config.toml
     def read_desc_state_config(self, use_current_config:bool=False, error_handler:ErrorHandler=None) -> None:
         """
@@ -190,7 +156,7 @@ class Toplevel:
         """
         self.add_log_string("Reading grip.toml file '%s'"%self.grip_path(self.grip_toml_filename))
         self.repo_desc = GripRepoDescriptor(git_repo=self.git_repo)
-        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepos=subrepos, error_handler=error_handler)
+        self.repo_desc.read_toml_file(self.grip_path(self.grip_toml_filename), subrepo_descs=subrepos, error_handler=error_handler)
         if validate:
             print("Validating and resolving")
             self.repo_desc.validate(error_handler=error_handler)
@@ -198,7 +164,7 @@ class Toplevel:
             if self.repo_desc.is_logging_enabled() and self.log:
                 self.log.set_tidy(self.log_to_logfile)
                 pass
-            self.set_branch_name()
+            self.make_branch_name()
             pass
         else:
             print("Resolving")

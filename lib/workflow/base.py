@@ -28,8 +28,8 @@ class Workflow(object):
         self.verbose = toplevel.verbose
         pass
     #f get_branch_name
-    def get_branch_name(self, **kwargs:Any) -> str:
-        return self.toplevel.get_branch_name(**kwargs)
+    def get_branch_name(self) -> str:
+        return self.toplevel.get_branch_name()
     #f install_hooks
     def install_hooks(self) -> None:
         """

@@ -188,18 +188,18 @@ class Descriptor(object):
         self.build_from_values(values)
         pass
     #f read_toml_file
-    def read_toml_file(self, grip_toml_filename:str, subrepos:List[RepositoryDescriptor]=[], error_handler:ErrorHandler=None) -> None:
+    def read_toml_file(self, grip_toml_filename:str, subrepo_descs:List[RepositoryDescriptor]=[], error_handler:ErrorHandler=None) -> None:
         """
         Load the <root_dir>/.grip/grip.toml file
 
-        subrepos is a list of RepoDescriptor instances which may have been checked
+        subrepo_descs is a list of RepoDescriptor instances which may have been checked
         out which may have grip.toml files. Add these after the main file.
         """
         with open(grip_toml_filename) as f:
             toml_string = f.read()
             pass
         subrepo_toml_strings = {}
-        for r in subrepos:
+        for r in subrepo_descs:
             srfn = self.git_repo.filename([r.get_path(),"grip.toml"])
             if os.path.isfile(srfn):
                 with open(srfn) as f:

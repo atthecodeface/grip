@@ -1,11 +1,11 @@
 #a Imports
 import os, time
+from .log         import Log
+from .verbose     import Verbose
+from .options     import Options
+from .exceptions  import *
 from typing import Type, List, Dict, Iterable, Optional, Any, Tuple, cast
 from .git import Repository as GitRepository
-from .log     import Log
-from .verbose import Verbose
-from .options import Options
-from .exceptions import *
 
 #c GripBase
 class GripBase:
