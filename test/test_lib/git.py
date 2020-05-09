@@ -10,10 +10,10 @@ from pathlib import Path
 from lib.log       import Log
 from lib.options   import Options
 from lib.git       import Repository as GitRepo
+from lib.os_command  import OSCommand
 
 from .filesystem  import FileSystem, FileContent, EmptyContent
 from .loggable    import TestLog, Loggable
-from .os_command  import OSCommand
 
 from typing import List, Callable, Optional, Any, ClassVar, cast
 

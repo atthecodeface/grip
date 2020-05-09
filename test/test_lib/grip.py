@@ -3,10 +3,10 @@ import os
 from pathlib import Path
 
 from lib.log       import Log
+from lib.os_command import OSCommand
 
 from .filesystem import FileSystem, FileContent, EmptyContent
 from .loggable import TestLog, Loggable
-from .os_command import OSCommand
 from .git import RepoBuildContentFn
 from .git import Repository as GitRepository
 

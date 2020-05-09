@@ -2,7 +2,7 @@
 import sys, os, re
 import argparse
 import traceback
-from .os_command import *
+from .os_command import OSCommand # for OSCommand.Error
 from .hookable import Hookable
 from .exceptions import *
 from .verbose import Verbose
