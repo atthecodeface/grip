@@ -23,18 +23,18 @@ class Repository(Loggable):
     readme_text = """
     This is a simple test git repo
     """
-    name : str
-    path : Path # Path within our FileSystem object
-    abspath : Path # Path within the actual file system
+    name     : str
+    abspath     : Path # Path within the actual file system
+    relpath  : Path # Path within our FileSystem object
     git_repo : GitRepo
     #f __init__ - must do a git_init or git_clone afterwards
     def __init__(self, name:str, fs:FileSystem, log:TestLog, parent:Optional[Path]=None, **kwargs:Any):
         Loggable.__init__(self, log)
         self.name = name
         self.fs = fs
-        self.path = Path(name)
-        if parent is not None: self.path = parent.joinpath(self.path)
-        self.abspath = self.fs.abspath(self.path)
+        self.relpath = Path(name)
+        if parent is not None: self.relpath = parent.joinpath(self.relpath)
+        self.abspath = self.fs.abspath(self.relpath)
         self.options = Options()
         self.options.verbose = False
         pass
@@ -49,7 +49,7 @@ class Repository(Loggable):
         return self
     #f git_init - do a git init, add a readme, and commit
     def git_init(self, init_content:Optional[RepoBuildContentFn]=None) -> 'Repository':
-        self.fs.make_dir(self.path)
+        self.fs.make_dir(self.relpath)
         self.git_command(cmd="init")
         if init_content is not None: init_content(self)
         self.git_command(cmd="commit -m Init -a")
@@ -73,19 +73,19 @@ class Repository(Loggable):
         return self.__class__(name="%s.git"%(self.name), fs=self.fs, log=self.logger()).git_clone(clone=self.abspath, bare=True)
     #f make_dir
     def make_dir(self, path:Path) -> None:
-        path = self.path.joinpath(path)
+        path = self.relpath.joinpath(path)
         self.add_log_string("Making directory %s"%str(path))
         self.fs.make_dir(path=path)
         pass
     #f create_file
     def create_file(self, path:Path, content:FileContent) -> None:
-        path = self.path.joinpath(path)
+        path = self.relpath.joinpath(path)
         self.add_log_string("Creating file %s"%str(path))
         self.fs.create_file(path=path, content=content)
         pass
     #f append_to_file
     def append_to_file(self, path:Path, content:FileContent) -> None:
-        path = self.path.joinpath(path)
+        path = self.relpath.joinpath(path)
         self.add_log_string("Appending to file %s"%str(path))
         self.fs.append_to_file(path, content=content)
         pass

@@ -52,7 +52,7 @@ class Repository(GitRepository):
     def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cmd = "%s --show-log --verbose %s"%(grip_exec, cmd)
         cwd = self.abspath
-        if wd is not None: cwd = Path.joinpath(self.path, Path(wd))
+        if wd is not None: cwd = Path.joinpath(self.abspath, Path(wd))
         self.add_log_string("Test running grip command in wd '%s' of '%s'"%(str(cwd), cmd))
         os_cmd = OSCommand(cmd=cmd, cwd=str(cwd), log=self.logger(), **kwargs).run()
         if os_cmd.rc()!=0: raise Exception("Command Rc non-zero for: %s"%(str(os_cmd)))
