@@ -1,9 +1,9 @@
-from typing import Dict, Mapping, Optional, List, Any
+from typing import Dict, Mapping, Optional, List, Any, Tuple, cast
 
 class Toml:
     def __init__(self, **kwargs:Any):
-        for (k,v) in kwargs:
-            setattr(kwargs,k,v)
+        for (k,v) in kwargs.items():
+            setattr(self,k,v)
             pass
         pass
         pass
@@ -21,6 +21,57 @@ class Toml:
             else:
                 result[k] = v
                 pass
+            pass
+        return result
+    def _dict_as_string_list(self, hierarchy:str, d:Dict[str, Any])->List[Tuple[str,str]]:
+        result : List[Tuple[str,str]] = []
+        hierarchy_contents = ""
+        for (k,v) in d.items():
+            sub_hierarchy = "%s.%s"%(hierarchy, k)
+            if hierarchy == "": sub_hierarchy = k
+            if isinstance(v,Toml):
+                sub_hierarchy = "%s.%s"%(hierarchy, k)
+                result.extend(v._as_string_list(sub_hierarchy))
+                pass
+            elif type(v)==int:
+                hierarchy_contents += "%s = %d\n"%(k,v)
+                pass
+            elif type(v)==dict:
+                result.extend(self._dict_as_string_list(sub_hierarchy,v))
+                pass
+            elif type(v)==list:
+                hierarchy_contents += "%s = ["%k
+                iv = cast(List[Any],v)
+                comma = ""
+                for i in iv:
+                    hierarchy_contents += "%s\"%s\""%(comma,str(i))
+                    comma = ","
+                    pass
+                hierarchy_contents += "]\n"
+                pass
+            else:
+                hierarchy_contents += "%s = \"%s\"\n"%(k,str(v))
+                pass
+            pass
+
+        if hierarchy_contents!="":
+            if hierarchy!="":
+                hierarchy_contents = "[%s]\n"%(hierarchy)+hierarchy_contents
+                pass
+            result.append((hierarchy,hierarchy_contents))
+            pass
+        return result
+    def _as_string_list(self, hierarchy:str) -> List[Tuple[str,str]]:
+        d = self._as_dict()
+        return self._dict_as_string_list(hierarchy=hierarchy, d=d)
+    def _as_string(self) -> str:
+        sl = self._as_string_list(hierarchy="")
+        result = ""
+        for (h,s) in sl:
+            if h=="": result += "\n"+s
+            pass
+        for (h,s) in sl:
+            if h!="": result += "\n"+s
             pass
         return result
     pass

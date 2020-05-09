@@ -17,21 +17,7 @@ grip_exec = os.path.join(grip_dir,"grip")
 
 #c Grip repo building class
 class Repository(GitRepository):
-    grip_toml = """
-    name = "test_grip"
-    default_config  = "cfg0"
-    configs         = ["cfg0","cfg1"]
-    base_repos      = ["d1"]
-    stages          = ["install"]
-    workflow        = "readonly"
-    env             = {{D2ENV="d2"}}
-    [config.cfg1]
-    repos = ["d2"]
-    d2.install = {{requires=[], wd="", exec="do_exec"}}
-    [repo]
-    d1 = {{ url="{fs_path}/d_1.git", branch="master", path="d1" }}
-    d2 = {{ url="{fs_path}/d_2.git", branch="master", path="%D2ENV%" }}
-    """
+    grip_toml = ""
     #f __init__
     def __init__(self, name:str, fs:FileSystem, log:TestLog, **kwargs:Any) -> None:
         GitRepository.__init__(self, name=name, fs=fs, log=log, **kwargs)
@@ -45,8 +31,8 @@ class Repository(GitRepository):
     def init_content(repo:'GitRepository') -> None:
         self = cast(Repository,repo)
         self.make_dir(Path(".grip"))
-        self.create_file(Path(".grip/grip.toml"), content=FileContent(self.grip_toml.format(fs_path=self.fs.path)))
-        self.git_command(wd=".grip", cmd="add grip.toml")
+        self.create_file(Path(".grip/grip.toml"), content=FileContent(self.grip_toml))
+        self.git_command(cmd="add .grip/grip.toml")
         pass
     #f grip_command
     def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:

@@ -6,10 +6,38 @@ from .test_lib.filesystem import FileSystem, FileContent
 from .test_lib.loggable import TestLog
 from .test_lib.unittest import TestCase
 from .test_lib.git import Repository as GitRepository
-from .test_lib.grip import Repository as GripRepoBuild
+from .test_lib.grip import Repository as GripRepository
+from .test_lib.toml_file import Toml
 
+from typing import List, Optional, Any, ClassVar, Dict
 
-from typing import List, Optional, Any, ClassVar
+class ExampleConfig1Toml(Toml):
+    repos = ["d2"]
+    d2 = {"install": {"requires":[], "wd":"", "exec":"do_exec"}}
+    pass
+class ExampleToml(Toml):
+    name            = "test_grip"
+    default_config  = "cfg0"
+    configs         = ["cfg0","cfg1"]
+    base_repos      = ["d1"]
+    stages          = ["install"]
+    workflow        = "readonly"
+    env             = {"D2ENV":"d2"}
+    config : Dict[str,Any] = {}
+    repo : Dict[str,Any] = {}
+    def __init__(self, fs:FileSystem, **kwargs:Any):
+        self.config["cfg1"] = ExampleConfig1Toml()
+        self.repo["d1"] = { "url":"%s/d_1.git" % fs.path, "branch":"master", "path":"d1" }
+        self.repo["d2"] = { "url":"%s/d_2.git" % fs.path, "branch":"master", "path":"@D2ENV@" }
+        Toml.__init__(self, **kwargs)
+        pass
+    pass
+class ExampleRepository(GripRepository):
+    def __init__(self, fs:FileSystem, **kwargs:Any):
+        self.grip_toml = ExampleToml(fs)._as_string()
+        # print(self.grip_toml)
+        GripRepository.__init__(self, fs=fs, **kwargs)
+        pass
 
 #a Test classes
 #c Basic grip test case
@@ -20,7 +48,7 @@ class BasicTest(TestCase):
     cls_d1_bare : ClassVar[GitRepository]
     cls_d2      : ClassVar[GitRepository]
     cls_d2_bare : ClassVar[GitRepository]
-    cls_g       : ClassVar[GripRepoBuild]
+    cls_g       : ClassVar[GripRepository]
     cls_g_bare  : ClassVar[GitRepository]
     #f setUpClass - invoked for all tests to use
     @classmethod
@@ -33,7 +61,7 @@ class BasicTest(TestCase):
             cls.cls_d1_bare  = cls.cls_d1.bare_clone()
             cls.cls_d2       = GitRepository(name="d_2",fs=fs,parent_dirs=[],log=cls._logger).git_init(GitRepository.add_readme)
             cls.cls_d2_bare  = cls.cls_d2.bare_clone()
-            cls.cls_g        = GripRepoBuild(name="grip_1",fs=fs,log=cls._logger).git_init()
+            cls.cls_g        = ExampleRepository(name="grip_1",fs=fs,log=cls._logger).git_init()
             cls.cls_g_bare   = cls.cls_g.bare_clone()
         except:
             cls._logger.tidy()
@@ -62,7 +90,7 @@ class BasicTest(TestCase):
     #f test_grip_interrogate
     def test_grip_interrogate(self) -> None:
         fs = FileSystem(log=self._logger)
-        g = GripRepoBuild(name="grip_repo_one_clone",fs=fs,log=self._logger)
+        g = GripRepository(name="grip_repo_one_clone",fs=fs,log=self._logger)
         g.git_clone(clone=self.cls_g_bare.abspath)
         g.grip_command("configure")
         grip_root = g.grip_command("root")
@@ -81,7 +109,7 @@ class BasicTest(TestCase):
     #f test_grip_configure
     def test_grip_configure(self) -> None:
         fs = FileSystem(log=self._logger) # "test_configure")
-        g = GripRepoBuild(name="grip_repo_one_clone",fs=fs,log=self._logger)
+        g = GripRepository(name="grip_repo_one_clone",fs=fs,log=self._logger)
         g.git_clone(clone=self.cls_g_bare.abspath)
         g.grip_command("configure")
         fs.log_hashes(reason="post grip configure", path=Path("grip_repo_one_clone/.grip"), glob="*", depth=-1, use_full_name=False)
