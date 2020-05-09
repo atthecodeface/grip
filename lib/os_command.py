@@ -8,6 +8,19 @@ from lib.log import Log
 
 #a OSCommand
 class OSCommand:
+    #c Error
+    class Error(Exception):
+        """
+        Exception to capture the result of an OS command
+        """
+        def __init__(self, cmd:'OSCommand') -> None:
+            self.cmd = cmd
+            pass
+        pass
+        #f __str__
+        def __str__(self) -> str:
+            return "Error in " + self.cmd.string_command_result()
+        pass
     #t Types of properties
     log : Log
     cmd : str
@@ -107,8 +120,15 @@ class OSCommand:
         r += "  Stdout: %s\n"     % (self.output_string(self._stdout))
         r += "  Stderr: %s\n"     % (self.output_string(self._stderr))
         return r
+    #f check_results
+    def check_results(self, stderr_output_indicates_error:bool=True, exception_on_error:bool=True) -> str:
+        had_error   = (self._rc!=0)
+        if len(self._stderr)>0 and stderr_output_indicates_error:
+            had_error=True
+            pass
+        if had_error and exception_on_error:
+            raise self.Error(self)
+        return self._stdout
     #f All done
     pass
-
-
 

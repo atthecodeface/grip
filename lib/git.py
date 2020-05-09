@@ -2,9 +2,8 @@
 import os, re, unittest
 from pathlib import Path
 from typing import Type, Dict, Optional, Tuple, Any, List, Union, cast
-from .oscommand import command as os_command
-from .oscommand import OSCommandError
-from .oscommand import OSCommand
+from .os_command import OSCommand
+OSCommandError = OSCommand.Error
 from .options import Options
 from .log import Log
 from .exceptions import *
@@ -16,8 +15,8 @@ branch_head = "HEAD"
 
 #a Useful functions
 #f global_git_command
-def global_git_command(options:Optional[Options]=None, cmd:str="", **kwargs:Any) -> OSCommand.Result:
-    return os_command(options=options, cmd="git %s"%(cmd), **kwargs)
+def global_git_command(cmd:str="", **kwargs:Any) -> OSCommand:
+    return OSCommand(cmd="git %s"%(cmd), **kwargs).run()
 
 #a Classes
 #c Git url class
@@ -127,20 +126,21 @@ class Repository(object):
     path     : Path
     options  : Options
     log      : Log
-    #f git_command_result
-    def git_command_result(self, cwd:Optional[Path]=None, cmd:str="", **kwargs:Any) -> OSCommand.Result:
+    #f git_os_command
+    def git_os_command(self, cwd:Optional[Path]=None, cmd:str="", **kwargs:Any) -> OSCommand:
         if cwd is None:
             cwd = self.path
             pass
-        return os_command(options = self.options,
-                          log     = self.log,
+        return OSCommand( log     = self.log,
                           cmd     = "git %s"%(cmd),
                           cwd     = str(cwd),
-                          **kwargs)
+                          **kwargs).run()
 
     #f git_command
-    def git_command(self, **kwargs:Any) -> str:
-        return cast(str,self.git_command_result(**kwargs))
+    def git_command(self, stderr_output_indicates_error:bool=True, exception_on_error:bool=True, **kwargs:Any) -> str:
+        cmd = self.git_os_command(**kwargs)
+        return cmd.check_results()
+
     #f __init__
     def __init__(self, path_str:Optional[str], git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
         """
@@ -202,45 +202,33 @@ class Repository(object):
         if changeset is not None: git_options.append( "--no-checkout")
         if depth is not None:   git_options.append( "--depth %s"%(depth))
         if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
-        try:
-            git_output = global_git_command(options=options,
-                                     log=log,
-                                     cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest),
-                                     stderr_output_indicates_error=False)
-            pass
-        except OSCommandError as e:
-            raise UserError("Failed to perform git clone - %s"%(e.cmd.error_output()))
-            pass
+        git_cmd = global_git_command(log=log,
+                                     cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest))
+        if git_cmd.rc()!=0:
+            raise UserError("Failed to perform git clone - %s"%(git_cmd.stderr()))
         if bare: return cls(dest, git_url=repo_url, log=log)
-        (rc,std) = global_git_command(options=options, log=log, cwd=dest, cmd="rev-parse --verify --quiet %s^{commit}"%branch_upstream,
-                                      exception_on_error=False, include_rc=True)
-        if rc==0:
+        git_cmd = global_git_command(log=log, cwd=dest, cmd="rev-parse --verify --quiet %s^{commit}"%branch_upstream)
+        if git_cmd.rc()==0:
             if log: log.add_entry_string("Already has branch '%s' - delete it before it causes trouble"%branch_upstream)
-            global_git_command(options=options, log=log, cwd=dest, cmd="branch --delete %s"%branch_upstream)
+            global_git_command(log=log, cwd=dest, cmd="branch --delete %s"%branch_upstream)
             pass
-        try:
-            # This can fail if we checked out a tag that is not a branch that is not its own head, as we would be in detached head state
-            global_git_command(options=options, log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)
-            pass
-        except:
+        git_cmd = global_git_command(log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)
+        if git_cmd.rc()==0:
             # If the branch move failed then just create the branch at this head
-            global_git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
+            global_git_command(log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
             pass
         if changeset is None:
-            global_git_command(options=options, log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
+            global_git_command(log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
             pass
         else:
-            try:
-                global_git_command(options=options, log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
-                pass
-            except:
-                raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
+            git_cmd = global_git_command(log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
+            if git_cmd.rc()!=0: raise Exception("Failed to point branch %s at required changeset %s - maybe depth is not large enough"%(new_branch_name, changeset))
             pass
-        git_output = global_git_command(options=options,
-                                 log=log,
-                                 cwd = dest,
-                                 cmd = "checkout %s" % new_branch_name,
-                                 stderr_output_indicates_error=False)
+        git_cmd = global_git_command(log=log,
+                                        cwd = dest,
+                                        cmd = "checkout %s" % new_branch_name)
+        if git_cmd.rc()!=0:
+                raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
         return cls(dest, git_url=repo_url, log=log, options=options)
     #f get_upstream - get Remote corresponding to the upstream
     def get_upstream(self) -> Optional[Remote]:
@@ -316,10 +304,8 @@ class Repository(object):
         Determine if a branch/hash is in the repo
         """
         if branch_name is None: branch_name="HEAD"
-        (rc,_) = self.git_command_result(cmd="rev-parse --verify --quiet %s^{commit}"%branch_name,
-                                         exception_on_error=False,
-                                         include_rc=True)
-        return rc==0
+        git_cmd = self.git_os_command(cmd="rev-parse --verify --quiet %s^{commit}"%branch_name)
+        return git_cmd.rc()==0
     #f is_modified
     def is_modified(self) -> Optional[GitReason]:
         """
