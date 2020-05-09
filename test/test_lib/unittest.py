@@ -38,13 +38,11 @@ class TestCase(unittest.TestCase):
         pass
     pass
 #c Stuff from test_utils
-import unittest
-from collections import namedtuple
 AKV = Dict[str,Any]
 AKV_has = Callable[[Any,str],bool]
 AKV_get = Callable[[Any,str],Any]
 class UnitTestObject(unittest.TestCase):
-    def _test_asserts(self, d:Dict[str,Any], akv:AKV, reason:str, has_element_fn:AKV_has, get_element_fn:AKV_get ) -> None:
+    def _test_asserts(self, d:object, akv:AKV, reason:str, has_element_fn:AKV_has, get_element_fn:AKV_get ) -> None:
         # print("_test_asserts %s:%s:%s"%(reason, str(akv),str(d)))
         if type(akv) is not dict:
             self.fail("Bug in test - reason '%s' - test data '%s' is not a dictionary (type '%s'), but element is type '%s'"%(reason, str(akv),str(type(akv)),str(type(d))))
@@ -70,8 +68,8 @@ class UnitTestObject(unittest.TestCase):
                 pass
             pass
         pass
-    def _test_dict_asserts(self, d:Dict[str,Any], akv:AKV, reason:str ) -> None:
+    def _test_dict_asserts(self, d:object, akv:AKV, reason:str ) -> None:
         return self._test_asserts(d, akv, reason, has_element_fn=(lambda d,k:k in d), get_element_fn=(lambda d,k:d[k]))
-    def _test_obj_asserts(self, d:Dict[str,Any], akv:AKV, reason:str )->None:
+    def _test_obj_asserts(self, d:object, akv:AKV, reason:str )->None:
         return self._test_asserts(d, akv, reason, has_element_fn=hasattr, get_element_fn=getattr)
     pass

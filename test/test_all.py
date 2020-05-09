@@ -9,7 +9,7 @@ import os, unittest
 log_dir       = os.environ["TESTS_LOG_DIR"]
 from .test_grip  import *
 from .test_git   import *
-#from lib.repodesc  import *
+from .test_state_file  import *
 #from lib.repostate import *
 if __name__ == "__main__":
     unittest.main()

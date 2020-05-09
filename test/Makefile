@@ -27,6 +27,7 @@ PYTHON_SRCS += ${GRIP_DIR}/test/test_lib/*py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_all.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_grip.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_git.py
+PYTHON_SRCS += ${GRIP_DIR}/test/test_state_file.py
 
 .PHONY:check_types
 check_types:

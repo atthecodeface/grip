@@ -1,26 +1,32 @@
 #a Unittest for GripRepoState class
+from lib.configstate import StateFile
+
+from .test_lib.unittest import UnitTestObject, AKV
+from .test_lib.unittest import TestCase
+
+
 from typing import Dict, Any, Optional, Union
-from ..test_utils import UnitTestObject
+
 class GripRepoStateUnitTestBase(UnitTestObject):
     state_toml : Optional[str] = None
-    config_name : Union[bool, None, str] = False
-    grs_assert : Optional[Dict[str,Any]] = None
-    cfg_assert = None
+    config_name : Optional[str] = None
+    grs_assert : AKV = {}
+    cfg_assert : AKV = {}
     exception_expected = None
-    def test_it(self):
+    def test_it(self) -> None:
         if self.state_toml is not None:
-            grs = GripRepoState()
+            grs = StateFile()
             if self.exception_expected is not None:
                 self.assertRaises(self.exception_expected, grs.read_toml_string, self.state_toml)
                 pass
             else:
                 grs.read_toml_string(self.state_toml)
                 pass
-            if self.grs_assert is not None:
+            if len(self.grs_assert)>0:
                 self._test_obj_asserts(grs, self.grs_assert, "grip_repo_state")
                 pass
-            if self.config_name is not False:
-                cfg = grs.select_config(config_name=self.config_name)
+            if self.config_name is not None:
+                cfg = grs.select_config(config_name=self.config_name, create_if_new=False)
                 if cfg is None:
                     self.assertEqual(cfg, self.cfg_assert)
                     pass
