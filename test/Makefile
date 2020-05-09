@@ -13,13 +13,14 @@ test_lib:
 
 .PHONY:test_grip
 test_grip:
-	${TESTS_ENV} ${TESTS_DIR}/test_grip.py
+	(cd ${TESTS_DIR} && ${TESTS_ENV} python3 -m test.test_grip)
 
 PYTHON_SRCS =
 PYTHON_SRCS += ${GRIP_DIR}/lib/*/*py
 PYTHON_SRCS += ${GRIP_DIR}/lib/*.py
 PYTHON_SRCS += ${GRIP_DIR}/cmds/*.py
 PYTHON_SRCS += ${GRIP_DIR}/grip
+PYTHON_SRCS += ${GRIP_DIR}/test/test_lib/*py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_grip.py
 
 .PHONY:check_types
