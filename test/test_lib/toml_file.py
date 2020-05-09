@@ -1,20 +1,21 @@
+from typing import Dict, Mapping, Optional, List, Any
 
-class TomlThing:
-    def __init__(self, **kwargs):
+class Toml:
+    def __init__(self, **kwargs:Any):
         for (k,v) in kwargs:
             setattr(kwargs,k,v)
             pass
         pass
         pass
-    def _attrs(self):
+    def _attrs(self)->List[str]:
         attrs = dir(self)
         return [x for x in attrs if (x[0]!='_')]
-    def _as_dict(self):
+    def _as_dict(self) -> Any:
         result = {}
-        l = self.attrs()
+        l = self._attrs()
         for k in l:
             v = getattr(self, k)
-            if isinstance(v,TomlThing):
+            if isinstance(v,Toml):
                 result[k] = v._as_dict()
                 pass
             else:
@@ -24,32 +25,23 @@ class TomlThing:
         return result
     pass
 
-class EnvToml(TomlThing):
-    pass
-class ConfigAllToml(TomlThing):
+class ConfigAllToml(Toml):
     repos = ["grip", "cdl", "toolchains", "verilator"]
     doc = """blah"""
-    stage = TomlThing(download=
-doc="""Download files, particularly for the GCC/binutils toolchain
-This will download tarballs, unpack them, and then download more files as require by gcc prerequisites.
-"""
+    stage = {"download":{"doc":"Download files, particularly for the GCC/binutils toolchain"},
+             "configure":{"doc":"Configure all", "requires":["toolchains.configure-riscv32-unknown-elf","verilator.configure","cdl.configure"],},
+             "install":{"doc":"Compile and build all the tools", "requires":["toolchains.install-riscv32-unknown-elf","verilator.install","cdl.install"],},
+             }
+    pass
 
-[config.all.stage.configure]
-doc="""Configures binutils and gcc for cross-compilation; gcc kinda requires binutils to be installed, so this actually build binutils too"""
-requires=["toolchains.configure-riscv32-unknown-elf","verilator.configure","cdl.configure"]
-
-[config.all.stage.install]
-doc="""Compile and build all the tools"""
-requires=["toolchains.install-riscv32-unknown-elf","verilator.install","cdl.install"]
-
-class GripToml(TomlThing):
+class GripToml(Toml):
     name = "cdl_tools_grip"
     doc= """Some docu"""
     default_config  = "all"
     configs         = ["all", "test"]
-    base_repos      = []
+    base_repos :List[str]     = []
     stages          = ["temp", "temp2", "download", "configure","install"]
     workflow        = "readonly"
-    env = TomlEnv(TOOLS_DIR="@GRIP_ROOT_PATH@/tools", PATH="@GRIP_ROOT_PATH@/grip:@TOOLS_DIR@/bin:@PATH@")
-    config = TomlThing(all=ConfigAllToml)
+    env    = Toml(TOOLS_DIR="@GRIP_ROOT_PATH@/tools", PATH="@GRIP_ROOT_PATH@/grip:@TOOLS_DIR@/bin:@PATH@")
+    config = Toml(all=ConfigAllToml)
 

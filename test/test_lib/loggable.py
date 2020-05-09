@@ -15,6 +15,9 @@ class TestLog(Log):
         self.filename = filename
         with open(self.filename,"w") as f: pass
         pass
+    #f add_log_string
+    def add_log_string(self, s:str) -> None:
+        return self.add_entry_string(s)
     #f log_to_logfile
     def log_to_logfile(self) -> None:
         """
@@ -32,16 +35,19 @@ class TestLog(Log):
 #c Base loggable class
 class Loggable(object):
     _logger_verbose : bool = False
-    _logger_log : Log
+    _logger_log : TestLog
     #f __init__
-    def __init__(self, logger:Log):
+    def __init__(self, logger:TestLog):
         self._logger_log = logger
     #f add_log_string
     def add_log_string(self, s:str) -> None:
         if self._logger_verbose: print(s)
-        return self._logger_log.add_entry_string(s)
+        return self._logger_log.add_log_string(s)
     #f log_flush
     def log_flush(self) -> None:
         return self._logger_log.tidy(reset=True)
+    #f logger
+    def logger(self) -> TestLog:
+        return self._logger_log
     pass
 

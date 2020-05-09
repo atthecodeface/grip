@@ -2,8 +2,10 @@ GRIP_DIR=$(abspath $(CURDIR))
 
 TESTS_DIR = ${GRIP_DIR}/test
 
+TESTS_LOG_DIR = ${GRIP_DIR}/test/logs
+
 TESTS_PYTHONPATH = ${GRIP_DIR}:${PYTHONPATH}
-TESTS_ENV = PYTHONPATH=${TESTS_PYTHONPATH} GRIP_DIR=${GRIP_DIR}
+TESTS_ENV = PYTHONPATH=${TESTS_PYTHONPATH} GRIP_DIR=${GRIP_DIR} TESTS_LOG_DIR=${TESTS_LOG_DIR}
 test_all: check_types_strict test_grip
 
 .PHONY:test_lib
@@ -13,6 +15,7 @@ test_lib:
 
 .PHONY:test_grip
 test_grip:
+	mkdir -p ${TESTS_LOG_DIR}
 	(cd ${TESTS_DIR} && ${TESTS_ENV} python3 -m test.test_grip)
 
 PYTHON_SRCS =
