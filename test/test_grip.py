@@ -4,30 +4,22 @@ Unittest harness to run test cases from lib directory
 """
 
 #a Imports
-import os, re, inspect, sys, unittest
+import os, unittest
 
-from lib.log       import Log
-from lib.options   import Options
-from lib.git       import Repository as GitRepo
+from .test_lib.filesystem import FileSystem, FileContent
+from .test_lib.loggable import TestLog
 
-from .test_lib.filesystem import FileSystem, PathList, FileContent, EmptyContent
-from .test_lib.loggable import TestLog, Loggable
-from .test_lib.os_command import OSCommand
-
-from .test_lib.git import RepoBuildContentFn
 from .test_lib.git import Repository as GitRepository
 from .test_lib.grip import Repository as GripRepoBuild
 
-from typing import List, Callable, Optional, Any, ClassVar, cast
+from typing import List, Optional, Any, ClassVar
 
-grip_dir      = os.environ["GRIP_DIR"]
 log_dir       = os.environ["TESTS_LOG_DIR"]
 test_logger   = TestLog(os.path.join(log_dir,"test_grip.log"))
-sys.path.append(grip_dir)
 
 #a Test classes
 #c Basic grip test case
-class Test(unittest.TestCase):
+class BasicTest(unittest.TestCase):
     #v class properties
     cls_fs      : ClassVar[FileSystem]
     cls_d1      : ClassVar[GitRepository]
