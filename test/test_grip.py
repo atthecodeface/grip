@@ -53,8 +53,8 @@ class BasicTest(TestCase):
     #f test_git_clone
     def test_git_clone(self) -> None:
         fs = FileSystem(log=self._logger)
-        d2 = GitRepository(name="grip_repo_one_clone",fs=fs,log=self._logger).git_clone(clone=self.cls_d1_bare.path, bare=False)
-        d2.append_to_file(["Readme.txt"], content=FileContent("Appended text"))
+        d2 = GitRepository(name="grip_repo_one_clone",fs=fs,log=self._logger).git_clone(clone=self.cls_d1_bare.abspath, bare=False)
+        d2.append_to_file(Path("Readme.txt"), content=FileContent("Appended text"))
         d2.git_command("commit -a -m 'appended text to readme'")
         d2.git_command_allow_stderr("push", )
         fs.cleanup()
@@ -63,10 +63,10 @@ class BasicTest(TestCase):
     def test_grip_interrogate(self) -> None:
         fs = FileSystem(log=self._logger)
         g = GripRepoBuild(name="grip_repo_one_clone",fs=fs,log=self._logger)
-        g.git_clone(clone=self.cls_g_bare.path)
+        g.git_clone(clone=self.cls_g_bare.abspath)
         g.grip_command("configure")
         grip_root = g.grip_command("root")
-        checkout_path = os.path.realpath(g.path)
+        checkout_path = os.path.realpath(g.abspath)
         self.assertEqual(grip_root, checkout_path, "Output of grip root and the actual checkout git path should match")
         grip_root = g.grip_command("root .grip/")
         self.assertEqual(grip_root, checkout_path, "Output of grip root and the actual checkout git path should match")
@@ -82,13 +82,13 @@ class BasicTest(TestCase):
     def test_grip_configure(self) -> None:
         fs = FileSystem(log=self._logger) # "test_configure")
         g = GripRepoBuild(name="grip_repo_one_clone",fs=fs,log=self._logger)
-        g.git_clone(clone=self.cls_g_bare.path)
+        g.git_clone(clone=self.cls_g_bare.abspath)
         g.grip_command("configure")
         fs.log_hashes(reason="post grip configure", path=Path("grip_repo_one_clone/.grip"), glob="*", depth=-1, use_full_name=False)
         #print(os_command(options=g.options, cmd="cat .grip/grip.toml", cwd=g.path))
-        self.assertTrue(os.path.isdir(fs.abspath(["grip_repo_one_clone"])), "git clone of bare grip repo should create grip_repo_one_clone directory")
-        self.assertTrue(os.path.isdir(fs.abspath(["grip_repo_one_clone" , ".grip"])), "git clone of bare grip repo should create .grip directory")
-        self.assertTrue(os.path.isdir(fs.abspath(["grip_repo_one_clone", "d1"])), "grip configure in grip repo should create d1 directory")
+        self.assertTrue(fs.abspath(Path("grip_repo_one_clone")).is_dir()        , "git clone of bare grip repo should create grip_repo_one_clone directory")
+        self.assertTrue(fs.abspath(Path("grip_repo_one_clone/.grip")).is_dir()  , "git clone of bare grip repo should create .grip directory")
+        self.assertTrue(fs.abspath(Path("grip_repo_one_clone/d1")).is_dir()     , "grip configure in grip repo should create d1 directory")
         #print(os_command(options=g.options, cmd="ls -lagtrR", cwd=g.path))
         fs.cleanup()
         pass

@@ -10,7 +10,6 @@ from hashlib import md5
 from .loggable import TestLog
 
 from typing import List, Callable, Optional, Any, Dict
-PathList = List[str]
 
 def md5sum(path:Path)->str:
     hash = md5()
@@ -53,30 +52,44 @@ class FileSystem(object):
             pass
         self.log.add_log_string("Fs: created '%s'"%(str(self.path)))
         pass
-    #f fold_files
-    def fold_files(self, hash_dict:Dict[Any,str], path:Path, fold_fn:Callable[[Path],str], glob:str, depth:int, path_name_fn:Callable[[Path],Any]) -> Dict[Any,str]:
-        hash_name = path_name_fn(path)
-        if not path.exists: return hash_dict
+    #f iter_files
+    def iter_files(self, path:Path, callback_fn:Callable[[Path],None], glob:str, depth:int) -> None:
+        if not path.exists: return
         if path.is_file():
-            hash_dict[hash_name] = fold_fn(path)
+            return callback_fn(path)
             pass
         if not path.is_dir():
-            return hash_dict
+            return
         if depth==0:
-            hash_dict[hash_name] = "<dir>"
-            return hash_dict
+            return callback_fn(path)
         local_paths = path.glob(glob)
         for p in local_paths:
-            self.fold_files(hash_dict, p, fold_fn=fold_fn, glob=glob, depth=depth-1, path_name_fn=path_name_fn)
+            self.iter_files(path=p, depth=depth-1, callback_fn=callback_fn, glob=glob)
             pass
+        pass
+    #f fold_files
+    def fold_files(self, hash_dict:Dict[Any,str], path:Path, fold_fn:Callable[[Path],str], glob:str, depth:int, path_name_fn:Callable[[Path],Any]) -> Dict[Any,str]:
+        def fold_callback(path:Path)->None:
+            hash_name = path_name_fn(path)
+            if path.is_file():
+                hash_dict[hash_name] = fold_fn(path)
+                pass
+            else:
+                hash_dict[hash_name] = "<dir>"
+                pass
+            pass
+        self.iter_files(path=path, glob=glob, depth=depth, callback_fn=fold_callback)
         return hash_dict
     #f log_hashes
     def log_hashes(self, reason:str, path:Path, glob:str="*", depth:int=0, use_full_name:bool=False) -> None:
-        path = self.path.joinpath(path)
-        d = self.fold_files({}, path=path, fold_fn=md5sum, glob=glob, depth=depth, path_name_fn=lambda p:str(p.relative_to(path)))
-        for (k,v) in d.items():
-            self.log.add_log_string("%s: %s : %s"%(reason,k,v))
+        path = self.abspath(path)
+        def log_hash(p:Path)->None:
+            if p.is_file():
+                rel_path = p.relative_to(path)
+                hash = md5sum(p)
+                self.log.add_log_string("%s: %s : %s"%(reason,str(rel_path), hash))
             pass
+        self.iter_files(path=path, glob=glob, depth=depth, callback_fn=log_hash)
         pass
     #f cleanup
     def cleanup(self) -> None:
@@ -90,25 +103,23 @@ class FileSystem(object):
             pass
         pass
     #f abspath
-    def abspath(self, paths:PathList) -> Path:
-        path = self.path
-        for p in paths: path=path.joinpath(path, Path(p))
-        return path
+    def abspath(self, path:Path) -> Path:
+        return path.joinpath(self.path, path)
     #f make_dir
-    def make_dir(self, paths:PathList) -> None:
-        path = self.abspath(paths)
+    def make_dir(self, path:Path) -> None:
+        path = self.abspath(path)
         path.mkdir()
         pass
     #f append_to_file
-    def append_to_file(self, paths:PathList, content:FileContent, mode:str="w+") -> None:
-        path = self.abspath(paths)
+    def append_to_file(self, path:Path, content:FileContent, mode:str="w+") -> None:
+        path = self.abspath(path)
         with path.open(mode) as f:
             f.write(content.content())
             pass
         pass
     #f create_file
-    def create_file(self, **kwargs:Any) -> None:
-        return self.append_to_file(mode="w", **kwargs)
+    def create_file(self, path:Path, **kwargs:Any) -> None:
+        return self.append_to_file(mode="w", path=path, **kwargs)
     #f All done
     pass
 

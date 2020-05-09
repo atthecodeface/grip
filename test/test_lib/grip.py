@@ -4,7 +4,7 @@ from pathlib import Path
 
 from lib.log       import Log
 
-from .filesystem import FileSystem, PathList, FileContent, EmptyContent
+from .filesystem import FileSystem, FileContent, EmptyContent
 from .loggable import TestLog, Loggable
 from .os_command import OSCommand
 from .git import RepoBuildContentFn
@@ -44,14 +44,14 @@ class Repository(GitRepository):
     @staticmethod
     def init_content(repo:'GitRepository') -> None:
         self = cast(Repository,repo)
-        self.make_dir([".grip"])
-        self.create_file(paths=[".grip","grip.toml"], content=FileContent(self.grip_toml.format(fs_path=self.fs.path)))
+        self.make_dir(Path(".grip"))
+        self.create_file(Path(".grip/grip.toml"), content=FileContent(self.grip_toml.format(fs_path=self.fs.path)))
         self.git_command(wd=".grip", cmd="add grip.toml")
         pass
     #f grip_command
     def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cmd = "%s --show-log --verbose %s"%(grip_exec, cmd)
-        cwd = self.path
+        cwd = self.abspath
         if wd is not None: cwd = Path.joinpath(self.path, Path(wd))
         self.add_log_string("Test running grip command in wd '%s' of '%s'"%(str(cwd), cmd))
         os_cmd = OSCommand(cmd=cmd, cwd=str(cwd), log=self.logger(), **kwargs).run()
