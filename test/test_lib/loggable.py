@@ -23,7 +23,6 @@ class TestLog(Log):
         """
         Invoked to append the log to the local logfile
         """
-        print("Tidying logfile %s"%self.filename)
         with open(self.filename,"a") as f:
             print("",file=f)
             print("*"*80,file=f)

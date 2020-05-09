@@ -1,5 +1,6 @@
 #a Imports
 import os
+from pathlib import Path
 
 from lib.log       import Log
 
@@ -51,9 +52,9 @@ class Repository(GitRepository):
     def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cmd = "%s --show-log --verbose %s"%(grip_exec, cmd)
         cwd = self.path
-        if wd is not None: cwd = os.path.join(self.path, wd)
-        self.add_log_string("Test running grip command in wd '%s' of '%s'"%(cwd, cmd))
-        os_cmd = OSCommand(cmd=cmd, cwd=cwd, log=self.logger(), **kwargs).run()
+        if wd is not None: cwd = Path.joinpath(self.path, Path(wd))
+        self.add_log_string("Test running grip command in wd '%s' of '%s'"%(str(cwd), cmd))
+        os_cmd = OSCommand(cmd=cmd, cwd=str(cwd), log=self.logger(), **kwargs).run()
         if os_cmd.rc()!=0: raise Exception("Command Rc non-zero for: %s"%(str(os_cmd)))
         return os_cmd.stdout()
     pass

@@ -5,6 +5,7 @@ Git repository creation and manipulation wrapper
 
 #a Imports
 import os, re, inspect, sys, unittest
+from pathlib import Path
 
 from lib.log       import Log
 from lib.options   import Options
@@ -22,6 +23,8 @@ class Repository(Loggable):
     readme_text = """
     This is a simple test git repo
     """
+    name : str
+    path : Path
     git_repo : GitRepo
     #f __init__ - must do a git_init or git_clone afterwards
     def __init__(self, name:str, fs:FileSystem, log:TestLog, parent_dirs:List[str]=[], **kwargs:Any):
@@ -33,8 +36,8 @@ class Repository(Loggable):
         self.options.verbose = False
         pass
     #f git_clone
-    def git_clone(self, clone:str, bare:bool=False, branch_name:str="master") -> 'Repository':
-        self.git_repo = GitRepo.clone(log=self.logger(), options=self.options, repo_url=clone, dest=self.path, bare=bare, new_branch_name=branch_name)
+    def git_clone(self, clone:Path, bare:bool=False, branch_name:str="master") -> 'Repository':
+        self.git_repo = GitRepo.clone(log=self.logger(), options=self.options, repo_url=str(clone), dest=str(self.path), bare=bare, new_branch_name=branch_name)
         if not bare:
             upstream =self.git_repo.get_upstream()
             if upstream is not None: self.git_repo.set_upstream_of_branch(branch_name, upstream)
@@ -46,7 +49,7 @@ class Repository(Loggable):
         self.git_command(cmd="init")
         if init_content is not None: init_content(self)
         self.git_command(cmd="commit -m Init -a")
-        self.git_repo = GitRepo(log=self.logger(), path_str=self.path, permit_no_remote=True)
+        self.git_repo = GitRepo(log=self.logger(), path_str=str(self.path), permit_no_remote=True)
         return self
     #f add_readme
     @staticmethod
@@ -81,9 +84,9 @@ class Repository(Loggable):
     #f git_command
     def git_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cwd = self.path
-        if wd is not None: cwd = os.path.join(self.path, wd)
-        self.add_log_string("Test running git command in wd '%s' of '%s'"%(cwd, cmd))
-        os_cmd = OSCommand(cmd="git %s"%cmd, cwd=cwd, log=self.logger(), **kwargs).run()
+        if wd is not None: cwd = Path.joinpath(self.path, Path(wd))
+        self.add_log_string("Test running git command in wd '%s' of '%s'"%(str(cwd), cmd))
+        os_cmd = OSCommand(cmd="git %s"%cmd, cwd=str(cwd), log=self.logger(), **kwargs).run()
         if os_cmd.rc()!=0: raise Exception("Command Rc non-zero for: %s"%(str(os_cmd)))
         return os_cmd.stdout()
     #f git_command_allow_stderr
