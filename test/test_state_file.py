@@ -4,7 +4,6 @@ from lib.configstate import StateFile
 from .test_lib.unittest import UnitTestObject, AKV
 from .test_lib.unittest import TestCase
 
-
 from typing import Dict, Any, Optional, Union
 
 class GripRepoStateUnitTestBase(UnitTestObject):

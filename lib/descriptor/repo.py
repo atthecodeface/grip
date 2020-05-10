@@ -71,15 +71,16 @@ class Descriptor(object):
 
     Possibly it should have a default dictionary of <stage> -> <StageDescriptor>
     """
+    #t types and default values of instance properties
     values : DescriptorValues
     name : str
     cloned_from : Optional['Descriptor']
-    url      : str
-    path     : str
+    url      : str = "<undefined_url>"
+    path     : str = "<undefined_path>"
     shallow  : bool
-    branch   : Optional[str]
+    branch   : Optional[str]=None
     env      : GripEnv
-    doc      : Optional[str]
+    doc      : Optional[str]=None
     git_url  : GitUrl
     workflow : Type['Workflow']
     # grip_config
@@ -102,6 +103,7 @@ class Descriptor(object):
                 pass
             pass
         if clone is not None:
+            if hasattr(clone,"git_url"): self.git_url=clone.git_url
             for (n,s) in clone.stages.items():
                 if n not in self.stages:
                     self.stages[n] = s.clone(grip_repo_desc=grip_repo_desc, git_repo_desc=self)
@@ -162,7 +164,7 @@ class Descriptor(object):
         r_src = ""
         if self.path    is not None: r_src += "locally at '%s'" % (self.path)
         if self.url     is not None: r_src += " remote url(orig) '%s'" % (self.url)
-        if self.git_url is not None: r_src += " remote url(parsed) '%s'" % (self.git_url.as_string())
+        if hasattr(self,"git_url"):  r_src += " remote url(parsed) '%s'" % (self.git_url.as_string())
         if self.branch  is not None: r_src += " branch '%s'" % (self.branch)
         r.append(r_src)
         r_stages = []
@@ -263,7 +265,7 @@ class Descriptor(object):
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "repo.%s:" % (self.name))
         if self.url     is not None: acc = pp(acc, "url(orig):   %s" % (self.url), indent=1)
-        if self.git_url is not None: acc = pp(acc, "url(parsed): %s" % (self.git_url.as_string()), indent=1)
+        if hasattr(self,"git_url"):  acc = pp(acc, " remote url(parsed) '%s'" % (self.git_url.as_string()))
         if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
         if self.path    is not None: acc = pp(acc, "path:        %s" % (self.path), indent=1)
         for name in self.stages:

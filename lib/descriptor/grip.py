@@ -70,6 +70,7 @@ class DescriptorValues(object):
         values.Set_obj_properties(self, ["name", "workflow", "base_repos", "default_config", "logging", "doc", "configs", "stages", "config", "repo", "env"])
         if values.base_repos is None: self.base_repos=[]
         if values.stages     is None: self.stages=[]
+        if values.env        is None: self.env=TomlDictValues(EnvTomlDict)
         self.repo={}
         if values.repo is not None:
             for repo_name in values.repo.Get_other_attrs():
@@ -213,10 +214,15 @@ class Descriptor(object):
     #f build_from_values
     def build_from_values(self, values:GripFileTomlDictValues) -> None:
         self.values = DescriptorValues(values)
-        if len(self.values.repo)==0:    raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
+        # Would like to support no repos
+        # if len(self.values.repo)==0:    raise GripTomlError("'repo' entries must be provided (empty grip configuration is not supported)")
         if len(self.values.configs)==0: raise GripTomlError("'configs' must be provided in grip configuration file")
-        self.name           = self.values.name
+        if self.values.default_config is None:
+            raise GripTomlError("default_config must bre provided in grip configuration file")
         self.default_config = self.values.default_config
+        if self.default_config not in self.values.configs:
+            raise GripTomlError("default_config '%s' must be in 'configs' (which are %s)"%(self.values.default_config,self.values.configs))
+        self.name           = self.values.name
         self.base_repos     = self.values.base_repos
         self.logging        = self.values.logging
         self.doc            = self.values.doc

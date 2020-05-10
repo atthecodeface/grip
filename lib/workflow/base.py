@@ -137,7 +137,8 @@ class Workflow(object):
         return True
     #f get_subclasses
     @classmethod
-    def get_subclasses(cls, so_far:Set[Type['Workflow']]=set()) -> Iterable[Type['Workflow']]:
+    def get_subclasses(cls, so_far:Optional[Set[Type['Workflow']]]=None) -> Iterable[Type['Workflow']]:
+        if so_far is None: so_far=set()
         for subclass in cls.__subclasses__():
             if subclass not in so_far:
                 so_far.add(subclass)
