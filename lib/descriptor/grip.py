@@ -1,7 +1,8 @@
 #a Imports
 import os, sys, re, copy
 import toml
-from typing import Type, Optional, Dict, List, Tuple, Any, Iterator, Sequence, Mapping, Union, cast
+from typing import Type, Optional, Dict, List, Tuple, Any, Iterator, Sequence, Mapping, Union, cast, Iterable
+from ..base        import GripBase
 from ..exceptions import *
 from ..tomldict import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
 from ..git import Repository as GitRepository
@@ -14,6 +15,7 @@ from .stage import Descriptor as StageDescriptor
 from .stage import StageTomlDict
 from .repo  import RepoDescTomlDict
 from .repo  import Descriptor as RepositoryDescriptor
+from .repo  import DescriptorInConfig as RepositoryDescriptorInConfig
 from .config import Descriptor as ConfigurationDescriptor
 from .config import ConfigTomlDict
 
@@ -53,6 +55,7 @@ class GripFileTomlDictValues(TomlDictValues):
     stages :     Optional[List[str]]
     config :     Optional[TomlDictValues]
     repo   :     Optional[TomlDictValues]
+    env    :     Optional[TomlDictValues]
     pass
 class DescriptorValues(object):
     name : Optional[str] = None
@@ -116,13 +119,15 @@ class Descriptor(object):
     stages         : Dict[str,StageDescriptor]
     re_valid_name = re.compile(r"[a-zA-Z0-9_]*$")
     workflow : Type[Workflow]
+    selected_config : Optional[ConfigurationDescriptor] = None
     #f __init__
-    def __init__(self, git_repo:GitRepository):
-        self.git_repo = git_repo
+    def __init__(self, base:GripBase):
+        self.base     = base
+        self.git_repo = base.get_git_repo()
         default_env = {}
-        default_env["GRIP_ROOT_URL"]  = git_repo.get_git_url_string()
-        default_env["GRIP_ROOT_PATH"] = git_repo.get_path()
-        default_env["GRIP_ROOT_DIR"]  = os.path.basename(git_repo.get_path())
+        default_env["GRIP_ROOT_URL"]  = self.git_repo.get_git_url_string()
+        default_env["GRIP_ROOT_PATH"] = self.git_repo.get_path()
+        default_env["GRIP_ROOT_DIR"]  = os.path.basename(self.git_repo.get_path())
         self.env = GripEnv(name='grip.toml', default_values=default_env)
         pass
     #f toml_loads
@@ -174,9 +179,6 @@ class Descriptor(object):
                 pass
             pass
         values = TomlDictParser.from_dict(GripFileTomlDict, "", self.raw_toml_dict)
-        # values.Prettyprint()
-        values = cast(GripFileTomlDictValues, values)
-        self.build_from_values(values)
         pass
     #f build_from_toml_dict
     def build_from_toml_dict(self) -> None:
@@ -189,19 +191,21 @@ class Descriptor(object):
         self.build_from_values(values)
         pass
     #f read_toml_file
-    def read_toml_file(self, grip_toml_filename:str, subrepo_descs:List[RepositoryDescriptor]=[], error_handler:ErrorHandler=None) -> None:
+    def read_toml_file(self, grip_toml_filename:str, subrepo_descs:List[RepositoryDescriptorInConfig]=[], error_handler:ErrorHandler=None) -> None:
         """
         Load the <root_dir>/.grip/grip.toml file
 
         subrepo_descs is a list of RepoDescriptor instances which may have been checked
         out which may have grip.toml files. Add these after the main file.
         """
+        self.base.add_log_string("Reading config toml file '%s'"%(grip_toml_filename))
         with open(grip_toml_filename) as f:
             toml_string = f.read()
             pass
         subrepo_toml_strings = {}
         for r in subrepo_descs:
             srfn = self.git_repo.filename([r.get_path(),"grip.toml"])
+            self.base.add_log_string("Trying to read subconfig toml file '%s'"%(srfn))
             if os.path.isfile(srfn):
                 with open(srfn) as f:
                     subrepo_toml_strings[r.name] = f.read()
@@ -242,12 +246,15 @@ class Descriptor(object):
             pass
         self.configs = {}
         for config_name in self.values.configs:
+            self.base.add_log_string("Noting values for config '%s'"%config_name)
             self.configs[config_name] = ConfigurationDescriptor(config_name, self)
             pass
-        for (config_name, config_values) in self.values.config.items():
-            if config_name not in self.configs:
-                raise GripTomlError("'config.%s' provided without '%s' in configs"%(config_name,config_name))
-            self.configs[config_name].build_from_values(config_values)
+        for (config_name, config_desc) in self.configs.items():
+            self.base.add_log_string("Build values for config '%s'"%config_name)
+            config_values = None
+            if config_name in self.values.config:
+                config_values = self.values.config[config_name]
+            config_desc.build_from_values(config_values)
             pass
         pass
     #f validate
@@ -262,17 +269,27 @@ class Descriptor(object):
         if self.values.workflow is None:
             raise RepoDescError("workflow must be defined")
         self.workflow = self.validate_workflow(self.values.workflow, "grip repo description")
-        for (n,c) in self.configs.items():
+        for c in self.iter_configs():
             c.validate(error_handler=error_handler)
             pass
         if self.logging is None: self.logging=False
+        pass
+    #f iter_configs:
+    def iter_configs(self) -> Iterable[ConfigurationDescriptor]:
+        if self.selected_config is None:
+            for (n,c) in self.configs.items():
+                yield(c)
+                pass
+        else:
+            yield(self.selected_config)
+            pass
         pass
     #f resolve
     def resolve(self, error_handler:ErrorHandler=None) -> None:
         """
         Resolve any values using grip environment variables to config or default values
         """
-        for (n,c) in self.configs.items():
+        for c in self.iter_configs():
             c.resolve(error_handler=error_handler)
             pass
         pass
@@ -335,6 +352,8 @@ class Descriptor(object):
         r.append(self.get_doc_string())
         if include_configs:
             for (n,c) in self.configs.items():
+                r.append(("********************************************************************************"))
+                r.append(("reinsntate configration get doc string in description/grip.py"))
                 #r.append(("Configuration %s"%n,c.get_doc_string()))
                 pass
             pass
@@ -347,15 +366,17 @@ class Descriptor(object):
         """
         Return a selected configuration
         """
+        self.selected_config = None
         if config_name is None: config_name=self.default_config
         if config_name not in self.configs: return None
+        self.selected_config = self.configs[config_name]
         return self.configs[config_name]
     #f resolve_git_urls
     def resolve_git_urls(self, grip_git_url:GitUrl) -> None:
         """
         Resolve all relative (and those using environment variables?) git urls
         """
-        for (n,c) in self.configs.items():
+        for c in self.iter_configs():
             c.resolve_git_urls(grip_git_url)
             pass
         pass

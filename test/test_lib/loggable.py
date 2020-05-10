@@ -3,8 +3,9 @@ Logging class
 """
 
 #a Imports
-from lib.log       import Log
-from typing import List, Callable, Optional, Any, ClassVar, cast
+from pathlib  import Path
+from lib.log  import Log
+from typing   import List, Optional, Any
 
 #c TestLog class
 class TestLog(Log):
@@ -45,6 +46,16 @@ class Loggable(object):
     #f log_flush
     def log_flush(self) -> None:
         return self._logger_log.tidy(reset=True)
+    #f log_file_contents
+    def log_file_contents(self, p:Path, prefix:str="") -> None:
+        self.log_flush()
+        with p.open() as f:
+            for l in f:
+                self.add_log_string("%s%s"%(prefix,l.rstrip()))
+                pass
+            pass
+        self.log_flush()
+        pass
     #f logger
     def logger(self) -> TestLog:
         return self._logger_log

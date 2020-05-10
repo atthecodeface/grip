@@ -2,6 +2,7 @@
 from ..exceptions  import *
 from ..base        import GripBase
 from ..descriptor  import RepositoryDescriptor
+from ..descriptor  import RepositoryDescriptorInConfig
 from ..descriptor  import ConfigurationDescriptor
 from ..descriptor  import GripDescriptor
 from ..configstate import ConfigFile as GripConfigFile
@@ -11,7 +12,7 @@ from ..git         import Repository as GitRepository
 from ..git         import Url as GitUrl
 from ..repo        import Repository as GripRepository
 
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Iterable, IO, Any
 #a GripConfigState classes
 #c GripConfigStateBase
 class GripConfigStateBase(object):
@@ -24,19 +25,11 @@ class GripConfigStateBase(object):
     initial_repo_desc : GripDescriptor
     config_file       : GripConfigFile
     state_file        : GripStateFile
+    state_file_config : GripStateFileConfig
+    config_desc       : ConfigurationDescriptor
     _has_state : bool
-    _is_configured : bool
-    clone_properties : ClassVar[List[str]] = ["base",
-                                              "grip_toml_filename",
-                                              "state_toml_filename",
-                                              "config_toml_filename",
-                                              "base_url",
-                                              "initial_repo_desc",
-                                              "config_file",
-                                              "state_file",
-                                              "_is_configured",
-                                              "_has_state",
-    ]
+    _has_config_file : bool
+    config_name : str
     #f __init__
     def __init__(self, base:GripBase):
         self.base = base
@@ -45,18 +38,12 @@ class GripConfigStateBase(object):
         self.config_toml_filename = self.base.grip_path(self.base.config_toml_filename)
         self.base_url = self.base.get_git_repo().get_git_url()
         self._has_state     = False
-        self._is_configured = False
-        pass
-    #f clone - invoked instead of __init__ by subclasses if required
-    def clone(self, clone:'GripConfigStateBase') -> None:
-        for k in self.clone_properties:
-            setattr(self,k,getattr(clone,k))
-            pass
+        self._has_config_file = False
         pass
     #f read_desc_initial - Read the inital grip.toml file without subrepos
     def read_desc_initial(self) -> None:
         self.base.add_log_string("First pass reading '%s'"%self.grip_toml_filename)
-        self.initial_repo_desc = GripDescriptor(git_repo=self.base.get_git_repo())
+        self.initial_repo_desc = GripDescriptor(base=self.base)
         self.initial_repo_desc.read_toml_file(self.grip_toml_filename, subrepo_descs=[])
         self.initial_repo_desc.resolve()
         self.initial_repo_desc.resolve_git_urls(self.base_url)
@@ -80,9 +67,9 @@ class GripConfigStateBase(object):
         self.config_file = GripConfigFile()
         try:
             self.config_file.read_toml_file(self.config_toml_filename)
-            self._is_configured = True
+            self._has_config_file = True
         except Exception as e:
-            self._is_configured = False
+            self._has_config_file = False
             self.base.add_log_string("Failed to read file: '%s'"%(str(e)))
             pass
         pass
@@ -97,9 +84,9 @@ class GripConfigStateBase(object):
         self.read_state()
         self.read_config()
         pass
-    #f is_configured
-    def is_configured(self) -> bool:
-        return self._is_configured
+    #f has_config_file
+    def has_config_file(self) -> bool:
+        return self._has_config_file
     #f has_state
     def has_state(self) -> bool:
         return self._has_state
@@ -111,50 +98,18 @@ class GripConfigStateInitial(GripConfigStateBase):
     """
     An initial pass, getting initial_repo_desc, optional state_file, optional config_file
     """
-    config_name : str
-    #f choose_configuration
-    def choose_configuration(self, config_name:Optional[str]) -> str:
-        config = self.initial_repo_desc.select_config(config_name)
-        if config is None:
+    subrepo_descs     : List[RepositoryDescriptorInConfig]
+    #f select_configuration
+    def select_configuration(self, config_name:Optional[str]) -> str:
+        config_desc = self.initial_repo_desc.select_config(config_name)
+        if config_desc is None:
             if config_name is None:
                 raise UserError("Could not select default grip config - bad configuration")
             raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
-        self.config_name = config.name
-        self.config_file.set_config_name(self.config_name)
-        return self.config_name
-    pass
-
-#c GripConfigStateUnconfigured
-class GripConfigStateUnconfigured(GripConfigStateBase):
-    #f __init__
-    def __init__(self, initial:GripConfigStateInitial) -> None:
-        GripConfigStateBase.clone(self, clone=initial)
-        pass
-    pass
-
-#c GripConfigStateConfigured
-class GripConfigStateConfigured(GripConfigStateBase):
-    """
-    """
-    #v Instance properties
-    config_name       : str
-    state_file_config : GripStateFileConfig
-    full_repo_desc    : GripDescriptor
-    config_desc       : ConfigurationDescriptor
-    subrepo_descs     : List[RepositoryDescriptor]
-    #f __init__
-    def __init__(self, initial:GripConfigStateInitial) -> None:
-        GripConfigStateBase.clone(self, clone=initial)
-        assert self.config_file.config is not None
-        self.select_configuration(self.config_file.config)
-        pass
-    #f select_configuration - called by __init__ to turn this from GripConfigStateInitial to GripConfigStateConfigured
-    def select_configuration(self, config_name:str) -> None:
-        self.config_name = config_name
-        config_desc = self.initial_repo_desc.select_config(config_name)
-        if config_desc is None:
-            raise ConfigurationError("Read local configuration file indicating grip configuration is '%s' but that is not in the repository description"%self.config_name)
         self.config_desc = config_desc
+        self.config_name = self.config_desc.name
+        self.config_file.set_config_name(self.config_name)
+        self.base.add_log_string("initial: select_configuration %s"%config_name)
         # state_file_config cannot be none if we use create_if_new - this fixes type checking
         state_file_config = self.state_file.select_config(self.config_name, create_if_new=True)
         assert state_file_config is not None
@@ -163,23 +118,94 @@ class GripConfigStateConfigured(GripConfigStateBase):
         for r in self.config_desc.iter_repos():
             self.subrepo_descs.append(r)
             pass
+        return self.config_name
+    #f select_current_configuration
+    def select_current_configuration(self) -> None:
+        assert self._has_config_file
+        config_name = self.config_file.config
+        self.select_configuration(config_name)
+        pass
+    #f iter_repos
+    def iter_repos(self) -> Iterable[RepositoryDescriptorInConfig]:
+        assert self.config_desc is not None
+        for r in self.config_desc.iter_repos():
+            yield r
+            pass
+        pass
+    #f dump_to_file
+    def dump_to_file(self, f:IO[str]) -> None:
+        def p(acc:Any, s:str, indent:int=0) -> Any:
+            print(("  "*indent)+s, file=f)
+        self.initial_repo_desc.prettyprint("",p)
+        pass
+    #f All done
+    pass
+
+#c GripConfigStateConfigured
+class GripConfigStateConfigured(GripConfigStateBase):
+    """
+    """
+    clone_properties : ClassVar[List[str]] = ["initial_repo_desc",
+                                              "config_file",
+                                              "state_file",
+                                              "config_desc",
+                                              "config_name",
+                                              "state_file_config",
+                                              "_has_config_file",
+                                              "_has_state",
+    ]
+    #v Instance properties
+    full_repo_desc    : GripDescriptor
+    subrepo_descs     : List[RepositoryDescriptorInConfig]
+    #f __init__
+    def __init__(self, initial:GripConfigStateInitial) -> None:
+        GripConfigStateBase.__init__(self, initial.base)
+        for k in self.clone_properties:
+            setattr(self,k,getattr(initial,k))
+            pass
+        self.initial_subrepo_descs = initial.subrepo_descs
         pass
     #f read_desc - Create full_repo_desc by rereading grip.toml and those of subrepos
     def read_desc(self, error_handler:ErrorHandler=None) -> None:
-        self.base.add_log_string("Second pass reading '%s'"%self.grip_toml_filename)
-        self.full_repo_desc = GripDescriptor(git_repo=self.base.get_git_repo())
-        self.full_repo_desc.read_toml_file(self.grip_toml_filename, subrepo_descs=self.subrepo_descs, error_handler=error_handler)
-        config_desc = self.full_repo_desc.select_config(self.config_name)
-        if config_desc is None:
-            raise ConfigurationError("Read local configuration file indicating grip configuration is '%s' but that is not in the repository description"%self.config_name)
-        self.config_desc = config_desc
+        self.base.add_log_string("read_desc_configuration %s"%self.config_name)
+        self.base.add_log_string("Second pass reading '%s' with %d subrepos"%(self.grip_toml_filename,len(self.initial_subrepo_descs)))
+        self.full_repo_desc = GripDescriptor(self.base)
+        self.full_repo_desc.read_toml_file(self.grip_toml_filename, subrepo_descs=self.initial_subrepo_descs, error_handler=error_handler)
+        self.select_configuration(self.config_name)
+        self.base.add_log_string("Validate full_repo_desc and selected configuration")
         self.full_repo_desc.validate(error_handler=error_handler)
-        self.config_desc.validate()
+        self.base.add_log_string("Resolve full_repo_desc and selected configuration")
         self.full_repo_desc.resolve(error_handler=error_handler)
-        self.config_desc.resolve()
         self.full_repo_desc.resolve_git_urls(self.base_url)
         if self.full_repo_desc.is_logging_enabled():
             self.base.log.set_tidy(self.base.log_to_logfile)
+            pass
+        pass
+    #f select_configuration
+    def select_configuration(self, config_name:Optional[str]) -> str:
+        self.base.add_log_string("select_configuration %s"%config_name)
+        config_desc = self.full_repo_desc.select_config(config_name)
+        if config_desc is None:
+            if config_name is None:
+                raise UserError("Could not select default grip config - bad configuration")
+            raise UserError("Could not select grip config '%s'; is it defined in the grip.toml file?"%config_name)
+        self.config_desc = config_desc
+        self.config_name = self.config_desc.name
+        self.config_file.set_config_name(self.config_name)
+        # state_file_config cannot be none if we use create_if_new - this fixes type checking
+        state_file_config = self.state_file.select_config(self.config_name, create_if_new=True)
+        assert state_file_config is not None
+        self.state_file_config = state_file_config
+        self.subrepo_descs = []
+        for r in self.config_desc.iter_repos():
+            self.subrepo_descs.append(r)
+            pass
+        return self.config_name
+    #f iter_repos
+    def iter_repos(self) -> Iterable[RepositoryDescriptorInConfig]:
+        assert self.config_desc is not None
+        for r in self.config_desc.iter_repos():
+            yield r
             pass
         pass
     #f update_state
@@ -204,4 +230,11 @@ class GripConfigStateConfigured(GripConfigStateBase):
     def write_config(self) -> None:
         self.base.add_log_string("Writing local configuration state file '%s'"%self.config_toml_filename)
         self.config_file.write_toml_file(self.config_toml_filename)
+        pass
+
+    #f dump_to_file
+    def dump_to_file(self, f:IO[str]) -> None:
+        def p(acc:Any, s:str, indent:int=0) -> Any:
+            print(("  "*indent)+s, file=f)
+        self.full_repo_desc.prettyprint("",p)
         pass

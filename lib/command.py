@@ -34,10 +34,11 @@ class GripCommandBase(Hookable):
     """
     #v Class properties
     names : List[str] # Type['GripCommandBase']]= []
-    base_options = {("-h", "--help")   :{"action":"store_true", "dest":"help",     "default":False, "help":"show the list of commands and options", },
-                    ("-v", "--verbose"):{"action":"store_true", "dest":"verbose",  "default":False},
-                    ("--show-log",)    :{"action":"store_true", "dest":"show_log", "default":False},
-                    ("-Q", "--quiet")  :{"action":"store_true", "dest":"quiet",    "default":False},
+    base_options = {("-h", "--help")     :{"action":"store_true", "dest":"help",     "default":False, "help":"show the list of commands and options", },
+                    ("-v", "--verbose")  :{"action":"store_true", "dest":"verbose",  "default":False},
+                    ("--show-log",)      :{"action":"store_true", "dest":"show_log", "default":False},
+                    ("--debug-config",)  :{"action":"store_true", "dest":"debug_config", "default":False, "help":"dump the complete configuration to the screen once it has been read"},
+                    ("-Q", "--quiet")    :{"action":"store_true", "dest":"quiet",    "default":False},
                     }
     command_options : ParserOptions = {}
     #t Instance types

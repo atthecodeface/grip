@@ -1,5 +1,5 @@
 #a Imports
-from typing import Optional, Type, List, Union, Any, Tuple, Sequence, Set, Iterable, Callable
+from typing import Optional, Type, Dict, List, Union, Any, Tuple, Sequence, Set, Iterable, Callable
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
 from ..git import Url as GitUrl
 from ..exceptions import *
@@ -56,20 +56,9 @@ class DescriptorValues(object):
             pass
         pass
 
-#c Descriptor - a descriptor of a repository within the grip description
-class Descriptor(object):
+#c DescriptorBase - a descriptor of a repository within the grip description
+class DescriptorBase(object):
     """
-    This is a simple object containing the data describing a git repo that is part of a grip repo
-
-    Each GitRepoDesc should have an entry repo.<name> as a table of <property>:<value> in the grip.toml file
-
-    Possibly this can include <install>
-
-    A GitRepoDesc may have a changeset associated with it from a .grip/state file
-
-    A GitRepoDesc may be read-only; push-to-integration; push-to-patch?; merge?
-
-    Possibly it should have a default dictionary of <stage> -> <StageDescriptor>
     """
     #t types and default values of instance properties
     values : DescriptorValues
@@ -81,71 +70,20 @@ class Descriptor(object):
     branch   : Optional[str]=None
     env      : GripEnv
     doc      : Optional[str]=None
-    git_url  : GitUrl
+    stages   : Dict[str,StageDescriptor]
     workflow : Type['Workflow']
-    # grip_config
     #f __init__
-    def __init__(self, name:str, grip_repo_desc:'GripDescriptor', values:Optional[TomlDictValues]=None, clone:Optional['Descriptor']=None):
+    def __init__(self, name:str, grip_repo_desc:'GripDescriptor'):
         """
         values must be a RepoDescTomlDict._values
         """
         self.name   = name
         self.grip_repo_desc = grip_repo_desc
-        self.cloned_from = clone
-        self.stages = {}
-        clone_values = None
-        if clone is not None: clone_values=clone.values
-        self.values = DescriptorValues(values, clone_values)
-        if values is not None:
-            for stage_name in values.Get_other_attrs():
-                stage_values = values.Get(stage_name)
-                self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, git_repo_desc=self, values=stage_values)
-                pass
-            pass
-        if clone is not None:
-            if hasattr(clone,"git_url"): self.git_url=clone.git_url
-            for (n,s) in clone.stages.items():
-                if n not in self.stages:
-                    self.stages[n] = s.clone(grip_repo_desc=grip_repo_desc, git_repo_desc=self)
-                    pass
-                pass
-            pass
-        if self.values.url is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
-        pass
-    #f clone
-    def clone(self) -> 'Descriptor':
-        return self.__class__(name=self.name, values=None, grip_repo_desc=self.grip_repo_desc, clone=self)
-    #f set_grip_config
-    def set_grip_config(self, grip_config:'ConfigurationDescriptor') -> None:
-        """
-        When instantiated in a grip config, this is invoked
-        """
-        self.grip_config = grip_config
-        pass
-    #f resolve_git_url
-    def resolve_git_url(self, grip_git_url:GitUrl) -> None:
-        """
-        Resolve relative (and those using environment variables?) git urls
-        """
-        if self.git_url.is_leaf():
-            self.git_url.make_relative_to(abs_url=grip_git_url)
-            pass
         pass
     #f get_path
     def get_path(self) -> str:
         assert self.path is not None
         return self.path
-    #f get_git_url
-    def get_git_url(self) -> GitUrl:
-        """
-        """
-        return self.git_url
-    #f get_git_url_string
-    def get_git_url_string(self) -> str:
-        """
-        """
-        assert self.git_url is not None
-        return self.git_url.as_string()
     #f get_doc_string
     def get_doc_string(self) -> str:
         """
@@ -153,28 +91,6 @@ class Descriptor(object):
         """
         r = "Undocumented"
         if self.doc is not None: r = self.doc
-        return r
-    #f get_doc
-    def get_doc(self) -> Documentation:
-        """
-        Return documentation = list of <string> | (name * documentation)
-        Get documentation
-        """
-        r : Documentation = [self.get_doc_string()]
-        r_src = ""
-        if self.path    is not None: r_src += "locally at '%s'" % (self.path)
-        if self.url     is not None: r_src += " remote url(orig) '%s'" % (self.url)
-        if hasattr(self,"git_url"):  r_src += " remote url(parsed) '%s'" % (self.git_url.as_string())
-        if self.branch  is not None: r_src += " branch '%s'" % (self.branch)
-        r.append(r_src)
-        r_stages = []
-        for (sn,s) in self.stages.items():
-            r_stages.append(sn)
-            pass
-        r_stages.sort()
-        if len(r_stages)>0:
-            r.append("Stages: %s"%(" ".join(r_stages)))
-            pass
         return r
     #f add_stage_names_to_set
     def add_stage_names_to_set(self, s:Set[str]) -> None:
@@ -194,17 +110,80 @@ class Descriptor(object):
             yield(s)
             pass
         pass
-    #f fold_repo_stages
-    def fold_repo_stages(self, acc:Any, callback_fn:Callable[[Any,'Descriptor',StageDescriptor],Any])->Any:
-        for (sn,s) in self.stages.items():
-            acc = callback_fn(acc, self, s)
-            pass
-        return acc
     #f is_shallow
     def is_shallow(self) -> bool:
         if self.shallow is not None:
             return self.shallow
         return False
+    #f get_env_as_makefile_strings
+    def get_env_as_makefile_strings(self) -> MakefileStrings:
+        return self.env.as_makefile_strings(include_parent=False)
+    #f All done
+    pass
+
+
+#c Descriptor - a descriptor of a repository within the grip description
+class Descriptor(DescriptorBase):
+    """
+    """
+    #f __init__
+    def __init__(self, name:str, grip_repo_desc:'GripDescriptor', values:Optional[TomlDictValues]=None):
+        """
+        values must be a RepoDescTomlDict._values
+        """
+        DescriptorBase.__init__(self, name=name, grip_repo_desc=grip_repo_desc)
+        self.stages = {}
+        self.values = DescriptorValues(values, None)
+        if values is not None:
+            for stage_name in values.Get_other_attrs():
+                stage_values = values.Get(stage_name)
+                # self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, git_repo_desc=self, values=stage_values)
+                pass
+            pass
+        if self.values.url is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
+        pass
+
+    #f prettyprint
+    def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
+        acc = pp(acc, "repo.%s:" % (self.name))
+        acc = pp(acc, "url(orig):   %s" % (self.url), indent=1)
+        acc = pp(acc, "path:        %s" % (self.path), indent=1)
+        if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
+        for name in self.stages:
+            def ppr(acc:Any, s:str, indent:int=0) -> Any:
+                return pp(acc, s, indent=indent+1)
+            acc = self.stages[name].prettyprint(acc,ppr)
+            pass
+        return acc
+#c DescriptorInConfig - descriptor instantiated in a configuration
+class DescriptorInConfig(DescriptorBase):
+    """
+    """
+    git_url  : GitUrl
+    grip_config : 'ConfigurationDescriptor'
+    #f __init__
+    def __init__(self, grip_config:'ConfigurationDescriptor', clone:Descriptor, values:Optional[TomlDictValues]=None):
+        """
+        values must be a RepoDescTomlDict._values
+        """
+        DescriptorBase.__init__(self, name=clone.name, grip_repo_desc=clone.grip_repo_desc)
+        self.cloned_from = clone
+        self.grip_config = grip_config
+        self.values = DescriptorValues(values, clone.values)
+        self.stages = {}
+        if values is not None:
+            for stage_name in values.Get_other_attrs():
+                stage_values = values.Get(stage_name)
+                self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, git_repo_desc=self, values=stage_values)
+                pass
+            pass
+        for (n,s) in clone.stages.items():
+            if n not in self.stages:
+                self.stages[n] = s.clone(grip_repo_desc=self.grip_repo_desc, git_repo_desc=self)
+                pass
+            pass
+        pass
+        pass
     #f validate
     def validate(self, error_handler:ErrorHandler=None) -> None:
         if self.values.workflow is None:
@@ -217,11 +196,34 @@ class Descriptor(object):
             s.validate(self.grip_config, error_handler=error_handler)
             pass
         pass
+    #f get_doc
+    def get_doc(self) -> Documentation:
+        """
+        Return documentation = list of <string> | (name * documentation)
+        Get documentation
+        """
+        r : Documentation = [self.get_doc_string()]
+        r_src = ""
+        if self.path    is not None: r_src += "locally at '%s'" % (self.path)
+        if self.url     is not None: r_src += " remote url(orig) '%s'" % (self.url)
+        r_src += " remote url(parsed) '%s'" % (self.git_url.as_string())
+        if self.branch  is not None: r_src += " branch '%s'" % (self.branch)
+        r.append(r_src)
+        r_stages = []
+        for (sn,s) in self.stages.items():
+            r_stages.append(sn)
+            pass
+        r_stages.sort()
+        if len(r_stages)>0:
+            r.append("Stages: %s"%(" ".join(r_stages)))
+            pass
+        return r
     #f resolve
     def resolve(self, env:GripEnv, error_handler:ErrorHandler=None) -> None:
         """
         Resolve the strings in the repo description and its stages, using the repo configuration's environment
         """
+        self.grip_repo_desc.base.add_log_string("Resolve repo '%s' in config '%s'"%(self.name, self.grip_config.name))
         self.env = GripEnv(name="repo %s"%self.name, parent=env)
         self.env.build_from_values(self.values.env)
         url     = self.env.substitute(self.values.url,      error_handler=error_handler)
@@ -258,22 +260,44 @@ class Descriptor(object):
             pass
         # print("Resolve %s:%s:%s:%s"%(self,self.name,self.url,self.git_url))
         pass
-    #f get_env_as_makefile_strings
-    def get_env_as_makefile_strings(self) -> MakefileStrings:
-        return self.env.as_makefile_strings(include_parent=False)
+    #f get_git_url
+    def get_git_url(self) -> GitUrl:
+        """
+        """
+        return self.git_url
+    #f get_git_url_string
+    def get_git_url_string(self) -> str:
+        """
+        """
+        assert self.git_url is not None
+        return self.git_url.as_string()
+    #f resolve_git_url
+    def resolve_git_url(self, grip_git_url:GitUrl) -> None:
+        """
+        Resolve relative (and those using environment variables?) git urls
+        """
+        if self.git_url.is_leaf():
+            self.git_url.make_relative_to(abs_url=grip_git_url)
+            pass
+        pass
+    #f fold_repo_stages
+    def fold_repo_stages(self, acc:Any, callback_fn:Callable[[Any,'DescriptorInConfig',StageDescriptor],Any])->Any:
+        for (sn,s) in self.stages.items():
+            acc = callback_fn(acc, self, s)
+            pass
+        return acc
+
     #f prettyprint
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "repo.%s:" % (self.name))
-        if self.url     is not None: acc = pp(acc, "url(orig):   %s" % (self.url), indent=1)
-        if hasattr(self,"git_url"):  acc = pp(acc, " remote url(parsed) '%s'" % (self.git_url.as_string()))
+        acc = pp(acc, " cfg:         %s" % (self.grip_config.name))
+        acc = pp(acc, " url(orig):   %s" % (self.url), indent=1)
+        acc = pp(acc, " url(parsed)  %s" % (self.git_url.as_string()))
+        acc = pp(acc, " path:        %s" % (self.path), indent=1)
         if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
-        if self.path    is not None: acc = pp(acc, "path:        %s" % (self.path), indent=1)
         for name in self.stages:
             def ppr(acc:Any, s:str, indent:int=0) -> Any:
                 return pp(acc, s, indent=indent+1)
             acc = self.stages[name].prettyprint(acc,ppr)
             pass
         return acc
-    #f All done
-    pass
-

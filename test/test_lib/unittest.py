@@ -41,9 +41,9 @@ class TestCase(unittest.TestCase):
 AKV = Dict[str,Any]
 AKV_has = Callable[[Any,str],bool]
 AKV_get = Callable[[Any,str],Any]
-class UnitTestObject(unittest.TestCase):
+class UnitTestObject(TestCase):
     def _test_asserts(self, d:object, akv:AKV, reason:str, has_element_fn:AKV_has, get_element_fn:AKV_get ) -> None:
-        # print("_test_asserts %s:%s:%s"%(reason, str(akv),str(d)))
+        self._logger.add_log_string("_test_asserts %s:%s:%s"%(reason, str(akv),str(d)))
         if type(akv) is not dict:
             self.fail("Bug in test - reason '%s' - test data '%s' is not a dictionary (type '%s'), but element is type '%s'"%(reason, str(akv),str(type(akv)),str(type(d))))
             return

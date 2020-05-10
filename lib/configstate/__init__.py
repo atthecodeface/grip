@@ -5,8 +5,7 @@ and ties together the reading of descriptor, state and configuration files
 from .config import ConfigFile
 from .state import StateFile
 from .state import GripConfig as StateFileConfig
-from .grip import GripConfigStateInitial, GripConfigStateUnconfigured,GripConfigStateConfigured
+from .grip import GripConfigStateInitial, GripConfigStateConfigured
 __all__ = ["ConfigFile", "StateFile", "StateFileConfig"]
 __all__ += ["GripConfigStateInitial"]
-__all__ += ["GripConfigStateUnconfigured"]
 __all__ += ["GripConfigStateConfigured"]

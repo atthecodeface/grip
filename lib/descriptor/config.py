@@ -8,7 +8,7 @@ from ..git import Url as GitUrl
 from .stage import StageTomlDict
 from .repo  import RepoDescTomlDict
 from .stage import Descriptor as StageDescriptor
-from .repo import Descriptor as RepositoryDescriptor
+from .repo import DescriptorInConfig as RepositoryDescriptorInConfig
 
 from typing import TYPE_CHECKING
 from ..types import PrettyPrinter, Documentation, DocumentationEntry, MakefileStrings, EnvDict
@@ -55,11 +55,16 @@ class DescriptorValues(object):
     doc:   Optional[str]
     stage: TomlDictValues
     #f __init__
-    def __init__(self, values:TomlDictValues):
+    def __init__(self, values:Optional[TomlDictValues]):
+        if values is None:
+            self.env   = TomlDictValues(EnvTomlDict)
+            self.stage = TomlDictValues(StageConfigTomlDict)
+            return
         values.Set_obj_properties(self, values.Get_fixed_attrs())
         if values.IsNone("env"):   self.env   = TomlDictValues(EnvTomlDict)
         if values.IsNone("stage"): self.stage = TomlDictValues(StageConfigTomlDict)
         pass
+    pass
 
 #c Descriptor - a set of GripRepoDesc's for a configuration of the grip repo
 class Descriptor(object):
@@ -71,8 +76,11 @@ class Descriptor(object):
 
     """
     values : DescriptorValues
-    repos  : Dict[str,RepositoryDescriptor] = {}
+    repos  : Dict[str,RepositoryDescriptorInConfig] = {}
     stages : Dict[str,StageDescriptor] = {}
+    name   : str
+    doc    : Optional[str]
+    grip_repo_desc : 'GripDescriptor'
     #f __init__
     def __init__(self, name:str, grip_repo_desc:'GripDescriptor'):
         self.name = name
@@ -80,14 +88,9 @@ class Descriptor(object):
         self.grip_repo_desc = grip_repo_desc
         self.env = GripEnv(name="config '%s'"%self.name,
                            parent=grip_repo_desc.env )
-        self.repos = {}
-        self.stages = {}
-        for r in self.grip_repo_desc.base_repos:
-            self.repos[r] = self.grip_repo_desc.repos[r].clone()
-            pass
         pass
     #f build_from_values
-    def build_from_values(self, values:TomlDictValues) -> None:
+    def build_from_values(self, values:Optional[TomlDictValues]) -> None:
         """
         values is a SpecificConfigTomlDict._values
 
@@ -98,24 +101,39 @@ class Descriptor(object):
         # Build repos before stages, as stages refer to the repos
         self.build_repos_from_values(values)
         self.build_stages_from_values()
+        self.grip_repo_desc.base.add_log_string("Built config '%s' from values containing stages '%s' and repos '%s'"%(self.name, str_keys(self.stages), str_keys(self.repos)))
         pass
     #f build_repos_from_values
-    def build_repos_from_values(self, values:TomlDictValues) -> None:
+    def build_repos_from_values(self, values:Optional[TomlDictValues]) -> None:
         """
         """
+        self.repos = {}
+        repo_names = set()
+        for rn in self.grip_repo_desc.base_repos:
+            repo_names.add(rn)
+            pass
         for rn in self.values.repos:
-            r = self.grip_repo_desc.get_repo(rn)
-            if r is None: raise GripTomlError("repo '%s' specified in config '%s' but it is not defined in the file"%(r, self.name))
-            self.repos[rn] = r
+            repo_names.add(rn)
             pass
-        for rn in values.Get_other_attrs(): # These must be RepoDescTomDict._values
-            if rn not in self.repos:
-                raise GripTomlError("repo '%s' description specified in config '%s' but it is not one of the repos for that config (repos are %s)"%(rn, self.name, str_keys(self.repos)))
-            repo_desc = values.Get(rn)
-            self.repos[rn] = RepositoryDescriptor(rn, values=repo_desc, clone=self.repos[rn], grip_repo_desc=self.grip_repo_desc)
+        unconfigured_repos = {}
+        for rn in repo_names:
+            opt_unconfigured_repo = self.grip_repo_desc.get_repo(rn)
+            if opt_unconfigured_repo is None:
+                raise GripTomlError("repo '%s' specified in config '%s' but it is not defined in the file"%(rn, self.name))
+            unconfigured_repos[rn] = opt_unconfigured_repo
             pass
-        for r in self.iter_repos():
-            r.set_grip_config(self)
+        repo_descs_just_for_config = {}
+        if values is not None:
+            for rn in values.Get_other_attrs(): # These must be RepoDescTomDict._values
+                if rn not in unconfigured_repos:
+                    raise GripTomlError("repo '%s' description specified in config '%s' but it is not one of the repos for that config (repos are %s)"%(rn, self.name, str_keys(unconfigured_repos)))
+                repo_descs_just_for_config[rn] = values.Get(rn)
+                pass
+            pass
+        for (rn, urd) in unconfigured_repos.items():
+            urd_values = None
+            if rn in repo_descs_just_for_config: urd_values = repo_descs_just_for_config[rn]
+            self.repos[rn] = RepositoryDescriptorInConfig(self, urd, values=urd_values)
             pass
         pass
     #f build_stages_from_values
@@ -125,21 +143,24 @@ class Descriptor(object):
         it must have <stage name> -> Stage for every stage name in the global stages
         as well as those locally for the config
         """
-        stage_values = {}
+        stage_values :Dict[str,Optional[TomlDictValues]] = {}
+        self.grip_repo_desc.base.add_log_string("adding stages")
+        stages : Dict[str,Optional[StageDescriptor]] = {}
+        for s in self.grip_repo_desc.iter_stages():
+            sn = s.get_name()
+            stage_values[sn] = None
+            stages[sn] = s
+            pass
         if self.values.stage is not None:
             for sn in self.values.stage.Get_other_attrs():
                 stage_values[sn] = self.values.stage.Get(sn)
-                pass
-            pass
-        for s in self.grip_repo_desc.iter_stages():
-            sn = s.get_name()
-            if sn not in stage_values:
-                stage_values[sn] = None
+                if sn not in stages: stages[sn] = None
                 pass
             pass
         self.stages = {}
         for sn in stage_values.keys():
-            stage = self.grip_repo_desc.get_stage(sn)
+            self.grip_repo_desc.base.add_log_string("adding stage %s"%(sn))
+            stage = stages[sn]
             if stage is None:
                 self.stages[sn] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=sn, values=stage_values[sn])
                 pass
@@ -171,14 +192,15 @@ class Descriptor(object):
         if stage_name in self.stages: return self.stages[stage_name]
         return None
     #f get_repo
-    def get_repo(self, repo_name:str, error_on_not_found:bool=True) -> Optional[RepositoryDescriptor]:
+    def get_repo(self, repo_name:str, error_on_not_found:bool=True) -> Optional[RepositoryDescriptorInConfig]:
         if repo_name not in self.repos:
             if not error_on_not_found: return None
             raise GripTomlError("Repository '%s' not know in grip configuration '%s'"%(repo_name, self.name))
         return self.repos[repo_name]
     #f iter_repos - iterate over repos in config, each is RepositoryDescriptor instance
-    def iter_repos(self) -> Iterable[RepositoryDescriptor]:
+    def iter_repos(self) -> Iterable[RepositoryDescriptorInConfig]:
         for n in self.repos:
+            self.grip_repo_desc.base.add_log_string("iter repos yield %s"%(n))
             yield self.repos[n]
             pass
         pass
@@ -263,7 +285,7 @@ class Descriptor(object):
             pass
         return acc
     #f fold_repo_stages
-    def fold_repo_stages(self, acc:Any, callback_fn:Callable[[Any,RepositoryDescriptor,StageDescriptor],Any]) -> Any:
+    def fold_repo_stages(self, acc:Any, callback_fn:Callable[[Any,RepositoryDescriptorInConfig,StageDescriptor],Any]) -> Any:
         for r in self.iter_repos():
             acc = r.fold_repo_stages(acc, callback_fn)
             pass

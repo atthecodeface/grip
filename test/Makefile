@@ -6,7 +6,7 @@ TESTS_LOG_DIR = ${GRIP_DIR}/test/logs
 
 TESTS_PYTHONPATH = ${GRIP_DIR}:${PYTHONPATH}
 TESTS_ENV = PYTHONPATH=${TESTS_PYTHONPATH} GRIP_DIR=${GRIP_DIR} TESTS_LOG_DIR=${TESTS_LOG_DIR}
-all: check_types_strict test_all
+all: check_types test_all
 
 .PHONY:test_lib
 test_lib:
@@ -29,11 +29,11 @@ PYTHON_SRCS += ${GRIP_DIR}/test/test_grip.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_git.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_state_file.py
 
-.PHONY:check_types
-check_types:
+.PHONY:check_types_loose
+check_types_loose:
 	mypy ${PYTHON_SRCS}
 
-.PHONY:check_types_strict
-check_types_strict:
+.PHONY:check_types
+check_types:
 	mypy --strict ${PYTHON_SRCS}
 

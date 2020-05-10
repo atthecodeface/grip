@@ -12,6 +12,16 @@ class GripRepoStateUnitTestBase(UnitTestObject):
     grs_assert : AKV = {}
     cfg_assert : AKV = {}
     exception_expected = None
+    #f setUpClass - invoked for all tests to use
+    @classmethod
+    def setUpClass(cls) -> None:
+        TestCase.setUpSubClass(cls)
+        pass
+    #f tearDownClass - invoked when all tests completed
+    @classmethod
+    def tearDownClass(cls) -> None:
+        TestCase.tearDownSubClass(cls)
+        pass
     def test_it(self) -> None:
         if self.state_toml is not None:
             grs = StateFile()

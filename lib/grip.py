@@ -85,9 +85,13 @@ class Toplevel(GripBase):
         self.initial_config_state = GripConfigStateInitial(self)
         self.initial_config_state.read_desc_state()
         self._is_configured = False
-        if self.initial_config_state.is_configured():
+        if self.initial_config_state.has_config_file():
+            self.initial_config_state.select_current_configuration()
             self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
             self.configured_config_state.read_desc(error_handler=error_handler)
+            if options.get("debug_config",False):
+                import sys
+                self.configured_config_state.dump_to_file(sys.stdout)
             self._is_configured = True
             pass
         if ensure_configured and not self._is_configured:
@@ -169,14 +173,20 @@ class Toplevel(GripBase):
         raise Exception("Repo is not configured so has no config name")
     #f configure
     def configure(self, config_name:Optional[str]=None) -> None:
+        self.add_log_string("Configuring repo %s with config %s"%(str(self.git_repo.path),config_name))
         if self.is_configured():
             raise UserError("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
-        self.initial_config_state.choose_configuration(config_name)
+        config_name = self.initial_config_state.select_configuration(config_name)
+        assert config_name is not None
         self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
+        self.add_log_string("...configuring toplevel for repo %s config %s"%(str(self.git_repo.path), config_name))
         self.configure_toplevel_repo()
         self.check_clone_permitted()
+        self.add_log_string("...cloning subrepos for repo %s"%(str(self.git_repo.path)))
         self.clone_subrepos()
+        self.add_log_string("...rereading config and state for repo %s"%(str(self.git_repo.path)))
         self.configured_config_state.read_desc()
+        self.add_log_string("...updating configuration for repo %s"%(str(self.git_repo.path)))
         self.create_subrepos()
         self._is_configured = True
         self.update_state()
@@ -248,9 +258,9 @@ class Toplevel(GripBase):
         assert self.branch_name is not None
         # Clone all subrepos to the correct paths from url / branch at correct changeset
         # Use shallow if required
-        for r in self.configured_config_state.config_desc.iter_repos():
+        for r in self.initial_config_state.iter_repos():
             # r : RepositoryDescriptor
-            r_state = self.configured_config_state.state_file_config.get_repo_state(self.configured_config_state.config_desc, r.name)
+            r_state = self.initial_config_state.state_file_config.get_repo_state(self.configured_config_state.config_desc, r.name)
             assert r_state is not None
             dest = self.git_repo.filename([r.path])
             self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))

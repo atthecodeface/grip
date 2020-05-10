@@ -1,5 +1,5 @@
 #a Imports
-from typing import Type, Dict, List, Sequence, Any, Iterable, Tuple, Set
+from typing import Type, Dict, List, Sequence, Any, Iterable, Tuple, Set, Optional
 from ..options import Options
 from ..log import Log
 from ..verbose import Verbose

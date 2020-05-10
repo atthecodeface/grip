@@ -1,6 +1,6 @@
 #a Imports
 import os
-from typing import Optional, List, Callable, Type, ClassVar, Union, Any, Tuple, IO
+from typing import Optional, List, Callable, Type, ClassVar, Union, Any, Tuple, IO, cast
 from ..tomldict import TomlDict, TomlDictValues, TomlDictParser
 from ..exceptions import *
 from ..env import GripEnv, EnvTomlDict
@@ -8,7 +8,7 @@ from ..env import GripEnv, EnvTomlDict
 from typing import TYPE_CHECKING
 from ..types import PrettyPrinter
 if TYPE_CHECKING:
-    from ..descriptor import RepositoryDescriptor, ConfigurationDescriptor
+    from ..descriptor import RepositoryDescriptorInConfig, ConfigurationDescriptor
     from ..descriptor import GripDescriptor
     from ..grip import Toplevel
 
@@ -36,14 +36,14 @@ class Dependency:
     repo_name  : Optional[str] # None if global
     stage_name : str
     stage : 'Descriptor'
-    repo  : Optional['RepositoryDescriptor']
+    repo  : Optional['RepositoryDescriptorInConfig']
     #f set_makefile_path_fn - class method - set makefile_path_fn for the whole class
     @classmethod
     def set_makefile_path_fn(cls, path_fn:Any) -> None:
         cls.makefile_path_fn = path_fn
         pass
     #f __init__
-    def __init__(self, s:str, git_repo_desc:Optional['RepositoryDescriptor']=None, must_be_global:bool=True, force_local:bool=False):
+    def __init__(self, s:str, git_repo_desc:Optional['RepositoryDescriptorInConfig']=None, must_be_global:bool=True, force_local:bool=False):
         repo_name=None
         if git_repo_desc is not None: repo_name=git_repo_desc.name
         s_split = s.split(".")
@@ -156,7 +156,7 @@ class Descriptor(object):
     grip_repo_desc  : 'GripDescriptor'
     grip_config     : 'ConfigurationDescriptor'
     #f __init__
-    def __init__(self, grip_repo_desc:'GripDescriptor', name:str, clone:Optional['Descriptor']=None, git_repo_desc:Optional['RepositoryDescriptor']=None, values:Optional['TomlDictValues']=None):
+    def __init__(self, grip_repo_desc:'GripDescriptor', name:str, clone:Optional['Descriptor']=None, git_repo_desc:Optional['RepositoryDescriptorInConfig']=None, values:Optional['TomlDictValues']=None):
         self.grip_repo_desc = grip_repo_desc
         self.git_repo_desc = git_repo_desc # May be None
         # self.grip_config = None # Will be set by validate
@@ -174,7 +174,7 @@ class Descriptor(object):
             pass
         pass
     #f clone - clone the stage descriptor, particularly to instantiate it within a particular config
-    def clone(self, grip_repo_desc:Optional['GripDescriptor']=None, git_repo_desc:Optional['RepositoryDescriptor']=None, values:Optional['TomlDictValues']=None) -> 'Descriptor':
+    def clone(self, grip_repo_desc:Optional['GripDescriptor']=None, git_repo_desc:Optional['RepositoryDescriptorInConfig']=None, values:Optional['TomlDictValues']=None) -> 'Descriptor':
         if grip_repo_desc is None: grip_repo_desc = self.grip_repo_desc
         if git_repo_desc  is None: git_repo_desc = self.git_repo_desc
         return self.__class__(grip_repo_desc=grip_repo_desc, git_repo_desc=git_repo_desc, name=self.name, clone=self, values=values)
@@ -307,6 +307,10 @@ class Descriptor(object):
         if self.values.requires != []:acc = pp(acc, "requires:   '%s'" % (" ".join(self.values.requires)), indent=1)
         if self.values.satisfies is not None:acc = pp(acc, "satisfies:   '%s'" % (self.values.satisfies), indent=1)
         return acc
+    #f __str__
+    def __str__(self) -> str:
+        def pp(acc:str,s:str,indent:int=0)->str: return acc + ("  "*indent) + s + "\n"
+        return cast(str,self.prettyprint("", pp))
     #f All done
     pass
 

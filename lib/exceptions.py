@@ -75,6 +75,23 @@ class HowFilesModified(GitReason):
     pass
 
 #a Exceptions
+class TomlError(ConfigurationError):
+    """
+    A TomlError records an error in reading a Toml dictionary.
+
+    *where* is provided by the toml library, indicating (hopefully) where an error started
+
+    *reason* is what is causing the error in TomlDict
+    """
+    def __init__(self, where:str, reason:str):
+        self.where = where
+        self.reason = reason
+        pass
+    def __str__(self) -> str:
+        return "%s %s"%(self.where, self.reason)
+        pass
+    pass
+
 #c GripTomlError - exception used when reading the grip toml file
 class GripTomlError(ConfigurationError):
     pass

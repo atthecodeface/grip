@@ -23,6 +23,7 @@ class ExampleToml(Toml):
     stages          = ["install"]
     workflow        = "readonly"
     env             = {"D2ENV":"d2"}
+    logging         = "True"
     config : Dict[str,Any] = {}
     repo : Dict[str,Any] = {}
     def __init__(self, fs:FileSystem, **kwargs:Any):
@@ -113,6 +114,7 @@ class BasicTest(TestCase):
         g.git_clone(clone=self.cls_g_bare.abspath)
         g.grip_command("configure")
         fs.log_hashes(reason="post grip configure", path=Path("grip_repo_one_clone/.grip"), glob="*", depth=-1, use_full_name=False)
+        g.log_file_contents(fs.abspath(Path("grip_repo_one_clone/.grip/local.log")),prefix="%%log%% ")
         #print(os_command(options=g.options, cmd="cat .grip/grip.toml", cwd=g.path))
         self.assertTrue(fs.abspath(Path("grip_repo_one_clone")).is_dir()        , "git clone of bare grip repo should create grip_repo_one_clone directory")
         self.assertTrue(fs.abspath(Path("grip_repo_one_clone/.grip")).is_dir()  , "git clone of bare grip repo should create .grip directory")

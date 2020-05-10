@@ -1,6 +1,7 @@
 #a Imports
 import sys, copy
 import toml
+from .exceptions import *
 from typing import Type, List, Callable, Mapping, Any, Dict, IO, Optional, MutableMapping
 RawTomlDict   = MutableMapping[str, Any]
 TDFN = Callable[['TomlDictValues', Any, str, Any],Any]
@@ -21,25 +22,6 @@ def str_keys(d:Mapping[str,Any]) -> str:
 #v bool_options
 bool_options = {"True":True, "False":False, "Yes":True, "No":False,
                 "true":True, "false":False, "yes":True, "no":False}
-
-#a Exceptions
-#c TomlError
-class TomlError(Exception):
-    """
-    A TomlError records an error in reading a Toml dictionary.
-
-    *where* is provided by the toml library, indicating (hopefully) where an error started
-
-    *reason* is what is causing the error in TomlDict
-    """
-    def __init__(self, where:str, reason:str):
-        self.where = where
-        self.reason = reason
-        pass
-    def __str__(self) -> str:
-        return "%s %s"%(self.where, self.reason)
-        pass
-    pass
 
 #a Classes
 #c TomlDictValues
