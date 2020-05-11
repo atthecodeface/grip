@@ -45,9 +45,9 @@ class Dependency:
         cls.makefile_path_fn = path_fn
         pass
     #f __init__
-    def __init__(self, s:str, git_repo_desc:Optional['RepositoryDescriptorInConfig']=None, must_be_global:bool=True, force_local:bool=False):
+    def __init__(self, s:str, repo:Optional['RepositoryDescriptorInConfig']=None, must_be_global:bool=True, force_local:bool=False):
         repo_name=None
-        if git_repo_desc is not None: repo_name=git_repo_desc.name
+        if repo is not None: repo_name=repo.name
         s_split = s.split(".")
         s_stage_name = s_split[0]
         s_repo_name = None
@@ -119,6 +119,9 @@ class Dependency:
         tgt_path = self.makefile_path()
         if tgt_path.exists(): tgt_path.unlink()
         return (tgt, tgt_path)
+    #f __str__
+    def __str__(self)->str:
+        return self.full_name()
     #f All done
     pass
 
@@ -151,7 +154,7 @@ class Descriptor(object):
 
     It a stage name (e.g. install, test, etc) and how to perform the stage
 
-    It may have a git_repo_desc (which it is for); if it is for a config, though, this will be None
+    It may have a repo (which it is for); if it is for a config, though, this will be None
     """
     values          : 'DescriptorValues'
     requires        : List[Dependency]
@@ -159,12 +162,12 @@ class Descriptor(object):
     grip_repo_desc  : 'GripDescriptor'
     grip_config     : 'ConfigurationDescriptor'
     #f __init__
-    def __init__(self, grip_repo_desc:'GripDescriptor', name:str, clone:Optional['Descriptor']=None, git_repo_desc:Optional['RepositoryDescriptorInConfig']=None, values:Optional['TomlDictValues']=None):
+    def __init__(self, grip_repo_desc:'GripDescriptor', name:str, clone:Optional['Descriptor']=None, repo:Optional['RepositoryDescriptorInConfig']=None, values:Optional['TomlDictValues']=None):
         self.grip_repo_desc = grip_repo_desc
-        self.git_repo_desc = git_repo_desc # May be None
+        self.repo = repo # May be None
         # self.grip_config = None # Will be set by validate
         self.name = name
-        self.dependency = Dependency(name, git_repo_desc=self.git_repo_desc, force_local=True)
+        self.dependency = Dependency(name, repo=self.repo, force_local=True)
         self.cloned_from = clone
         if clone is not None:
             self.values = clone.values.clone(clone.values)
@@ -177,10 +180,10 @@ class Descriptor(object):
             pass
         pass
     #f clone - clone the stage descriptor, particularly to instantiate it within a particular config
-    def clone(self, grip_repo_desc:Optional['GripDescriptor']=None, git_repo_desc:Optional['RepositoryDescriptorInConfig']=None, values:Optional['TomlDictValues']=None) -> 'Descriptor':
+    def clone(self, grip_repo_desc:Optional['GripDescriptor']=None, repo:Optional['RepositoryDescriptorInConfig']=None, values:Optional['TomlDictValues']=None) -> 'Descriptor':
         if grip_repo_desc is None: grip_repo_desc = self.grip_repo_desc
-        if git_repo_desc  is None: git_repo_desc = self.git_repo_desc
-        return self.__class__(grip_repo_desc=grip_repo_desc, git_repo_desc=git_repo_desc, name=self.name, clone=self, values=values)
+        if repo  is None: repo = self.repo
+        return self.__class__(grip_repo_desc=grip_repo_desc, repo=repo, name=self.name, clone=self, values=values)
     #f get_name - Get name of the stage
     def get_name(self) -> str:
         return self.name
@@ -205,15 +208,15 @@ class Descriptor(object):
         self.grip_config = grip_config
         self.requires = []
         for vr in self.values.requires:
-            self.requires.append(Dependency(vr, git_repo_desc=self.git_repo_desc, must_be_global=False))
+            self.requires.append(Dependency(vr, repo=self.repo, must_be_global=False))
             pass
         self.satisfies = []
         if self.values.satisfies is not None:
-            self.satisfies.append(Dependency(self.values.satisfies, git_repo_desc=self.git_repo_desc, must_be_global=False))
+            self.satisfies.append(Dependency(self.values.satisfies, repo=self.repo, must_be_global=False))
             pass
         repo_name = "<global!!>"
-        if self.git_repo_desc is not None:
-            repo_name = self.git_repo_desc.name
+        if self.repo is not None:
+            repo_name = self.repo.name
             pass
         for r in self.requires:
             r.validate(grip_config, reason="Repo stage '%s.%s' requires of '%s'"%(repo_name, self.name, r.full_name()), error_handler=error_handler)
@@ -233,22 +236,22 @@ class Descriptor(object):
     def write_makefile_entries(self, f:IO[str], verbose:Callable[[str], None]) -> None:
         (tgt, tgt_filename) = self.dependency.new_makefile_stamp()
         sn = self.get_name()
-        if self.git_repo_desc is None:
+        if self.repo is None:
             verbose("Adding global stage '%s'"%sn)
             rs_name = "%s"%(sn)
             pass
         else:
             verbose("Adding target '%s'"%tgt)
-            rs_name = "%s_%s"%(self.git_repo_desc.name, sn)
+            rs_name = "%s_%s"%(self.repo.name, sn)
             pass
 
         wd = self.wd
         if wd is None:
-            if self.git_repo_desc is None:
+            if self.repo is None:
                 wd = str(self.grip_repo_desc.git_repo.path())
                 pass
             else:
-                wd = str(self.grip_repo_desc.git_repo.path(self.git_repo_desc.path()))
+                wd = str(self.grip_repo_desc.git_repo.path(self.repo.path()))
                 pass
             pass
 
@@ -281,8 +284,8 @@ class Descriptor(object):
             pass
 
         for s in self.satisfies:
-            assert self.git_repo_desc is not None
-            verbose("Global stage '%s' depends on repo '%s' stage '%s'"%(s.target_name(), self.git_repo_desc.name, self.name))
+            assert self.repo is not None
+            verbose("Global stage '%s' depends on repo '%s' stage '%s'"%(s.target_name(), self.repo.name, self.name))
             ostgt          = s.makefile_stamp()
             ostgt_filename = s.makefile_path()
             print("%s: %s"%(ostgt_filename, tgt_filename), file=f)
@@ -290,10 +293,10 @@ class Descriptor(object):
             print("force.%s: force.%s"%(ostgt, tgt), file=f)
             pass
 
-        if self.git_repo_desc is not None:
+        if self.repo is not None:
             config_stage = self.grip_config.get_stage(self.name)
             if config_stage is not None:
-                verbose("Global stage '%s' depends on repo '%s' of same name"%(config_stage.name, self.git_repo_desc.name))
+                verbose("Global stage '%s' depends on repo '%s' of same name"%(config_stage.name, self.repo.name))
                 stgt_filename = config_stage.dependency.makefile_path()
                 print("%s: %s"%(stgt_filename, tgt_filename), file=f)
                 pass
@@ -301,7 +304,7 @@ class Descriptor(object):
         pass
     #f prettyprint
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
-        acc = pp(acc, "%s:" % (self.name))
+        acc = pp(acc, "stage.%s:" % (self.name))
         if hasattr(self,"wd"): acc = pp(acc, "wd:     %s" % (self.wd), indent=1)
         if hasattr(self,"env"):
             if isinstance(self.env, GripEnv): acc = pp(acc, "env:    %s" % (self.env.as_str()), indent=1)
@@ -310,7 +313,7 @@ class Descriptor(object):
         if hasattr(self,"requires"):
             cc = pp(acc, "requires:   '%s'" % (" ".join([str(r) for r in self.requires])), indent=1)
         if hasattr(self,"satisfies"):
-            acc = pp(acc, "satisfies:   '%s'" % (self.satisfies), indent=1)
+            acc = pp(acc, "satisfies:   '%s'" % (" ".join([str(r) for r in self.satisfies])), indent=1)
         return acc
     #f __str__
     def __str__(self) -> str:

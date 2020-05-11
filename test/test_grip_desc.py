@@ -71,18 +71,6 @@ class TestSet(UnitTestObject, Loggable):
         # self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
         # self.grd  = self.grip.initial_repo_desc
         pass
-    # def do_read_toml_cfg(self, config_name:str) -> None:
-    #    subrepos = {}
-    #    for (sn,st) in self.test.subrepos.items():
-    #        subrepos[sn] = st()._as_string()
-    #        pass
-    #    self.grd.read_toml_strings(self.config_toml, subrepos, path=Path("no_path_really"))
-    #    self.grd.build_from_toml_dict()
-    #    self.grd.select_config(config_name=config_name)
-    #    self.grd.validate()
-    #    self.grd.resolve()
-    #    self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
-    #    pass
     def _test_it(self, test:Type[TestBase]) -> None:
         self.test = test
         self.config_toml = test.ConfigToml()._as_string()
@@ -302,9 +290,15 @@ class TestConfiguredSubrepos(TestSet):
             pass
         config_name : Union [None, bool, str] = None
         config_name = None
-        subrepos : SubrepoTomls = {"joe":SubrepoTomlJoe}
+        subrepos : SubrepoTomls = {"binutils":SubrepoTomlJoe}
         pass
     class Working(Test):
+        config_name = "y"
+        cfg_assert = {"repos":{"joe":{"_path":"binutils"}}}
+        pass
+    class SubrepoJoeEnv(Test):
+        config_name = "y"
+        cfg_assert = {"repos":{"joe":{"doc":"subrepo joe doc"}}}
         pass
 
 #c TestStages
@@ -331,16 +325,21 @@ class TestStages(TestSet):
                     "build":{"exec":"build_joe"},
                 },
             }
+            # Want to support [stage.some] ... but we do not as yet
             # stage = {"some":{"doc":"doc of stage some"}}
             config = {
                 "x": {
                     "repos":["jim"],
-                    "stage":{"all":{"doc":"doc of stage all", "requires":[]}}, # "jim.build"]}},
+                    "stage":{"all":{"doc":"doc of stage all in cfg x",
+                                    "exec":"some_exec for x",
+                                    "requires":["fred.build"]}},
                     "env":{"A":"v"},
                 },
                 "y": {
                     "repos":["joe"],
-                    "stage":{"all":{"doc":"doc of stage all", "requires":[]}}, # "joe.build"]}},
+                    "stage":{"all":{"doc":"doc of stage all in cfg y",
+                                    "exec":"some_exec",
+                                    "requires":["joe.build", "fred.build"]}},
                     "fred":{"path":"nothing"},
                 },
             }
@@ -350,12 +349,19 @@ class TestStages(TestSet):
         pass
     class Working(Test):
         config_name = "y"
-        # cfg_assert = {"stages":{"some":{"doc":"doc of stage all"}}}
-        cfg_assert : Asserts = {"repos":{"joe":{}}}
+        cfg_assert : Asserts = {"stages":{"all":{"doc":"doc of stage all in cfg y"}}}
+        pass
+    class StageFredBuild(Test):
+        cfg_assert : Asserts = {"repos":{"fred":{"stages":{"build":{"exec":"build_fred"}}}}}
         pass
     class StageAll1(Test):
-        cfg_assert : Asserts = {"stages":{"all":{"doc":"doc of stage all"}}}
+        cfg_assert : Asserts = {"stages":{"all":{"doc":"doc of stage all in cfg x"}}}
         pass
+    class StageAll1Exec(Test):
+        config_name = "y"
+        cfg_assert : Asserts = {"stages":{"all":{"exec":"some_exec"}}}
+        pass
+    pass
 
 #a Toplevel
 #f Create tests

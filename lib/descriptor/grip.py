@@ -212,6 +212,7 @@ class Descriptor(object):
             if self.base.is_file(sr_path):
                 with self.base.open(sr_path) as f:
                     subrepo_toml_strings[r.name] = f.read()
+                    self.base.add_log_string("Read toml file '%s'"%(str(sr_path)))
                     pass
                 pass
             pass
@@ -387,6 +388,9 @@ class Descriptor(object):
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "default_config: %s"%(self.default_config))
         acc = pp(acc, "base_repos:     %s"%(str(self.base_repos)))
+        acc = pp(acc, "repos:  %s" % (str(list(self.repos.keys()))))
+        acc = pp(acc, "configs: %s" % (str(list(self.configs.keys()))))
+        acc = pp(acc, "stages: %s" % (str(list(self.stages.keys()))))
         for (n,r) in self.repos.items():
             def ppr(acc:Any, s:str, indent:int=0) -> Any:
                 return pp(acc, s, indent=indent)

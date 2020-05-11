@@ -62,6 +62,7 @@ class GripConfigStateInitial(GripConfigStateBase):
         self.base.add_log_string("First pass reading '%s'"%str(self.grip_toml_path))
         self.initial_repo_desc = GripDescriptor(base=self.base)
         self.initial_repo_desc.read_toml_file(self.grip_toml_path, subrepo_descs=[])
+        self.initial_repo_desc.validate()
         self.initial_repo_desc.resolve()
         self.initial_repo_desc.resolve_git_urls(self.base_url)
         if self.initial_repo_desc.is_logging_enabled():

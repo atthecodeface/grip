@@ -197,13 +197,13 @@ class Descriptor(object):
             if not error_on_not_found: return None
             raise GripTomlError("Repository '%s' not know in grip configuration '%s'"%(repo_name, self.name))
         return self.repos[repo_name]
-    #f iter_repos - iterate over repos in config, each is RepositoryDescriptor instance
+    #f iter_repos - iterate over repos in config
     def iter_repos(self) -> Iterable[RepositoryDescriptorInConfig]:
         for n in self.repos:
             yield self.repos[n]
             pass
         pass
-    #f iter_stages - iterate over stages in config, each is Stage instance
+    #f iter_stages - iterate over stages in config
     def iter_stages(self) -> Iterable[StageDescriptor]:
         for n in self.stages:
             yield self.stages[n]
@@ -303,6 +303,8 @@ class Descriptor(object):
     #f prettyprint
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "config.%s:" % (self.name))
+        acc = pp(acc, "repos:  %s" % (str(list(self.repos.keys()))),indent=1)
+        acc = pp(acc, "stages: %s" % (str(list(self.stages.keys()))),indent=1)
         for (n,r) in self.repos.items():
             def ppr(acc:Any, s:str, indent:int=0) -> Any:
                 return pp(acc, s, indent=indent+1)

@@ -53,6 +53,7 @@ class Repository(GitRepository):
 class GripBaseTest(GripBase):
     files:Dict[str,str] = {}
     toml_dicts:Dict[str,Any]={}
+    verbose_files :bool= False
     def __init__(self, log:Log, files:Dict[str,str]={}, toml_dicts:Dict[str,Any]={}):
         options =  Options()
         options._validate()
@@ -64,10 +65,12 @@ class GripBaseTest(GripBase):
     def is_file(self, path:Path) -> bool:
         return str(path) in self.files
     def open(self, path:Path, mode:str="r") -> IO[str]:
-        print("open %s %s"%(str(path),mode))
+        if self.verbose_files: print("open %s %s"%(str(path),mode))
         if mode!="r": raise Exception("Test has read-only string files")
         if str(path) in self.files:
+            if self.verbose_files:  print("opened")
             return io.StringIO(self.files[str(path)])
+        if self.verbose_files:  print("not found")
         raise FileNotFoundError("GripBaseTest has not file '%s'"%str(path))
     pass
 

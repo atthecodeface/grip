@@ -140,7 +140,10 @@ class Descriptor(DescriptorBase):
         if values is not None:
             for stage_name in values.Get_other_attrs():
                 stage_values = values.Get(stage_name)
-                # self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, git_repo_desc=self, values=stage_values)
+                self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc,
+                                                          name=stage_name,
+                                                          repo=None,
+                                                          values=stage_values)
                 pass
             pass
         if self.values.url is None: raise GripTomlError("repo '%s' has no url to clone from"%(self.name))
@@ -179,12 +182,12 @@ class DescriptorInConfig(DescriptorBase):
         if values is not None:
             for stage_name in values.Get_other_attrs():
                 stage_values = values.Get(stage_name)
-                self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, git_repo_desc=self, values=stage_values)
+                self.stages[stage_name] = StageDescriptor(grip_repo_desc=self.grip_repo_desc, name=stage_name, repo=self, values=stage_values)
                 pass
             pass
         for (n,s) in clone.stages.items():
             if n not in self.stages:
-                self.stages[n] = s.clone(grip_repo_desc=self.grip_repo_desc, git_repo_desc=self)
+                self.stages[n] = s.clone(grip_repo_desc=self.grip_repo_desc, repo=self)
                 pass
             pass
         pass
@@ -296,11 +299,11 @@ class DescriptorInConfig(DescriptorBase):
     #f prettyprint
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "repo.%s:" % (self.name))
-        acc = pp(acc, " cfg:         %s" % (self.grip_config.name))
-        acc = pp(acc, " url(orig):   %s" % (self.url), indent=1)
+        acc = pp(acc, "cfg:         %s" % (self.grip_config.name), indent=1)
+        acc = pp(acc, "url(orig):   %s" % (self.url), indent=1)
         if self._is_resolved:
-            acc = pp(acc, " url(parsed)  %s" % (self.git_url.as_string()))
-            acc = pp(acc, " path:        %s" % (str(self._path)), indent=1)
+            acc = pp(acc, "url(parsed)  %s" % (self.git_url.as_string()), indent=1)
+            acc = pp(acc, "path:        %s" % (str(self._path)), indent=1)
         if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
         for name in self.stages:
             def ppr(acc:Any, s:str, indent:int=0) -> Any:
