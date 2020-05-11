@@ -1,7 +1,8 @@
 #a Imports
-import toml
+from pathlib import Path
 from typing import Dict, Optional, Any
-from ..tomldict import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
+from ..base       import GripBase
+from ..tomldict   import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
 from ..exceptions import *
 from ..descriptor import ConfigurationDescriptor as ConfigDescriptor
 
@@ -163,7 +164,8 @@ class StateFile(object):
     raw_toml_dict = None
     configs : Dict[str, GripConfig] = {}
     #f __init__
-    def __init__(self) -> None:
+    def __init__(self, base:GripBase) -> None:
+        self.base = base
         self.configs = {}
         pass
     #f read_toml_dict
@@ -173,31 +175,14 @@ class StateFile(object):
         self.build_from_values(values)
         pass
     #f read_toml_file
-    def read_toml_file(self, grip_toml_filename:str) -> None:
+    def read_toml_file(self, grip_toml_path:Path) -> None:
         """
         Load the <root_dir>/.grip/state.toml file
         """
         try:
-            toml_dict = toml.load(grip_toml_filename)
+            toml_dict = self.base.toml_load(grip_toml_path)
             return self.read_toml_dict(toml_dict)
         except FileNotFoundError:
-            pass
-        pass
-    #f read_toml_string
-    def read_toml_string(self, grip_toml_string:str) -> None:
-        """
-        Really used in test only, read description from string
-        """
-        return self.read_toml_dict(toml.loads(grip_toml_string))
-    #f write_toml_file
-    def write_toml_file(self, grip_toml_filename:str) -> None:
-        """
-        Write the <root_dir>/.grip/state.toml file
-        """
-        toml_dict = self.toml_dict()
-        toml_string = toml.dumps(toml_dict)
-        with open(grip_toml_filename,"w") as f:
-            f.write(toml_string)
             pass
         pass
     #f build_from_values
@@ -214,6 +199,11 @@ class StateFile(object):
             toml_dict[n] = c.toml_dict()
             pass
         return toml_dict
+    #f write_toml_file - write out a toml file with the state of the instance
+    def write_toml_file(self, grip_toml_path:Path) -> None:
+        toml_dict = self.toml_dict()
+        self.base.toml_save(grip_toml_path, toml_dict)
+        pass
     #f prettyprint
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         for c in self.configs:

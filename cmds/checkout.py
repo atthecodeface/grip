@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import lib.grip
 from lib.command import GripCommandBase, ParsedCommand
 from lib.options import Options
@@ -24,8 +25,10 @@ class clone(GripCommandBase):
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
         repo_url     = self.options.repo_url.rstrip('/')
         checkoutname = self.options.checkoutname
+        if checkoutname is None: dest=None
+        else: dest = Path(checkoutname)
         branch       = self.options.branch
-        grip_repo    = lib.grip.Toplevel.clone(options=self.options, repo_url=repo_url, branch=branch, path=None, dest=checkoutname, invocation=self.invocation)
+        grip_repo    = lib.grip.Toplevel.clone(options=self.options, repo_url=repo_url, dest=dest, branch=branch, invocation=self.invocation)
         self.add_logger(grip_repo.log)
         #print(grip_repo.debug_repodesc())
         grip_repo.configure(config_name = self.options.config)
@@ -44,7 +47,7 @@ class configure(GripCommandBase):
         configuration : Optional[str]
     options : ConfigureOptions
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.get_grip_repo(ensure_configured=False)
         self.grip_repo.configure(config_name=self.options.configuration)
         return 0
         pass
@@ -58,7 +61,7 @@ class reconfigure(GripCommandBase):
     names = ["reconfigure"]
     # command_options = { }
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()), ensure_configured=True)
+        self.get_grip_repo()
         self.grip_repo.reconfigure()
         return 0
         pass

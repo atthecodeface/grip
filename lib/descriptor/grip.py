@@ -126,10 +126,11 @@ class Descriptor(object):
     def __init__(self, base:GripBase):
         self.base     = base
         self.git_repo = base.get_git_repo()
+        git_repo_path = self.git_repo.path()
         default_env = {}
         default_env["GRIP_ROOT_URL"]  = self.git_repo.get_git_url_string()
-        default_env["GRIP_ROOT_PATH"] = self.git_repo.get_path()
-        default_env["GRIP_ROOT_DIR"]  = os.path.basename(self.git_repo.get_path())
+        default_env["GRIP_ROOT_PATH"] = str(git_repo_path)
+        default_env["GRIP_ROOT_DIR"]  = git_repo_path.name
         self.env = GripEnv(name='grip.toml', default_values=default_env)
         pass
     #f toml_loads
@@ -144,14 +145,14 @@ class Descriptor(object):
             raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
         return r
     #f read_toml_strings
-    def read_toml_strings(self, grip_toml_string:str, subrepo_toml_strings:Dict[str,str], filename:str="<toml_file>")->None:
+    def read_toml_strings(self, grip_toml_string:str, subrepo_toml_strings:Dict[str,str], path:Path)->None:
         """
         Create the description and validate it from the grip_toml_string contents
 
         subrepo_toml_strings is a dictionary of repo -> repo_desc
 
         """
-        self.raw_toml_dict = self.toml_loads(filename, grip_toml_string)
+        self.raw_toml_dict = self.toml_loads(str(path), grip_toml_string)
         if "repo" in self.raw_toml_dict:
             for (rn,rs) in subrepo_toml_strings.items():
                 if rn not in self.raw_toml_dict["repo"]:
@@ -193,28 +194,28 @@ class Descriptor(object):
         self.build_from_values(values)
         pass
     #f read_toml_file
-    def read_toml_file(self, grip_toml_filename:str, subrepo_descs:List[RepositoryDescriptorInConfig]=[], error_handler:ErrorHandler=None) -> None:
+    def read_toml_file(self, grip_toml_path:Path, subrepo_descs:List[RepositoryDescriptorInConfig]=[], error_handler:ErrorHandler=None) -> None:
         """
         Load the <root_dir>/.grip/grip.toml file
 
         subrepo_descs is a list of RepoDescriptor instances which may have been checked
         out which may have grip.toml files. Add these after the main file.
         """
-        self.base.add_log_string("Reading config toml file '%s'"%(grip_toml_filename))
-        with self.base.open(Path(grip_toml_filename)) as f:
+        self.base.add_log_string("Reading config toml file '%s'"%str(grip_toml_path))
+        with self.base.open(grip_toml_path) as f:
             toml_string = f.read()
             pass
         subrepo_toml_strings = {}
         for r in subrepo_descs:
-            srfn = self.git_repo.path(r.path().joinpath(Path("grip.toml")))
-            self.base.add_log_string("Trying to read subconfig toml file '%s'"%(srfn))
-            if os.path.isfile(srfn):
-                with self.base.open(srfn) as f:
+            sr_path = self.git_repo.path(r.path().joinpath(Path("grip.toml")))
+            self.base.add_log_string("Trying to read subconfig toml file '%s'"%(str(sr_path)))
+            if self.base.is_file(sr_path):
+                with self.base.open(sr_path) as f:
                     subrepo_toml_strings[r.name] = f.read()
                     pass
                 pass
             pass
-        self.read_toml_strings(toml_string, subrepo_toml_strings, filename=grip_toml_filename)
+        self.read_toml_strings(toml_string, subrepo_toml_strings, path=grip_toml_path)
         self.build_from_toml_dict()
         pass
     #f build_from_values

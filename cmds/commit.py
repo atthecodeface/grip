@@ -13,7 +13,7 @@ class commit(GripCommandBase):
                     ("--ignore-modified",):{"action":"store_true", "dest":"ignore_modified",  "default":False, "help":"Ignore modified files in git repositories in appropriate workflows"},
     }
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.get_grip_repo()
         self.grip_repo.commit()
         return 0
 
@@ -27,7 +27,7 @@ class merge(GripCommandBase):
                     ("--interactive",):{"action":"store_true", "dest":"interactive",  "default":False, "help":"Use interactive git rebase"},
     }
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.get_grip_repo()
         self.grip_repo.merge()
         return 0
 
@@ -38,7 +38,7 @@ class prepublish(GripCommandBase):
     names = ["prepublish"]
     # command_options = {}
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.get_grip_repo()
         self.grip_repo.publish(prepush_only=True)
         return 0
 
@@ -49,7 +49,7 @@ class publish(GripCommandBase):
     names = ["publish"]
     # command_options = {}
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.get_grip_repo()
         self.grip_repo.publish(prepush_only=False)
         return 0
 

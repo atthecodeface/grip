@@ -16,10 +16,11 @@ class make(GripCommandBase):
     options : MakeOptions
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
         self.get_grip_repo(ensure_configured=True)
-        os.chdir(self.grip_repo.path())
-        args=["make","-f",self.grip_repo.grip_makefile_path()]
+        path = self.grip_repo.path()
+        os.chdir(path)
+        args=["make","-f",str(self.grip_repo.grip_makefile_path())]
         args.extend(self.options.args)
-        self.grip_repo.verbose.info("Entering "+self.grip_repo.path())
+        self.grip_repo.verbose.info("Entering "+str(path))
         self.grip_repo.verbose.info("Executing "+" ".join(args))
         os.execvp("make",args)
         return None

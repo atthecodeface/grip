@@ -36,7 +36,7 @@ class RepoUnitTest(TestCase):
         self.assertEqual(d.host,host,"Mismatch in host")
         self.assertEqual(d.user,user,"Mismatch in user")
         self.assertEqual(d.port,port,"Mismatch in port")
-        self.assertEqual(d.path,path,"Mismatch in path")
+        self.assertEqual(str(d.path),path,"Mismatch in path")
         self.assertEqual(d.protocol,protocol,"Mismatch in protocol")
         self.assertEqual(d.repo_name,repo_name,"Mismatch in repo_name")
         pass

@@ -1,4 +1,6 @@
 #a Imports
+from pathlib import Path
+
 from ..exceptions  import *
 from ..base        import GripBase
 from ..descriptor  import RepositoryDescriptor
@@ -18,10 +20,10 @@ from typing import ClassVar, List, Optional, Iterable, IO, Any
 class GripConfigStateBase(object):
     #v Instance properties
     base              : GripBase
-    grip_toml_filename   : str
-    state_toml_filename  : str
-    config_toml_filename : str
-    base_url             : GitUrl
+    grip_toml_path    : Path
+    state_toml_path   : Path
+    config_toml_path  : Path
+    base_url          : GitUrl
     initial_repo_desc : GripDescriptor
     config_file       : GripConfigFile
     state_file        : GripStateFile
@@ -33,18 +35,18 @@ class GripConfigStateBase(object):
     #f __init__
     def __init__(self, base:GripBase):
         self.base = base
-        self.grip_toml_filename   = self.base.grip_path(self.base.grip_toml_filename)
-        self.state_toml_filename  = self.base.grip_path(self.base.state_toml_filename)
-        self.config_toml_filename = self.base.grip_path(self.base.config_toml_filename)
+        self.grip_toml_path   = self.base.grip_path(self.base.grip_toml_filename)
+        self.state_toml_path  = self.base.grip_path(self.base.state_toml_filename)
+        self.config_toml_path = self.base.grip_path(self.base.config_toml_filename)
         self.base_url = self.base.get_git_repo().get_git_url()
         self._has_state     = False
         self._has_config_file = False
         pass
     #f read_desc_initial - Read the inital grip.toml file without subrepos
     def read_desc_initial(self) -> None:
-        self.base.add_log_string("First pass reading '%s'"%self.grip_toml_filename)
+        self.base.add_log_string("First pass reading '%s'"%str(self.grip_toml_path))
         self.initial_repo_desc = GripDescriptor(base=self.base)
-        self.initial_repo_desc.read_toml_file(self.grip_toml_filename, subrepo_descs=[])
+        self.initial_repo_desc.read_toml_file(self.grip_toml_path, subrepo_descs=[])
         self.initial_repo_desc.resolve()
         self.initial_repo_desc.resolve_git_urls(self.base_url)
         if self.initial_repo_desc.is_logging_enabled():
@@ -53,20 +55,20 @@ class GripConfigStateBase(object):
         pass
     #f read_state - Read state.toml
     def read_state(self) -> None:
-        self.base.add_log_string("Reading '%s'"%self.state_toml_filename)
-        self.state_file = GripStateFile()
+        self.base.add_log_string("Reading '%s'"%str(self.state_toml_path))
+        self.state_file = GripStateFile(self.base)
         try:
-            self.state_file.read_toml_file(self.state_toml_filename)
+            self.state_file.read_toml_file(self.state_toml_path)
             self._has_state = True
         except:
             raise
         pass
     #f read_config - Create GripConfig and read local.config.toml; set self.repo_config.config (GripConfig of config)
     def read_config(self) -> None:
-        self.base.add_log_string("Reading local configuration state file '%s'"%self.config_toml_filename)
-        self.config_file = GripConfigFile()
+        self.base.add_log_string("Reading local configuration state file '%s'"%str(self.config_toml_path))
+        self.config_file = GripConfigFile(self.base)
         try:
-            self.config_file.read_toml_file(self.config_toml_filename)
+            self.config_file.read_toml_file(self.config_toml_path)
             self._has_config_file = True
         except Exception as e:
             self._has_config_file = False
@@ -168,9 +170,9 @@ class GripConfigStateConfigured(GripConfigStateBase):
     #f read_desc - Create full_repo_desc by rereading grip.toml and those of subrepos
     def read_desc(self, error_handler:ErrorHandler=None) -> None:
         self.base.add_log_string("read_desc_configuration %s"%self.config_name)
-        self.base.add_log_string("Second pass reading '%s' with %d subrepos"%(self.grip_toml_filename,len(self.initial_subrepo_descs)))
+        self.base.add_log_string("Second pass reading '%s' with %d subrepos"%(str(self.grip_toml_path),len(self.initial_subrepo_descs)))
         self.full_repo_desc = GripDescriptor(self.base)
-        self.full_repo_desc.read_toml_file(self.grip_toml_filename, subrepo_descs=self.initial_subrepo_descs, error_handler=error_handler)
+        self.full_repo_desc.read_toml_file(self.grip_toml_path, subrepo_descs=self.initial_subrepo_descs, error_handler=error_handler)
         self.select_configuration(self.config_name)
         self.base.add_log_string("Validate full_repo_desc and selected configuration")
         self.full_repo_desc.validate(error_handler=error_handler)
@@ -216,8 +218,8 @@ class GripConfigStateConfigured(GripConfigStateBase):
         pass
     #f write_state
     def write_state(self) -> None:
-        self.base.add_log_string("Writing state file '%s'"%self.state_toml_filename)
-        self.state_file.write_toml_file(self.state_toml_filename)
+        self.base.add_log_string("Writing state file '%s'"%str(self.state_toml_path))
+        self.state_file.write_toml_file(self.state_toml_path)
         pass
     #f update_config
     def update_config(self) -> None:
@@ -228,8 +230,8 @@ class GripConfigStateConfigured(GripConfigStateBase):
         pass
     #f write_config
     def write_config(self) -> None:
-        self.base.add_log_string("Writing local configuration state file '%s'"%self.config_toml_filename)
-        self.config_file.write_toml_file(self.config_toml_filename)
+        self.base.add_log_string("Writing local configuration state file '%s'"%str(self.config_toml_path))
+        self.config_file.write_toml_file(self.config_toml_path)
         pass
 
     #f dump_to_file

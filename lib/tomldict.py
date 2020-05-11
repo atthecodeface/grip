@@ -1,6 +1,8 @@
 #a Imports
 import sys, copy
 import toml
+from pathlib import Path
+
 from .exceptions import *
 from typing import Type, List, Callable, Mapping, Any, Dict, IO, Optional, MutableMapping
 RawTomlDict   = MutableMapping[str, Any]
@@ -231,3 +233,12 @@ class TomlDictParser(object):
             raise TomlError(msg, "Unparsed keys '%s'"%(" ".join(r)))
         return values
 
+
+#a Toplevel functions
+def toml_load(f:IO[str]) -> RawTomlDict:
+    return toml.load(f)
+
+def toml_save(f:IO[str], toml_dict:RawTomlDict) -> None:
+    s = toml.dumps(toml_dict)
+    f.write(s)
+    pass

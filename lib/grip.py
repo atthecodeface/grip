@@ -45,31 +45,25 @@ class Toplevel(GripBase):
     _is_configured : bool
     #f find_git_repo_of_grip_root
     @classmethod
-    def find_git_repo_of_grip_root(cls, path:Optional[str], options:Options, log:Log) -> GitRepo:
-        git_repo = GitRepo(path, permit_no_remote=True, options=options, log=log)
-        path = git_repo.get_path()
-        if not os.path.isdir(os.path.join(path,".grip")):
-            path = os.path.dirname(path)
+    def find_git_repo_of_grip_root(cls, path:Path, options:Options, log:Log) -> GitRepo:
+        git_repo = GitRepo(path=path, permit_no_remote=True, options=options, log=log)
+        path = git_repo.path()
+        if not path.joinpath(Path(".grip")).is_dir():
+            path = path.parent
             return cls.find_git_repo_of_grip_root(path, options=options, log=log)
         return git_repo
-    #f clone - classmethod to create an instance after a git clone
+    #f clone - classmethod to perform a git clone and then create an instance
     @classmethod
-    def clone(cls, repo_url:str, branch:Optional[str], path:Optional[str]=None, dest:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None, invocation:str="")-> 'Toplevel':
+    def clone(cls, repo_url:str, dest:Optional[Path], branch:Optional[str], options:Optional[Options]=None, log:Optional[Log]=None, invocation:str="")-> 'Toplevel':
         if options is None: options=Options()
         if log is None: log = Log()
-        dest_path = dest
-        if path is not None:
-            if dest is not None:
-                dest_path = os.path.join(path,dest)
-                pass
-            else:
-                dest_path = path
-                pass
-            pass
-        git_repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest_path, options=options, log=log)
-        return cls(git_repo=git_repo, options=options, log=log, invocation=invocation)
+        git_repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest, options=options, log=log)
+        return cls(path=git_repo.path(), git_repo=git_repo, options=options, log=log, invocation=invocation, ensure_configured=False)
+    #f path - get a path relative to the repository
+    def path(self, path:Optional[Path]=None) -> Path:
+        return self.git_repo.path(path)
     #f __init__
-    def __init__(self, options:Options, log:Log, git_repo:Optional[GitRepo]=None, path:Optional[str]=None, ensure_configured:bool=False, invocation:str="", error_handler:ErrorHandler=None):
+    def __init__(self, options:Options, log:Log, path:Path, git_repo:Optional[GitRepo]=None, ensure_configured:bool=True, invocation:str="", error_handler:ErrorHandler=None):
         if git_repo is None:
             try:
                 git_repo = Toplevel.find_git_repo_of_grip_root(path, options=options, log=log)
@@ -250,7 +244,7 @@ class Toplevel(GripBase):
     #f check_clone_permitted
     def check_clone_permitted(self) -> None:
         for r in self.configured_config_state.config_desc.iter_repos():
-            dest = str(self.git_repo.path(r.path()))
+            dest = self.git_repo.path(r.path())
             if not GitRepo.check_clone_permitted(r.url, branch=r.branch, dest=dest, log=self.log):
                 raise UserError("Not permitted to clone '%s' to  '%s"%(r.url, dest))
             pass
@@ -264,8 +258,8 @@ class Toplevel(GripBase):
             # r : RepositoryDescriptor
             r_state = self.initial_config_state.state_file_config.get_repo_state(self.configured_config_state.config_desc, r.name)
             assert r_state is not None
-            dest = str(self.git_repo.path(r.path()))
-            self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))
+            dest = self.git_repo.path(r.path())
+            self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, str(dest)))
             depth = None
             if r.is_shallow(): depth=1
             GitRepo.clone(repo_url=r.get_git_url_string(),
@@ -284,8 +278,8 @@ class Toplevel(GripBase):
         for rd in self.configured_config_state.config_desc.iter_repos():
             # rd : RepositoryDescriptor
             try:
-                path_str = str(self.git_repo.path(rd.path()))
-                gr = GitRepo(path_str=path_str, options=self.options, log=self.log)
+                repo_path = self.git_repo.path(rd.path())
+                gr = GitRepo(path=repo_path, options=self.options, log=self.log)
                 sr = Repository(name=rd.name, grip_repo=self, parent=self.repo_instance_tree, git_repo=gr, workflow=rd.workflow)
                 pass
             except SubrepoError as e:
@@ -295,12 +289,13 @@ class Toplevel(GripBase):
         self.repo_instance_tree.install_hooks()
         pass
     #f get_makefile_stamp_path
-    def get_makefile_stamp_path(self, rd:StageDependency) -> str:
+    def get_makefile_stamp_path(self, rd:StageDependency) -> Path:
         """
         Get an absolute path to a makefile stamp filename
         """
         rd_tgt = rd.target_name()
-        return os.path.join(self.grip_path(self.makefile_stamps_dirname), rd_tgt)
+        rd_tgt_path = Path(self.grip_path(self.makefile_stamps_dirname)).joinpath(Path(rd_tgt))
+        return rd_tgt_path
     #f create_grip_makefiles
     def create_grip_makefiles(self) -> None:
         """
@@ -344,11 +339,11 @@ class Toplevel(GripBase):
         # clean out make stamps
         pass
     #f get_root
-    def get_root(self) -> str:
+    def get_root(self) -> Path:
         """
-        Get absolute path to grip repository
+        Get path to grip repository
         """
-        return self.git_repo.get_path()
+        return self.git_repo.path()
     #f get_grip_env
     def get_grip_env(self) -> EnvDict:
         """

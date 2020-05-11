@@ -2,6 +2,8 @@
 import sys, os, re
 import argparse
 import traceback
+from pathlib import Path
+
 from .os_command import OSCommand # for OSCommand.Error
 from .hookable import Hookable
 from .exceptions import *
@@ -34,11 +36,13 @@ class GripCommandBase(Hookable):
     """
     #v Class properties
     names : List[str] # Type['GripCommandBase']]= []
-    base_options = {("-h", "--help")     :{"action":"store_true", "dest":"help",     "default":False, "help":"show the list of commands and options", },
-                    ("-v", "--verbose")  :{"action":"store_true", "dest":"verbose",  "default":False},
-                    ("--show-log",)      :{"action":"store_true", "dest":"show_log", "default":False},
+    base_options : Dict[Tuple[str, ...], Dict[str, object]]
+    base_options = {("-h", "--help")     :{"action":"store_true", "dest":"help",         "default":False, "help":"show the list of commands and options", },
+                    ("-v", "--verbose")  :{"action":"store_true", "dest":"verbose",      "default":False},
+                    ("--show-log",)      :{"action":"store_true", "dest":"show_log",     "default":False},
                     ("--debug-config",)  :{"action":"store_true", "dest":"debug_config", "default":False, "help":"dump the complete configuration to the screen once it has been read"},
-                    ("-Q", "--quiet")    :{"action":"store_true", "dest":"quiet",    "default":False},
+                    ("--grip-path",)     :{                       "dest":"grip_path",    "default":None, "help":"path to somewhere with the grip repository (default is working directory)"},
+                    ("-Q", "--quiet")    :{"action":"store_true", "dest":"quiet",        "default":False},
                     }
     command_options : ParserOptions = {}
     #t Instance types
@@ -117,10 +121,18 @@ class GripCommandBase(Hookable):
         return ParsedCommand(self, self.options.get("args",default=[]))
 
     #f get_grip_repo
-    def get_grip_repo(self, log:Optional[Log]=None, **kwargs:Any) -> None:
+    def get_grip_repo(self, log:Optional[Log]=None, path:Optional[Path]=None, **kwargs:Any) -> None:
+        if path is None:
+            path_str =  self.options.get("grip_path",None)
+            if path_str is None:
+                path = Path(".").resolve()
+                pass
+            else:
+                path = Path(path_str)
+            pass
         if log is None: log = Log()
         self.add_logger(log)
-        self.grip_repo = Toplevel(log=log, invocation=self.invocation, options=self.options, **kwargs)
+        self.grip_repo = Toplevel(path=path, log=log, invocation=self.invocation, options=self.options, **kwargs)
         pass
 
     #f add_logger
@@ -179,6 +191,7 @@ class GripCommandBase(Hookable):
                 pass
             pass
         except GripException as e:
+            raise
             self.tidy_logs()
             print("%s: %s" % (e.grip_type, str(e)), file=sys.stderr)
             if (self.options.get("show_log",False)): self.show_logs(sys.stderr)

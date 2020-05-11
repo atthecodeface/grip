@@ -1,5 +1,6 @@
 #a Import
 import os, sys, shlex
+from pathlib import Path
 import lib.repo
 import lib.env
 from lib.command import GripCommandBase, ParsedCommand
@@ -14,19 +15,9 @@ class root(GripCommandBase):
     Find the root of the grip repository
     """
     names = ["root"]
-    command_options = {
-        ("path",):      {"nargs":"?", "help":"file or directory within a grip repostiory whose root is to be found (default is working directory)", "default":None},
-    }
-    class RootOptions(Options):
-        path : Optional[str]
-    options : RootOptions
+    # command_options = { }
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        path = self.options.path
-        if path is None:
-            path = os.path.abspath(os.getcwd())
-            pass
-        if os.path.isfile(path): path=os.path.dirname(path)
-        self.get_grip_repo(path=path)
+        self.get_grip_repo(ensure_configured=False)
         print(self.grip_repo.get_root(),end='')
         return 0
     pass
@@ -40,7 +31,7 @@ class env(GripCommandBase):
     names = ["env"]
     # command_options = {}
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(ensure_configured=True)
+        self.get_grip_repo()
         for (k,v) in self.grip_repo.grip_env_iter():
             print('%s=%s; export %s'%(k,shlex.quote(v),k))
             pass
@@ -108,7 +99,7 @@ class status(GripCommandBase):
     names = ["status"]
     # command_options = {}
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
-        self.get_grip_repo(path=os.path.abspath(os.getcwd()))
+        self.get_grip_repo()
         self.grip_repo.status()
         return 0
     pass

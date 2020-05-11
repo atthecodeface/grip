@@ -6,13 +6,15 @@ from .log         import Log
 from .verbose     import Verbose
 from .options     import Options
 from .exceptions  import *
-from typing import Type, List, Dict, Iterable, Optional, Any, Tuple, IO
-from .git import Repository as GitRepository
+from typing       import Type, List, Dict, Iterable, Optional, Any, Tuple, IO
+from .git         import Repository as GitRepository
+from .tomldict    import RawTomlDict, toml_load, toml_save
 
 #c GripBase
 class GripBase:
     #v Static properties
     grip_dir_name = ".grip"
+    grip_dir_path = Path(grip_dir_name)
     grip_toml_filename   = "grip.toml"
     state_toml_filename  = "state.toml"
     config_toml_filename = "local.config.toml"
@@ -50,15 +52,12 @@ class GripBase:
     def add_log_string(self, s:str) -> None:
         if self.log: self.log.add_entry_string(s)
         pass
-    #f path
-    def path(self, filenames:List[str]=[]) -> str:
-        assert self.git_repo is not None
-        return self.git_repo.filename(filenames)
     #f grip_path
-    def grip_path(self, filename:str) -> str:
-        return self.path([self.grip_dir_name, filename])
+    def grip_path(self, filename:str) -> Path:
+        assert self.git_repo is not None
+        return self.git_repo.path(self.grip_dir_path.joinpath(Path(filename)))
     #f grip_makefile_path
-    def grip_makefile_path(self) -> str:
+    def grip_makefile_path(self) -> Path:
         return self.grip_path(self.grip_makefile_filename)
     #f set_branch_name
     def set_branch_name(self, branch_name:str) -> None:
@@ -81,5 +80,17 @@ class GripBase:
     #f is_file
     def is_file(self, path:Path)->bool:
         return path.is_file()
+    #f toml_load
+    def toml_load(self, path:Path) -> RawTomlDict:
+        with self.open(path) as f:
+            toml_dict = toml_load(f)
+            pass
+        return toml_dict
+    #f toml_save:
+    def toml_save(self, path:Path, toml_dict:RawTomlDict) -> None:
+        with self.open(path,"w") as f:
+            toml_save(f, toml_dict)
+            pass
+        pass
     #f All done
     pass

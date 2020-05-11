@@ -1,6 +1,9 @@
 #a Unittest for GripRepoState class
+from pathlib import Path
+
 from lib.configstate import StateFile
 
+from .test_lib.grip import GripBaseTest
 from .test_lib.unittest import UnitTestObject, AKV
 from .test_lib.unittest import TestCase
 
@@ -24,12 +27,14 @@ class GripRepoStateUnitTestBase(UnitTestObject):
         pass
     def test_it(self) -> None:
         if self.state_toml is not None:
-            grs = StateFile()
+            files = {"state.toml":self.state_toml}
+            base = GripBaseTest(files=files)
+            grs = StateFile(base)
             if self.exception_expected is not None:
-                self.assertRaises(self.exception_expected, grs.read_toml_string, self.state_toml)
+                self.assertRaises(self.exception_expected, grs.read_toml_file, Path("state.toml"))
                 pass
             else:
-                grs.read_toml_string(self.state_toml)
+                grs.read_toml_file(Path("state.toml"))
                 pass
             if len(self.grs_assert)>0:
                 self._test_obj_asserts(grs, self.grs_assert, "grip_repo_state")

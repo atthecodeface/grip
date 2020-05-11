@@ -26,6 +26,7 @@ PYTHON_SRCS += ${GRIP_DIR}/grip
 PYTHON_SRCS += ${GRIP_DIR}/test/test_lib/*py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_all.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_grip.py
+PYTHON_SRCS += ${GRIP_DIR}/test/test_grip_desc.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_git.py
 PYTHON_SRCS += ${GRIP_DIR}/test/test_state_file.py
 

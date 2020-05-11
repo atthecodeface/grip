@@ -41,7 +41,7 @@ class Repository(Loggable):
     #f git_clone
     def git_clone(self, clone:Path, bare:bool=False, branch_name:str="master") -> 'Repository':
         self.add_log_string("Cloning %s"%str(clone))
-        self.git_repo = GitRepo.clone(log=self.logger(), options=self.options, repo_url=str(clone), dest=str(self.abspath), bare=bare, new_branch_name=branch_name)
+        self.git_repo = GitRepo.clone(log=self.logger(), options=self.options, repo_url=str(clone), dest=self.abspath, bare=bare, new_branch_name=branch_name)
         if not bare:
             upstream =self.git_repo.get_upstream()
             if upstream is not None: self.git_repo.set_upstream_of_branch(branch_name, upstream)
@@ -53,7 +53,7 @@ class Repository(Loggable):
         self.git_command(cmd="init")
         if init_content is not None: init_content(self)
         self.git_command(cmd="commit -m Init -a")
-        self.git_repo = GitRepo(log=self.logger(), path_str=str(self.abspath), permit_no_remote=True)
+        self.git_repo = GitRepo(log=self.logger(), path=Path(self.abspath), permit_no_remote=True)
         return self
     #f add_readme
     @staticmethod

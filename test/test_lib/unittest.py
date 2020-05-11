@@ -1,5 +1,5 @@
 import os, unittest
-from pathlib import Path
+from pathlib import PurePath
 
 from .loggable import TestLog
 
@@ -48,12 +48,12 @@ class UnitTestObject(TestCase):
     def _test_asserts(self, d:object, akv:AKV, reason:str, has_element_fn:AKV_has, get_element_fn:AKV_get ) -> None:
         self._logger.add_log_string("_test_asserts %s:%s:%s"%(reason, str(akv),str(d)))
         if type(akv) is not dict:
-            self.fail("Bug in test - reason '%s' - test data '%s' is not a dictionary (type '%s'), but element is type '%s'"%(reason, str(akv),str(type(akv)),str(type(d))))
+            self.fail("Bug in test - reason '%s' - expected data (as string) '%s' is not a dictionary (type '%s'), but element is type '%s'"%(reason, str(akv),str(type(akv)),str(type(d))))
             return
         for (k,v) in akv.items():
             if has_element_fn(d,k):
                 dv = get_element_fn(d,k)
-                if isinstance(dv,Path):
+                if isinstance(dv,PurePath):
                     self.assertEqual(str(dv),v,"Mismatch in path %s for key %s"%(reason,k))
                 elif type(dv) in [str,int]:
                     self.assertEqual(dv,v,"Mismatch in %s for key %s"%(reason,k))

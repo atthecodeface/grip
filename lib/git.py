@@ -1,6 +1,6 @@
 #a Imports
 import os, re, unittest
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Type, Dict, Optional, Tuple, Any, List, Union, cast
 from .os_command import OSCommand
 OSCommandError = OSCommand.Error
@@ -15,8 +15,10 @@ branch_head = "HEAD"
 
 #a Useful functions
 #f global_git_command
-def global_git_command(cmd:str="", **kwargs:Any) -> OSCommand:
-    return OSCommand(cmd="git %s"%(cmd), **kwargs).run()
+def global_git_command(cmd:str="", cwd:Optional[Path]=None, **kwargs:Any) -> OSCommand:
+    if cwd is None: cmd_cwd=Path()
+    else: cmd_cwd=cwd
+    return OSCommand(cmd="git %s"%(cmd), cwd=str(cmd_cwd), **kwargs).run()
 
 #a Classes
 #c Git url class
@@ -35,8 +37,9 @@ class Url:
     user     : Optional[str] = None
     port     : Optional[str] = None
     protocol : Optional[str] = None
-    path      : Optional[str] = None
-    path_dir  : str
+    path      : PurePath
+    path_has_dir : bool # True once parsed if path has a directory element
+    path_dir  : PurePath # Ignore if path_has_dir is False
     path_leaf : str
     repo_name : str
     #f __init__
@@ -46,7 +49,9 @@ class Url:
         if not match: match = self.git_repo_path_re.fullmatch(git_url)
         if not match: raise Exception("Failed to parse git URL '%s'"%git_url)
         d = match.groupdict()
-        for k in ['protocol','host','user','port','path']:
+        if "path" not in d: raise Exception("Bug - git url parse re must have a 'path' group")
+        self.path=PurePath(d["path"])
+        for k in ['protocol','host','user','port']:
             if k in d:
                 if d[k]!="": setattr(self,k,d[k])
                 pass
@@ -55,7 +60,6 @@ class Url:
         pass
     #f as_string - return 'canonical' string of this url
     def as_string(self) -> str:
-        assert self.path is not None
         if (self.protocol is not None) or (self.user is not None) or (self.port is not None):
             assert self.host is not None
             url : str = self.host
@@ -65,33 +69,28 @@ class Url:
         if self.host is not None:
             url = self.host
             if self.user is not None: url = self.user+"@"+url
-            return "%s/%s"%(url, self.path)
-        return self.path
+            return "%s/%s"%(url, str(self.path))
+        return str(self.path)
     #f parse_path
     def parse_path(self) -> None:
-        assert self.path is not None
-        (d,f) = os.path.split(self.path)
-        if f=='': self.path = d
-        (path_dir, path_leaf) = os.path.split(self.path)
-        self.path_dir = path_dir
-        self.path_leaf = path_leaf
-        self.repo_name = path_leaf
-        if path_leaf[-4:]=='.git': self.repo_name=path_leaf[:-4]
+        self.path_leaf    = self.path.name
+        self.path_has_dir = (self.path_leaf != str(self.path))
+        self.path_dir     = self.path.parent
+        self.repo_name    = self.path_leaf
+        if self.path.suffix=='.git': self.repo_name=self.path.stem
         pass
     #f is_leaf - return True if a file URL and no pathname
     def is_leaf(self) -> bool:
         if self.host is not None: return False
-        if self.path_dir != "": return False
-        return True
+        return not self.path_has_dir
     #f make_relative_to - if .is_leaf() then make relative to another of these
     def make_relative_to(self, abs_url:'Url') -> None:
-        assert self.host is None
-        assert self.path_dir == ""
+        assert self.is_leaf()
         self.host     = abs_url.host
         self.user     = abs_url.user
         self.port     = abs_url.port
         self.protocol = abs_url.protocol
-        self.path     = os.path.join(abs_url.path_dir, self.path_leaf)
+        self.path     = Path(abs_url.path_dir).joinpath(self.path_leaf)
         self.parse_path()
         pass
     # __str__ - get human readable version
@@ -142,7 +141,7 @@ class Repository(object):
         return cmd.check_results()
 
     #f __init__
-    def __init__(self, path_str:Optional[str], git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
+    def __init__(self, path:Path, git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
         """
         Create the object from a given path
 
@@ -154,8 +153,7 @@ class Repository(object):
         if options is None: options=Options()
         self.log = log
         self.options = options
-        if path_str is None: path_str="."
-        path = Path(path_str)
+        if path.is_file(): path=path.parent
         if not path.exists():
             raise PathError("path '%s' does not exist"%str(path))
         git_output = self.git_command(cwd=path, cmd="rev-parse --show-toplevel")
@@ -176,16 +174,16 @@ class Repository(object):
         pass
     #f check_clone_permitted - check if can clone url to path
     @classmethod
-    def check_clone_permitted(cls, repo_url:str, dest:str, branch:Optional[str], log:Optional[Log]=None) -> bool:
+    def check_clone_permitted(cls, repo_url:str, dest:Path, branch:Optional[str], log:Optional[Log]=None) -> bool:
         if branch is None: branch="<none>"
-        if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, dest))
-        if os.path.exists(dest): raise UserError("Cannot clone to %s as it already exists"%(dest))
-        dest_dir = os.path.dirname(dest)
-        if not os.path.exists(dest_dir): raise UserError("Cannot clone to %s as the parent directory does not exist"%(dest))
+        if log: log.add_entry_string("check to clone from %s branch %s in to %s"%(repo_url, branch, str(dest)))
+        if dest.exists(): raise UserError("Cannot clone to %s as it already exists"%(str(dest)))
+        dest_dir = dest.parent
+        if not dest_dir.is_dir(): raise UserError("Cannot clone to %s as the parent directory does not exist"%(str(dest)))
         return True
     #f clone - clone from a Git URL (of a particular branch to a destination directory)
     @classmethod
-    def clone(cls, repo_url:str, new_branch_name:str, branch:Optional[str]=None, dest:Optional[str]=None, bare:bool=False, depth:Optional[int]=None, changeset:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None) -> 'Repository':
+    def clone(cls, repo_url:str, new_branch_name:str, dest:Optional[Path]=None, branch:Optional[str]=None, bare:bool=False, depth:Optional[int]=None, changeset:Optional[str]=None, options:Optional[Options]=None, log:Optional[Log]=None) -> 'Repository':
         """
         Clone a branch of a repo_url into a checkout directory
         bare checkouts are used in testing only
@@ -195,18 +193,18 @@ class Repository(object):
 
         """
         url = Url(repo_url)
-        if dest is None: dest=url.repo_name
+        if dest is None: dest=Path(url.repo_name)
         git_options = []
         if branch is not None: git_options.append( "--branch %s"%branch )
         if (bare is not None) and bare: git_options.append( "--bare") # For TEST only
         if changeset is not None: git_options.append( "--no-checkout")
         if depth is not None:   git_options.append( "--depth %s"%(depth))
-        if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, dest))
+        if log: log.add_entry_string("Attempting to clone %s branch %s in to %s"%(repo_url, branch, str(dest)))
         git_cmd = global_git_command(log=log,
-                                     cmd="clone %s %s %s" % (" ".join(git_options), repo_url, dest))
+                                     cmd="clone %s %s %s" % (" ".join(git_options), repo_url, str(dest)))
         if git_cmd.rc()!=0:
             raise UserError("Failed to perform git clone - %s"%(git_cmd.stderr()))
-        if bare: return cls(dest, git_url=repo_url, log=log)
+        if bare: return cls(path=dest, git_url=repo_url, log=log)
         git_cmd = global_git_command(log=log, cwd=dest, cmd="rev-parse --verify --quiet %s^{commit}"%branch_upstream)
         if git_cmd.rc()==0:
             if log: log.add_entry_string("Already has branch '%s' - delete it before it causes trouble"%branch_upstream)
@@ -229,7 +227,7 @@ class Repository(object):
                                         cmd = "checkout %s" % new_branch_name)
         if git_cmd.rc()!=0:
                 raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
-        return cls(dest, git_url=repo_url, log=log, options=options)
+        return cls(path=Path(dest), git_url=repo_url, log=log, options=options)
     #f get_upstream - get Remote corresponding to the upstream
     def get_upstream(self) -> Optional[Remote]:
         return self.upstream
@@ -259,9 +257,6 @@ class Repository(object):
     #f get_git_url_string
     def get_git_url_string(self) -> str:
         return self.url.as_string()
-    #f get_path
-    def get_path(self) -> str:
-        return str(self._path)
     #f get_config
     def get_config(self, config_path:List[str]) -> str:
         config=".".join(config_path)
@@ -427,21 +422,9 @@ class Repository(object):
         """
         self.git_command(cmd="checkout %s"%(changeset), stderr_output_indicates_error=False)
         pass
-    #f filename - get filename of full path relative to repo in file system
-    def filename(self, paths:Union[List[str],str]=[]) -> str:
-        if type(paths)!=list:
-            path_list=[cast(str,paths)]
-            pass
-        else:
-            path_list=cast(List[str],paths)
-            pass
-        filename = str(self._path)
-        for p in path_list:
-            filename=os.path.join(filename,p)
-            pass
-        return filename
     #f path - get a path relative to the repository
-    def path(self, path:Path) -> Path:
+    def path(self, path:Optional[Path]=None) -> Path:
+        if path is None: return self._path
         return self._path.joinpath(path)
     #f All done
     pass

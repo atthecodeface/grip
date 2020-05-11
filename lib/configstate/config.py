@@ -1,9 +1,10 @@
 #a Imports
-import toml
+from pathlib import Path
 from typing import Dict, Any, Optional, Callable, MutableMapping
 from ..types import PrettyPrinter
 from ..exceptions import *
-from ..tomldict import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
+from ..base       import GripBase
+from ..tomldict   import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
 
 #a Toml parser classes - description of a .grip/grip.toml file
 #c *..TomlDict subclasses to parse toml file contents
@@ -23,7 +24,8 @@ class ConfigFile(object):
     grip_git_url  : Optional[str] # git URL the grip repo was cloned from
     branch        : Optional[str] # branch the git URL was cloned from
     #f __init__
-    def __init__(self) -> None:
+    def __init__(self, base:GripBase) -> None:
+        self.base = base
         self.config = None
         self.grip_git_url = None
         self.branch = None
@@ -41,15 +43,9 @@ class ConfigFile(object):
         self.branch = s
         pass
     #f read_toml_file - read a config.toml file (should be a local configuration)
-    def read_toml_file(self, grip_toml_filename:str) -> None:
-        toml_dict = toml.load(grip_toml_filename)
+    def read_toml_file(self, grip_toml_path:Path) -> None:
+        toml_dict = self.base.toml_load(grip_toml_path)
         return self.read_toml_dict(toml_dict)
-    #f read_toml_string - test only, generate from a string
-    def read_toml_string(self, grip_toml_string:str) -> None:
-        """
-        Really used in test only, read description from string
-        """
-        return self.read_toml_dict(toml.loads(grip_toml_string))
     #f read_toml_dict - parse a toml_dict and build the config from that
     def read_toml_dict(self, toml_dict:RawTomlDict) -> None:
         self.raw_toml_dict = toml_dict
@@ -65,12 +61,9 @@ class ConfigFile(object):
         values.Set_obj_properties(self, ["config", "grip_git_url", "branch"])
         pass
     #f write_toml_file - write out a toml file with the state of the instance
-    def write_toml_file(self, grip_toml_filename:str) -> None:
+    def write_toml_file(self, grip_toml_path:Path) -> None:
         toml_dict = self.toml_dict()
-        toml_string = toml.dumps(toml_dict)
-        with open(grip_toml_filename,"w") as f:
-            f.write(toml_string)
-            pass
+        self.base.toml_save(grip_toml_path, toml_dict)
         pass
     #f prettyprint - print it out
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:

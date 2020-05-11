@@ -1,4 +1,6 @@
 #a Imports
+from pathlib import Path
+
 from typing import Optional, Dict, Sequence, Collection, Any, Union, Type
 from lib.exceptions import *
 from lib.options    import Options
@@ -64,7 +66,7 @@ class TestSet(UnitTestObject, Loggable):
         for (sn,st) in self.test.subrepos.items():
             subrepos[sn] = st()._as_string()
             pass
-        self.grd.read_toml_strings(self.config_toml, subrepos)
+        self.grd.read_toml_strings(self.config_toml, subrepos, path=Path("no_path_really"))
         self.grd.build_from_toml_dict()
         self.grd.validate()
         self.grd.resolve()
@@ -76,7 +78,7 @@ class TestSet(UnitTestObject, Loggable):
             subrepos[sn] = st()._as_string()
             print(subrepos[sn])
             pass
-        self.grd.read_toml_strings(self.config_toml, subrepos)
+        self.grd.read_toml_strings(self.config_toml, subrepos, path=Path("no_path_really"))
         self.grd.build_from_toml_dict()
         self.grd.select_config(config_name=config_name)
         self.grd.validate()
@@ -91,7 +93,7 @@ class TestSet(UnitTestObject, Loggable):
         self._logger.add_log_string("Test %s"%test.__qualname__)
         self._logger.add_log_string("Config %s"%self.test.config_name)
         self._logger.add_log_string("Toml %s"%self.config_toml)
-        self.git_repo  = GitRepo(path_str=".", permit_no_remote=True)
+        self.git_repo  = GitRepo(path=Path(".").resolve(), permit_no_remote=True)
         self.grip_base = GripBase(options, self._logger, git_repo=self.git_repo, branch_name=None)
         self.grd       = GripRepository(base=self.grip_base)
         if self.test.exception_expected is not None:

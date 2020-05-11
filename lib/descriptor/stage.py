@@ -1,5 +1,6 @@
 #a Imports
 import os
+from pathlib import Path
 from typing import Optional, List, Callable, Type, ClassVar, Union, Any, Tuple, IO, cast
 from ..tomldict import TomlDict, TomlDictValues, TomlDictParser
 from ..exceptions import *
@@ -26,12 +27,13 @@ class StageTomlDict(TomlDict):
     pass
 
 #c Dependency
+MakefilePathFn = Callable[['Dependency'],Path]
 class Dependency:
     """
     This class is a stage dependency - that is '<name>', '.<name>' or '<repo>.<name>'
     """
     #v makefile_path_fn - function from Dependency instance to its makefile stamp path - class property
-    makefile_path_fn : ClassVar[Optional[Callable[['Dependency'],str]]] = None
+    makefile_path_fn : ClassVar[MakefilePathFn]
     #v instance properties
     repo_name  : Optional[str] # None if global
     stage_name : str
@@ -39,7 +41,7 @@ class Dependency:
     repo  : Optional['RepositoryDescriptorInConfig']
     #f set_makefile_path_fn - class method - set makefile_path_fn for the whole class
     @classmethod
-    def set_makefile_path_fn(cls, path_fn:Any) -> None:
+    def set_makefile_path_fn(cls, path_fn:MakefilePathFn) -> None:
         cls.makefile_path_fn = path_fn
         pass
     #f __init__
@@ -91,13 +93,14 @@ class Dependency:
         if self.repo_name is None: return self.stage_name
         return "repo.%s.%s"%(self.repo_name, self.stage_name)
     #f makefile_path - invoke the class property makefile_path_fn on *this* instance to get its makefile stamp path
-    def makefile_path(self) -> str:
+    def makefile_path(self) -> Path:
         """
         Return the pathname for a makefile target for an instance of this class
         """
-        if self.makefile_path_fn is None:
+        if not hasattr(self,"makefile_path_fn"):
             raise Exception("Bug - makefile_path_fn not supplied")
-        return self.makefile_path_fn(self)
+        mpfn : MakefilePathFn = self.__class__.makefile_path_fn
+        return mpfn(self)
     #f makefile_stamp
     def makefile_stamp(self) -> str:
         """
@@ -105,7 +108,7 @@ class Dependency:
         """
         return self.target_name()
     #f new_makefile_stamp
-    def new_makefile_stamp(self) -> Tuple[str,str]:
+    def new_makefile_stamp(self) -> Tuple[str,Path]:
         """
         Get an absolute path to a makefile stamp filename
         Clean the file if it exists
@@ -114,7 +117,7 @@ class Dependency:
         """
         tgt      = self.target_name()
         tgt_path = self.makefile_path()
-        if os.path.exists(tgt_path): os.unlink(tgt_path)
+        if tgt_path.exists(): tgt_path.unlink()
         return (tgt, tgt_path)
     #f All done
     pass
@@ -242,7 +245,7 @@ class Descriptor(object):
         wd = self.wd
         if wd is None:
             if self.git_repo_desc is None:
-                wd = self.grip_repo_desc.git_repo.filename()
+                wd = str(self.grip_repo_desc.git_repo.path())
                 pass
             else:
                 wd = str(self.grip_repo_desc.git_repo.path(self.git_repo_desc.path()))

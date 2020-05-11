@@ -1,7 +1,9 @@
 #a Imports
 import os
+import io
 from pathlib import Path
 
+from lib.base import GripBase
 from lib.log       import Log
 from lib.os_command import OSCommand
 
@@ -10,10 +12,24 @@ from .loggable import TestLog, Loggable
 from .git import RepoBuildContentFn
 from .git import Repository as GitRepository
 
-from typing import List, Callable, Optional, Any, ClassVar, cast
+from typing import List, Callable, Optional, Any, ClassVar, cast, Dict, IO
 
 grip_dir  = os.environ["GRIP_DIR"]
 grip_exec = os.path.join(grip_dir,"grip")
+
+#c GripBaseTest
+class GripBaseTest(GripBase):
+    files:Dict[str,str] = {}
+    toml_dicts:Dict[str,Any]={}
+    def __init__(self, files:Dict[str,str]={}, toml_dicts:Dict[str,Any]={}):
+        self.files = files
+        pass
+    def open(self, path:Path, mode:str="r") -> IO[str]:
+        print("open %s"%str(path))
+        if str(path) in self.files:
+            return io.StringIO(self.files[str(path)])
+        raise FileNotFoundError("GripBaseTest has not file '%s'"%str(path))
+    pass
 
 #c Grip repo building class
 class Repository(GitRepository):
