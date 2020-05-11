@@ -83,3 +83,7 @@ class GripRepoStateUnitTest12(GripRepoStateUnitTestComplex):
         "repo2":{"changeset":"7"},
     }}}}
     pass
+
+#a Toplevel
+#f Create tests
+test_suite = [GripRepoStateUnitTestComplex]

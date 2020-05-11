@@ -123,3 +123,6 @@ class BasicTest(TestCase):
         fs.cleanup()
         pass
     pass
+#a Toplevel
+#f Create tests
+test_suite = [BasicTest]

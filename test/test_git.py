@@ -65,4 +65,8 @@ class RepoUnitTest(TestCase):
         pass
     pass
 
+#a Toplevel
+#f Create tests
+test_suite = [RepoUnitTest]
+
 

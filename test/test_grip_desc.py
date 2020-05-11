@@ -244,11 +244,11 @@ class TestConfigured(TestSet):
     class t3(Test):
         config_name = "x"
         cfg_assert = {"name":"x",
-                      "repos":{"fred":{"git_url":{"protocol":"ssh", "user":"me", "host":"there", "path":"path/to/thing.git"}, "path":"thing"}}}
+                      "repos":{"fred":{"git_url":{"protocol":"ssh", "user":"me", "host":"there", "path":"path/to/thing.git"}, "_path":"thing"}}}
         pass
     class SelectConfigY(Test):
         config_name = "y"
-        cfg_assert = {"name":"y", "repos":{"fred":{"path":"nothing"}}}
+        cfg_assert = {"name":"y", "repos":{"fred":{"_path":"nothing"}}}
         pass
     class t5(Test):
         config_name = "y"
@@ -264,7 +264,7 @@ class TestConfigured(TestSet):
         pass
     class t8(Test):
         config_name = "y"
-        cfg_assert = {"repos":{"joe":{"git_url":{"protocol":"git","host":"sourceware.org", "_path":"git/binutils-gdb.git"}, "_path":"binutils"}}}
+        cfg_assert = {"repos":{"joe":{"git_url":{"protocol":"git","host":"sourceware.org", "path":"git/binutils-gdb.git"}, "_path":"binutils"}}}
         pass
 
 #c TestConfiguredSubrepos
@@ -355,4 +355,4 @@ TestUnconfigured._create_test_fns_of_class(TestUnconfigured.Test)
 TestConfigured._create_test_fns_of_class(TestConfigured.Test)
 TestConfiguredSubrepos._create_test_fns_of_class(TestConfiguredSubrepos.Test)
 TestStages._create_test_fns_of_class(TestStages.Test)
-test_suite = ["TestUnconfigured"]
+test_suite = [TestUnconfigured, TestConfigured, TestConfiguredSubrepos, TestStages]

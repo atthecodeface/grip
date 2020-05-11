@@ -1,4 +1,6 @@
 import os, unittest
+from pathlib import Path
+
 from .loggable import TestLog
 
 from typing import Type, Dict, List, Any, Callable
@@ -51,7 +53,9 @@ class UnitTestObject(TestCase):
         for (k,v) in akv.items():
             if has_element_fn(d,k):
                 dv = get_element_fn(d,k)
-                if type(dv) in [str,int]:
+                if isinstance(dv,Path):
+                    self.assertEqual(str(dv),v,"Mismatch in path %s for key %s"%(reason,k))
+                elif type(dv) in [str,int]:
                     self.assertEqual(dv,v,"Mismatch in %s for key %s"%(reason,k))
                     pass
                 elif type(dv) is list:
