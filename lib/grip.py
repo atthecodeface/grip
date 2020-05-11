@@ -1,5 +1,7 @@
 #a Imports
 import os, time
+from pathlib import Path
+
 from .verbose import Verbose
 from .options import Options
 from .log import Log
@@ -248,7 +250,7 @@ class Toplevel(GripBase):
     #f check_clone_permitted
     def check_clone_permitted(self) -> None:
         for r in self.configured_config_state.config_desc.iter_repos():
-            dest = self.git_repo.filename([r.path])
+            dest = str(self.git_repo.path(r.path()))
             if not GitRepo.check_clone_permitted(r.url, branch=r.branch, dest=dest, log=self.log):
                 raise UserError("Not permitted to clone '%s' to  '%s"%(r.url, dest))
             pass
@@ -262,7 +264,7 @@ class Toplevel(GripBase):
             # r : RepositoryDescriptor
             r_state = self.initial_config_state.state_file_config.get_repo_state(self.configured_config_state.config_desc, r.name)
             assert r_state is not None
-            dest = self.git_repo.filename([r.path])
+            dest = str(self.git_repo.path(r.path()))
             self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, dest))
             depth = None
             if r.is_shallow(): depth=1
@@ -282,7 +284,8 @@ class Toplevel(GripBase):
         for rd in self.configured_config_state.config_desc.iter_repos():
             # rd : RepositoryDescriptor
             try:
-                gr = GitRepo(path_str=self.git_repo.filename([rd.path]), options=self.options, log=self.log)
+                path_str = str(self.git_repo.path(rd.path()))
+                gr = GitRepo(path_str=path_str, options=self.options, log=self.log)
                 sr = Repository(name=rd.name, grip_repo=self, parent=self.repo_instance_tree, git_repo=gr, workflow=rd.workflow)
                 pass
             except SubrepoError as e:

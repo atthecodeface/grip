@@ -1,10 +1,12 @@
 #a Imports
 import os, time
+from pathlib import Path
+
 from .log         import Log
 from .verbose     import Verbose
 from .options     import Options
 from .exceptions  import *
-from typing import Type, List, Dict, Iterable, Optional, Any, Tuple, cast
+from typing import Type, List, Dict, Iterable, Optional, Any, Tuple, IO
 from .git import Repository as GitRepository
 
 #c GripBase
@@ -73,3 +75,11 @@ class GripBase:
     def get_git_repo(self) -> GitRepository:
         assert self.git_repo is not None
         return self.git_repo
+    #f open
+    def open(self, path:Path, mode:str="r") -> IO[str]:
+        return path.open(mode)
+    #f is_file
+    def is_file(self, path:Path)->bool:
+        return path.is_file()
+    #f All done
+    pass

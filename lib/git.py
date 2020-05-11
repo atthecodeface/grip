@@ -123,13 +123,13 @@ class Repository(object):
     git_url  : str
     url      : Url
     upstream : Optional[Remote]
-    path     : Path
+    _path     : Path
     options  : Options
     log      : Log
     #f git_os_command
     def git_os_command(self, cwd:Optional[Path]=None, cmd:str="", **kwargs:Any) -> OSCommand:
         if cwd is None:
-            cwd = self.path
+            cwd = self._path
             pass
         return OSCommand( log     = self.log,
                           cmd     = "git %s"%(cmd),
@@ -159,7 +159,7 @@ class Repository(object):
         if not path.exists():
             raise PathError("path '%s' does not exist"%str(path))
         git_output = self.git_command(cwd=path, cmd="rev-parse --show-toplevel")
-        self.path = Path(git_output.strip())
+        self._path = Path(git_output.strip())
         if git_url is None:
             try:
                 git_output = self.git_command(cmd="remote get-url origin")
@@ -252,7 +252,7 @@ class Repository(object):
         return Remote(origin, push_branch)
     #f get_name
     def get_name(self) -> str:
-        return str(self.path)
+        return str(self._path)
     #f get_git_url
     def get_git_url(self) -> Url:
         return self.url
@@ -261,7 +261,7 @@ class Repository(object):
         return self.url.as_string()
     #f get_path
     def get_path(self) -> str:
-        return str(self.path)
+        return str(self._path)
     #f get_config
     def get_config(self, config_path:List[str]) -> str:
         config=".".join(config_path)
@@ -435,11 +435,14 @@ class Repository(object):
         else:
             path_list=cast(List[str],paths)
             pass
-        filename = str(self.path)
+        filename = str(self._path)
         for p in path_list:
             filename=os.path.join(filename,p)
             pass
         return filename
+    #f path - get a path relative to the repository
+    def path(self, path:Path) -> Path:
+        return self._path.joinpath(path)
     #f All done
     pass
 

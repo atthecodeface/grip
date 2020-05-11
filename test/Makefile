@@ -16,7 +16,7 @@ test_lib:
 .PHONY:test_all
 test_all:
 	mkdir -p ${TESTS_LOG_DIR}
-	(cd ${TESTS_DIR} && ${TESTS_ENV} python3 -m test.test_all)
+	(cd ${TESTS_DIR} && ${TESTS_ENV} python3 -m test.test_all -v)
 
 PYTHON_SRCS =
 PYTHON_SRCS += ${GRIP_DIR}/lib/*/*py

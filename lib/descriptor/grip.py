@@ -1,7 +1,9 @@
 #a Imports
 import os, sys, re, copy
 import toml
+from pathlib import Path
 from typing import Type, Optional, Dict, List, Tuple, Any, Iterator, Sequence, Mapping, Union, cast, Iterable
+
 from ..base        import GripBase
 from ..exceptions import *
 from ..tomldict import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
@@ -199,15 +201,15 @@ class Descriptor(object):
         out which may have grip.toml files. Add these after the main file.
         """
         self.base.add_log_string("Reading config toml file '%s'"%(grip_toml_filename))
-        with open(grip_toml_filename) as f:
+        with self.base.open(Path(grip_toml_filename)) as f:
             toml_string = f.read()
             pass
         subrepo_toml_strings = {}
         for r in subrepo_descs:
-            srfn = self.git_repo.filename([r.get_path(),"grip.toml"])
+            srfn = self.git_repo.path(r.path().joinpath(Path("grip.toml")))
             self.base.add_log_string("Trying to read subconfig toml file '%s'"%(srfn))
             if os.path.isfile(srfn):
-                with open(srfn) as f:
+                with self.base.open(srfn) as f:
                     subrepo_toml_strings[r.name] = f.read()
                     pass
                 pass

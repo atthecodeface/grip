@@ -200,7 +200,6 @@ class Descriptor(object):
     #f iter_repos - iterate over repos in config, each is RepositoryDescriptor instance
     def iter_repos(self) -> Iterable[RepositoryDescriptorInConfig]:
         for n in self.repos:
-            self.grip_repo_desc.base.add_log_string("iter repos yield %s"%(n))
             yield self.repos[n]
             pass
         pass

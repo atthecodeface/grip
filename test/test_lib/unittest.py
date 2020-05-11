@@ -6,6 +6,7 @@ from typing import Type, Dict, List, Any, Callable
 log_dir       = os.environ["TESTS_LOG_DIR"]
 
 #c Extend unittest.TestCase
+class TestSuite(unittest.TestSuite):pass
 class TestCase(unittest.TestCase):
     _fqn : str
     _logger : TestLog

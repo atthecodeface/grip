@@ -11,7 +11,7 @@ from lib.descriptor.stage import Dependency as StageDependency
 from lib.descriptor.stage import Descriptor as StageDescriptor
 from lib.descriptor.stage import StageTomlDict
 from lib.descriptor.repo  import RepoDescTomlDict
-from lib.descriptor.grip import Descriptor as GripRepoDesc
+from lib.descriptor.grip import Descriptor as GripRepository
 
 from .test_lib.loggable import Loggable
 from .test_lib.unittest import UnitTestObject, AKV
@@ -20,7 +20,7 @@ from .test_lib.toml_file import Toml
 
 from typing import Dict, List, Any, Optional, Union, cast
 
-#a Unittest for GripRepoDesc class
+#a Unittest for GripRepository class
 #c DefaultConfigToml
 class DefaultConfigToml(Toml):
     name="y"
@@ -33,9 +33,10 @@ class DefaultConfigToml(Toml):
 
 #c TestBase
 Asserts = Dict[str, Any]
+SubrepoTomls = Dict[str,Type[Toml]]
 class TestBase(object):
     class ConfigToml(DefaultConfigToml):pass
-    subrepos    : List[Type[DefaultConfigToml]] = []
+    subrepos    : SubrepoTomls = {}
     config_name : Union [None, bool, str] = False
     grd_assert  : Asserts = {}
     cfg_assert  : Asserts = {}
@@ -53,57 +54,75 @@ class TestSet(UnitTestObject, Loggable):
         TestCase.tearDownSubClass(cls)
         pass
     #f debug_repo_desc
-    def debug_repo_desc(self, grd:GripRepoDesc) -> None:
+    def debug_repo_desc(self) -> None:
         def p(acc:Any, s:str, indent:int=0) -> Any:
-            print(("  "*indent)+s)
-        grd.prettyprint("",p)
+            self._logger.add_log_string("grd: " + ("  "*indent)+s)
+        self.grd.prettyprint("",p)
         pass
     def do_read_toml(self) -> None:
-        self.grd.read_toml_strings(self.config_toml, {})
+        subrepos = {}
+        for (sn,st) in self.test.subrepos.items():
+            subrepos[sn] = st()._as_string()
+            pass
+        self.grd.read_toml_strings(self.config_toml, subrepos)
         self.grd.build_from_toml_dict()
         self.grd.validate()
         self.grd.resolve()
-        # self.debug_repo_desc(self.grd)
+        self.grd.resolve_git_urls(self.git_repo.get_git_url())
+        pass
+    def do_read_toml_cfg(self, config_name:str) -> None:
+        subrepos = {}
+        for (sn,st) in self.test.subrepos.items():
+            subrepos[sn] = st()._as_string()
+            print(subrepos[sn])
+            pass
+        self.grd.read_toml_strings(self.config_toml, subrepos)
+        self.grd.build_from_toml_dict()
+        self.grd.select_config(config_name=config_name)
+        self.grd.validate()
+        self.grd.resolve()
         self.grd.resolve_git_urls(self.git_repo.get_git_url())
         pass
     def _test_it(self, test:Type[TestBase]) -> None:
+        self.test = test
         self.config_toml = test.ConfigToml()._as_string()
-        self.grd_assert  = test.grd_assert
-        self.cfg_assert  = test.cfg_assert
-        self.exception_expected = test.exception_expected
-        self.config_name        = test.config_name
         options =  Options()
         options._validate()
         self._logger.add_log_string("Test %s"%test.__qualname__)
-        self._logger.add_log_string("Config %s"%self.config_name)
+        self._logger.add_log_string("Config %s"%self.test.config_name)
         self._logger.add_log_string("Toml %s"%self.config_toml)
         self.git_repo  = GitRepo(path_str=".", permit_no_remote=True)
         self.grip_base = GripBase(options, self._logger, git_repo=self.git_repo, branch_name=None)
-        self.grd       = GripRepoDesc(base=self.grip_base)
-        if self.exception_expected is not None:
+        self.grd       = GripRepository(base=self.grip_base)
+        if self.test.exception_expected is not None:
             self._logger.add_log_string("Checking exception is raised by reading Toml")
-            self.assertRaises(self.exception_expected, self.do_read_toml)
+            self.assertRaises(self.test.exception_expected, self.do_read_toml)
             return
         else:
             self._logger.add_log_string("Reading Toml")
             self.do_read_toml()
+            self.debug_repo_desc()
             pass
-        if len(self.grd_assert)>0:
+        if len(self.test.grd_assert)>0:
             self._logger.add_log_string("Checking resultant grd against descriptor")
-            self._test_obj_asserts(self.grd, self.grd_assert, "grip_repo_desc")
+            self._test_obj_asserts(self.grd, self.test.grd_assert, "grip_repo_desc")
             pass
-        if self.config_name is not False:
-            self._logger.add_log_string("Selecting configuration %s"%self.config_name)
-            config_name = cast(Optional[str],self.config_name)
+        if self.test.config_name is not False:
+            self._logger.add_log_string("Selecting configuration %s"%self.test.config_name)
+            config_name = cast(Optional[str],self.test.config_name)
             cfg = self.grd.select_config(config_name=config_name)
+            if cfg is not None:
+                self.do_read_toml_cfg(config_name=cfg.name)
+                self.debug_repo_desc()
+                pass
             if cfg is None:
                 self._logger.add_log_string("No config selected - ensuring this is what test requires")
-                self._logger.add_log_string(str(self.cfg_assert))
-                self.assertTrue(len(self.cfg_assert)==0)
+                self._logger.add_log_string(str(self.test.cfg_assert))
+                self.assertTrue(len(self.test.cfg_assert)==0)
                 pass
             else:
                 self._logger.add_log_string("Checking resultant cfg against descriptor")
-                self._test_obj_asserts(cfg, self.cfg_assert, "config_desc")
+                self._test_obj_asserts(cfg, self.test.cfg_assert, "config_desc")
                 pass
             pass
         pass
@@ -245,7 +264,39 @@ class TestConfigured(TestSet):
         pass
     class t8(Test):
         config_name = "y"
-        cfg_assert = {"repos":{"joe":{"git_url":{"protocol":"git","host":"sourceware.org", "path":"git/binutils-gdb.git"}, "path":"binutils"}}}
+        cfg_assert = {"repos":{"joe":{"git_url":{"protocol":"git","host":"sourceware.org", "_path":"git/binutils-gdb.git"}, "_path":"binutils"}}}
+        pass
+
+#c TestConfiguredSubrepos
+class SubrepoTomlJoe(Toml):
+    doc="subrepo joe doc"
+    env = {"SRC":"@GRIP_REPO_PATH@"}
+    clean_sim = {"exec":"clean_sim joe"}
+    build_sim = {"exec":"build_sim joe"}
+    run_sim = {"exec":"run_sim joe", "action":"yes"}
+
+class TestConfiguredSubrepos(TestSet):
+    class Test(TestBase):
+        class ConfigToml(Toml):
+            name="y"
+            workflow="readonly"
+            default_config="x"
+            configs=["x","y"]
+            base_repos=["fred"]
+            repo:Dict[str,Any]={}
+            repo={"fred":{"url":'ssh://me@there/path/to/thing.git'},
+                  "jim":{"url":'some/path/to/jim.git',"workflow":"single"},
+                  "joe":{"url":"git://sourceware.org/git/binutils-gdb.git","workflow":"readonly","path":"binutils"},
+                  }
+            config = {"x":{"repos":["jim"]},
+                      "y":{"repos":["joe"], "fred":{"path":"nothing"}},
+            }
+            pass
+        config_name : Union [None, bool, str] = None
+        config_name = None
+        subrepos : SubrepoTomls = {"joe":SubrepoTomlJoe}
+        pass
+    class Working(Test):
         pass
 
 #c TestStages
@@ -298,7 +349,10 @@ class TestStages(TestSet):
         cfg_assert : Asserts = {"stages":{"all":{"doc":"doc of stage all"}}}
         pass
 
+#a Toplevel
 #f Create tests
 TestUnconfigured._create_test_fns_of_class(TestUnconfigured.Test)
 TestConfigured._create_test_fns_of_class(TestConfigured.Test)
+TestConfiguredSubrepos._create_test_fns_of_class(TestConfiguredSubrepos.Test)
 TestStages._create_test_fns_of_class(TestStages.Test)
+test_suite = ["TestUnconfigured"]

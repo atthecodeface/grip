@@ -245,7 +245,7 @@ class Descriptor(object):
                 wd = self.grip_repo_desc.git_repo.filename()
                 pass
             else:
-                wd = self.grip_repo_desc.git_repo.filename(self.git_repo_desc.path)
+                wd = str(self.grip_repo_desc.git_repo.path(self.git_repo_desc.path()))
                 pass
             pass
 
@@ -299,13 +299,15 @@ class Descriptor(object):
     #f prettyprint
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "%s:" % (self.name))
-        if self.wd   is not None: acc = pp(acc, "wd:     %s" % (self.wd), indent=1)
-        if self.env  is not None:
+        if hasattr(self,"wd"): acc = pp(acc, "wd:     %s" % (self.wd), indent=1)
+        if hasattr(self,"env"):
             if isinstance(self.env, GripEnv): acc = pp(acc, "env:    %s" % (self.env.as_str()), indent=1)
             else: acc = pp(acc, "env:    %s" % ("<unresolved values>"), indent=1)
-        if self.exec is not None: acc = pp(acc, "exec:   %s" % (self.exec), indent=1)
-        if self.values.requires != []:acc = pp(acc, "requires:   '%s'" % (" ".join(self.values.requires)), indent=1)
-        if self.values.satisfies is not None:acc = pp(acc, "satisfies:   '%s'" % (self.values.satisfies), indent=1)
+        if hasattr(self,"exec"): acc = pp(acc, "exec:   %s" % (self.exec), indent=1)
+        if hasattr(self,"requires"):
+            cc = pp(acc, "requires:   '%s'" % (" ".join([str(r) for r in self.requires])), indent=1)
+        if hasattr(self,"satisfies"):
+            acc = pp(acc, "satisfies:   '%s'" % (self.satisfies), indent=1)
         return acc
     #f __str__
     def __str__(self) -> str:

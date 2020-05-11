@@ -1,4 +1,6 @@
 #a Imports
+from pathlib import Path
+
 from typing import Optional, Type, Dict, List, Union, Any, Tuple, Sequence, Set, Iterable, Callable
 from ..tomldict import TomlDict, TomlDictParser, TomlDictValues
 from ..git import Url as GitUrl
@@ -65,13 +67,14 @@ class DescriptorBase(object):
     name : str
     cloned_from : Optional['Descriptor']
     url      : str = "<undefined_url>"
-    path     : str = "<undefined_path>"
+    _path    : Path
     shallow  : bool
     branch   : Optional[str]=None
     env      : GripEnv
     doc      : Optional[str]=None
     stages   : Dict[str,StageDescriptor]
     workflow : Type['Workflow']
+    _is_resolved : bool = False
     #f __init__
     def __init__(self, name:str, grip_repo_desc:'GripDescriptor'):
         """
@@ -80,10 +83,10 @@ class DescriptorBase(object):
         self.name   = name
         self.grip_repo_desc = grip_repo_desc
         pass
-    #f get_path
-    def get_path(self) -> str:
-        assert self.path is not None
-        return self.path
+    #f path
+    def path(self) -> Path:
+        assert self._is_resolved
+        return Path(self._path)
     #f get_doc_string
     def get_doc_string(self) -> str:
         """
@@ -147,7 +150,9 @@ class Descriptor(DescriptorBase):
     def prettyprint(self, acc:Any, pp:PrettyPrinter) -> Any:
         acc = pp(acc, "repo.%s:" % (self.name))
         acc = pp(acc, "url(orig):   %s" % (self.url), indent=1)
-        acc = pp(acc, "path:        %s" % (self.path), indent=1)
+        if self._is_resolved:
+            acc = pp(acc, "path:        %s" % (str(self._path)), indent=1)
+            pass
         if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
         for name in self.stages:
             def ppr(acc:Any, s:str, indent:int=0) -> Any:
@@ -204,7 +209,7 @@ class DescriptorInConfig(DescriptorBase):
         """
         r : Documentation = [self.get_doc_string()]
         r_src = ""
-        if self.path    is not None: r_src += "locally at '%s'" % (self.path)
+        if hasattr(self,"_path"): r_src += "locally at '%s'" % (str(self._path))
         if self.url     is not None: r_src += " remote url(orig) '%s'" % (self.url)
         r_src += " remote url(parsed) '%s'" % (self.git_url.as_string())
         if self.branch  is not None: r_src += " branch '%s'" % (self.branch)
@@ -237,11 +242,9 @@ class DescriptorInConfig(DescriptorBase):
             raise GripTomlError("for repo '%s' could not parse git url '%s'"%(self.name, self.url))
 
         self.branch  = self.env.substitute(self.values.branch,   error_handler=error_handler)
-        if self.values.path is None:
-            self.path = self.git_url.repo_name
-            pass
-        else:
-            self.path = self.values.path
+        self._path = Path(self.git_url.repo_name)
+        if self.values.path is not None:
+            self._path = Path(self.values.path)
             pass
 
         if self.values.shallow is None:
@@ -253,29 +256,32 @@ class DescriptorInConfig(DescriptorBase):
 
         self.doc     = self.values.doc
 
-        self.env.add_values({"GRIP_REPO_PATH":"@GRIP_ROOT_PATH@/"+self.path})
+        self.env.add_values({"GRIP_REPO_PATH":"@GRIP_ROOT_PATH@/"+str(self._path)})
         self.env.resolve(error_handler=error_handler)
         for (n,s) in self.stages.items():
             s.resolve(self.env, error_handler=error_handler)
             pass
         # print("Resolve %s:%s:%s:%s"%(self,self.name,self.url,self.git_url))
+        self._is_resolved = True
         pass
     #f get_git_url
     def get_git_url(self) -> GitUrl:
         """
         """
+        assert self._is_resolved
         return self.git_url
     #f get_git_url_string
     def get_git_url_string(self) -> str:
         """
         """
-        assert self.git_url is not None
+        assert self._is_resolved
         return self.git_url.as_string()
     #f resolve_git_url
     def resolve_git_url(self, grip_git_url:GitUrl) -> None:
         """
         Resolve relative (and those using environment variables?) git urls
         """
+        assert self._is_resolved
         if self.git_url.is_leaf():
             self.git_url.make_relative_to(abs_url=grip_git_url)
             pass
@@ -292,8 +298,9 @@ class DescriptorInConfig(DescriptorBase):
         acc = pp(acc, "repo.%s:" % (self.name))
         acc = pp(acc, " cfg:         %s" % (self.grip_config.name))
         acc = pp(acc, " url(orig):   %s" % (self.url), indent=1)
-        acc = pp(acc, " url(parsed)  %s" % (self.git_url.as_string()))
-        acc = pp(acc, " path:        %s" % (self.path), indent=1)
+        if self._is_resolved:
+            acc = pp(acc, " url(parsed)  %s" % (self.git_url.as_string()))
+            acc = pp(acc, " path:        %s" % (str(self._path)), indent=1)
         if self.branch  is not None: acc = pp(acc, "branch:      %s" % (self.branch), indent=1)
         for name in self.stages:
             def ppr(acc:Any, s:str, indent:int=0) -> Any:
