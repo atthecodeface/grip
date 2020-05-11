@@ -56,12 +56,16 @@ class GripBaseTest(GripBase):
     def __init__(self, log:Log, files:Dict[str,str]={}, toml_dicts:Dict[str,Any]={}):
         options =  Options()
         options._validate()
-        git_repo  = GitRepo(path=Path(".").resolve(), permit_no_remote=True)
+        git_repo  = GitRepo(path=Path("."), permit_no_remote=True)
+        git_repo._path = Path(".")
         GripBase.__init__(self, options=options, log=log, git_repo=git_repo, branch_name=None)
         self.files = files
         pass
+    def is_file(self, path:Path) -> bool:
+        return str(path) in self.files
     def open(self, path:Path, mode:str="r") -> IO[str]:
-        print("open %s"%str(path))
+        print("open %s %s"%(str(path),mode))
+        if mode!="r": raise Exception("Test has read-only string files")
         if str(path) in self.files:
             return io.StringIO(self.files[str(path)])
         raise FileNotFoundError("GripBaseTest has not file '%s'"%str(path))

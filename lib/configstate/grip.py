@@ -18,20 +18,19 @@ from typing import ClassVar, List, Optional, Iterable, IO, Any
 #a GripConfigState classes
 #c GripConfigStateBase
 class GripConfigStateBase(object):
-    #v Instance properties
+    #v Base instance properties
     base              : GripBase
     grip_toml_path    : Path
     state_toml_path   : Path
     config_toml_path  : Path
     base_url          : GitUrl
+    #v Properites of initial inherited by configured
     initial_repo_desc : GripDescriptor
     config_file       : GripConfigFile
     state_file        : GripStateFile
-    state_file_config : GripStateFileConfig
     config_desc       : ConfigurationDescriptor
-    _has_state : bool
-    _has_config_file : bool
     config_name : str
+    state_file_config : GripStateFileConfig
     #f __init__
     def __init__(self, base:GripBase):
         self.base = base
@@ -39,6 +38,22 @@ class GripConfigStateBase(object):
         self.state_toml_path  = self.base.grip_path(self.base.state_toml_filename)
         self.config_toml_path = self.base.grip_path(self.base.config_toml_filename)
         self.base_url = self.base.get_git_repo().get_git_url()
+        pass
+    #f All done
+    pass
+
+#c GripConfigStateInitial
+class GripConfigStateInitial(GripConfigStateBase):
+    """
+    An initial pass, getting initial_repo_desc, optional state_file, optional config_file
+    """
+    #v Properties private to Initial
+    subrepo_descs     : List[RepositoryDescriptorInConfig]
+    _has_state : bool
+    _has_config_file : bool
+    #f __init__
+    def __init__(self, base:GripBase):
+        GripConfigStateBase.__init__(self, base)
         self._has_state     = False
         self._has_config_file = False
         pass
@@ -92,15 +107,6 @@ class GripConfigStateBase(object):
     #f has_state
     def has_state(self) -> bool:
         return self._has_state
-    #f All done
-    pass
-
-#c GripConfigStateInitial
-class GripConfigStateInitial(GripConfigStateBase):
-    """
-    An initial pass, getting initial_repo_desc, optional state_file, optional config_file
-    """
-    subrepo_descs     : List[RepositoryDescriptorInConfig]
     #f select_configuration
     def select_configuration(self, config_name:Optional[str]) -> str:
         config_desc = self.initial_repo_desc.select_config(config_name)
@@ -152,9 +158,7 @@ class GripConfigStateConfigured(GripConfigStateBase):
                                               "state_file",
                                               "config_desc",
                                               "config_name",
-                                              "state_file_config",
-                                              "_has_config_file",
-                                              "_has_state",
+                                              "state_file_config"
     ]
     #v Instance properties
     full_repo_desc    : GripDescriptor

@@ -11,7 +11,9 @@ from lib.descriptor.stage import Dependency as StageDependency
 from lib.descriptor.stage import Descriptor as StageDescriptor
 from lib.descriptor.stage import StageTomlDict
 from lib.descriptor.repo  import RepoDescTomlDict
-from lib.descriptor.grip import Descriptor as GripRepository
+from lib.descriptor.grip import Descriptor as GripDescriptor
+from lib.configstate.grip import GripConfigStateInitial    as GripRepositoryInitial
+from lib.configstate.grip import GripConfigStateConfigured as GripRepositoryConfigured
 
 from .test_lib.grip import GripBaseTest
 from .test_lib.loggable import Loggable
@@ -55,43 +57,47 @@ class TestSet(UnitTestObject, Loggable):
         TestCase.tearDownSubClass(cls)
         pass
     #f debug_repo_desc
-    def debug_repo_desc(self) -> None:
+    def debug_repo_desc(self, repo_desc:GripDescriptor) -> None:
         def p(acc:Any, s:str, indent:int=0) -> Any:
             self._logger.add_log_string("grd: " + ("  "*indent)+s)
-        self.grd.prettyprint("",p)
+        repo_desc.prettyprint("",p)
         pass
     def do_read_toml(self) -> None:
-        subrepos = {}
-        for (sn,st) in self.test.subrepos.items():
-            subrepos[sn] = st()._as_string()
-            pass
-        self.grd.read_toml_strings(self.config_toml, subrepos, path=Path("no_path_really"))
-        self.grd.build_from_toml_dict()
-        self.grd.validate()
-        self.grd.resolve()
-        self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
+        self.grip_initial.read_desc_state()
+        # .d.read_toml_file(grip_toml_path=Path("grip.toml"), subrepo_descs=[])
+        # self.grd.build_from_toml_dict()
+        # self.grd.validate()
+        # self.grd.resolve()
+        # self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
+        # self.grd  = self.grip.initial_repo_desc
         pass
-    def do_read_toml_cfg(self, config_name:str) -> None:
-        subrepos = {}
-        for (sn,st) in self.test.subrepos.items():
-            subrepos[sn] = st()._as_string()
-            print(subrepos[sn])
-            pass
-        self.grd.read_toml_strings(self.config_toml, subrepos, path=Path("no_path_really"))
-        self.grd.build_from_toml_dict()
-        self.grd.select_config(config_name=config_name)
-        self.grd.validate()
-        self.grd.resolve()
-        self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
-        pass
+    # def do_read_toml_cfg(self, config_name:str) -> None:
+    #    subrepos = {}
+    #    for (sn,st) in self.test.subrepos.items():
+    #        subrepos[sn] = st()._as_string()
+    #        pass
+    #    self.grd.read_toml_strings(self.config_toml, subrepos, path=Path("no_path_really"))
+    #    self.grd.build_from_toml_dict()
+    #    self.grd.select_config(config_name=config_name)
+    #    self.grd.validate()
+    #    self.grd.resolve()
+    #    self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
+    #    pass
     def _test_it(self, test:Type[TestBase]) -> None:
         self.test = test
         self.config_toml = test.ConfigToml()._as_string()
+        self.local_config_toml = """config="y"\ngrip_git_url="test"\nbranch=""\n"""
+        files = {}
+        files[".grip/grip.toml"]=self.config_toml
+        files[".grip/local.config.toml"]=self.local_config_toml
+        for (sn,st) in self.test.subrepos.items():
+            files["%s/grip.toml"%sn] = st()._as_string()
+            pass
         self._logger.add_log_string("Test %s"%test.__qualname__)
         self._logger.add_log_string("Config %s"%self.test.config_name)
         self._logger.add_log_string("Toml %s"%self.config_toml)
-        self.base  = GripBaseTest(log=self._logger)
-        self.grd   = GripRepository(base=self.base)
+        self.base  = GripBaseTest(log=self._logger, files=files)
+        self.grip_initial = GripRepositoryInitial(base=self.base)
         if self.test.exception_expected is not None:
             self._logger.add_log_string("Checking exception is raised by reading Toml")
             self.assertRaises(self.test.exception_expected, self.do_read_toml)
@@ -99,26 +105,30 @@ class TestSet(UnitTestObject, Loggable):
         else:
             self._logger.add_log_string("Reading Toml")
             self.do_read_toml()
-            self.debug_repo_desc()
+            self.debug_repo_desc(self.grip_initial.initial_repo_desc)
             pass
         if len(self.test.grd_assert)>0:
             self._logger.add_log_string("Checking resultant grd against descriptor")
-            self._test_obj_asserts(self.grd, self.test.grd_assert, "grip_repo_desc")
+            self._test_obj_asserts(self.grip_initial.initial_repo_desc, self.test.grd_assert, "grip_repo_desc")
             pass
         if self.test.config_name is not False:
             self._logger.add_log_string("Selecting configuration %s"%self.test.config_name)
             config_name = cast(Optional[str],self.test.config_name)
-            cfg = self.grd.select_config(config_name=config_name)
-            if cfg is not None:
-                self.do_read_toml_cfg(config_name=cfg.name)
-                self.debug_repo_desc()
+            try:
+                config_name = self.grip_initial.select_configuration(config_name)
                 pass
-            if cfg is None:
+            except Exception as e:
                 self._logger.add_log_string("No config selected - ensuring this is what test requires")
+                self._logger.add_log_string(str(e))
                 self._logger.add_log_string(str(self.test.cfg_assert))
                 self.assertTrue(len(self.test.cfg_assert)==0)
+                return
                 pass
-            else:
+            if config_name is not None:
+                self.grip_configured = GripRepositoryConfigured(self.grip_initial)
+                self.grip_configured.read_desc()
+                self.debug_repo_desc(self.grip_configured.full_repo_desc)
+                cfg = self.grip_configured.config_desc
                 self._logger.add_log_string("Checking resultant cfg against descriptor")
                 self._test_obj_asserts(cfg, self.test.cfg_assert, "config_desc")
                 pass
