@@ -138,7 +138,7 @@ class Repository(object):
     #f git_command
     def git_command(self, stderr_output_indicates_error:bool=True, exception_on_error:bool=True, **kwargs:Any) -> str:
         cmd = self.git_os_command(**kwargs)
-        return cmd.check_results()
+        return cmd.check_results(stderr_output_indicates_error=stderr_output_indicates_error, exception_on_error=exception_on_error)
 
     #f __init__
     def __init__(self, path:Path, git_url:Optional[str]=None, permit_no_remote:bool=False, log:Optional[Log]=None, options:Optional[Options]=None):
