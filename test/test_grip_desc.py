@@ -3,10 +3,8 @@ from pathlib import Path
 
 from typing import Optional, Dict, Sequence, Collection, Any, Union, Type
 from lib.exceptions import *
-from lib.options    import Options
 from lib.base       import GripBase
 from lib.tomldict import TomlDict, TomlDictParser
-from lib.git import Repository as GitRepo
 from lib.exceptions import *
 from lib.env import GripEnv, EnvTomlDict
 from lib.descriptor.stage import Dependency as StageDependency
@@ -15,6 +13,7 @@ from lib.descriptor.stage import StageTomlDict
 from lib.descriptor.repo  import RepoDescTomlDict
 from lib.descriptor.grip import Descriptor as GripRepository
 
+from .test_lib.grip import GripBaseTest
 from .test_lib.loggable import Loggable
 from .test_lib.unittest import UnitTestObject, AKV
 from .test_lib.unittest import TestCase
@@ -70,7 +69,7 @@ class TestSet(UnitTestObject, Loggable):
         self.grd.build_from_toml_dict()
         self.grd.validate()
         self.grd.resolve()
-        self.grd.resolve_git_urls(self.git_repo.get_git_url())
+        self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
         pass
     def do_read_toml_cfg(self, config_name:str) -> None:
         subrepos = {}
@@ -83,19 +82,16 @@ class TestSet(UnitTestObject, Loggable):
         self.grd.select_config(config_name=config_name)
         self.grd.validate()
         self.grd.resolve()
-        self.grd.resolve_git_urls(self.git_repo.get_git_url())
+        self.grd.resolve_git_urls(self.base.git_repo.get_git_url())
         pass
     def _test_it(self, test:Type[TestBase]) -> None:
         self.test = test
         self.config_toml = test.ConfigToml()._as_string()
-        options =  Options()
-        options._validate()
         self._logger.add_log_string("Test %s"%test.__qualname__)
         self._logger.add_log_string("Config %s"%self.test.config_name)
         self._logger.add_log_string("Toml %s"%self.config_toml)
-        self.git_repo  = GitRepo(path=Path(".").resolve(), permit_no_remote=True)
-        self.grip_base = GripBase(options, self._logger, git_repo=self.git_repo, branch_name=None)
-        self.grd       = GripRepository(base=self.grip_base)
+        self.base  = GripBaseTest(log=self._logger)
+        self.grd   = GripRepository(base=self.base)
         if self.test.exception_expected is not None:
             self._logger.add_log_string("Checking exception is raised by reading Toml")
             self.assertRaises(self.test.exception_expected, self.do_read_toml)

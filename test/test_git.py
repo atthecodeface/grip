@@ -31,6 +31,14 @@ class RepoUnitTest(TestCase):
     def tearDownClass(cls) -> None:
         TestCase.tearDownSubClass(cls)
         pass
+    def _test_git_url_path(self, url:str, path:str, has_dir:bool, leaf:str, repo_name:str, dir:str) -> None:
+        d = GitUrl(url)
+        self.assertEqual(str(d.path),path,       "Mismatch in path")
+        self.assertEqual(d.path_has_dir,has_dir, "Mismatch in has_dir")
+        self.assertEqual(d.path_leaf,leaf,       "Mismatch in path_leaf")
+        self.assertEqual(str(d.path_dir),dir,    "Mismatch in path_dir")
+        self.assertEqual(repo_name,repo_name,    "Mismatch in repo_name")
+        pass
     def _test_git_url(self, url:str, host:OptStr=None, user:OptStr=None, port:OptStr=None, path:OptStr=None, protocol:OptStr=None, repo_name:OptStr=None) -> None:
         d = GitUrl(url)
         self.assertEqual(d.host,host,"Mismatch in host")
@@ -42,6 +50,12 @@ class RepoUnitTest(TestCase):
         pass
     def _test_git_url_fails(self, *args:Any) -> None:
         self.assertRaises(Exception, GitUrl, *args)
+        pass
+    def test_path_breakout(self) -> None:
+        self._test_git_url_path("banana.git",    path="banana.git",    has_dir=False, leaf="banana.git", repo_name="banana", dir=".")
+        self._test_git_url_path("banana.not",    path="banana.not",    has_dir=False, leaf="banana.not", repo_name="banana.not", dir=".")
+        self._test_git_url_path("a/b/c/banana",  path="a/b/c/banana",  has_dir=True, leaf="banana", repo_name="banana", dir="a/b/c")
+        self._test_git_url_path("a/b/c/banana/", path="a/b/c/banana",  has_dir=True, leaf="banana", repo_name="banana", dir="a/b/c")
         pass
     def test_paths(self) -> None:
         self._test_git_url("banana.git", host=None, user=None, port=None, path="banana.git", protocol=None, repo_name="banana")

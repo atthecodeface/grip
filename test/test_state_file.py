@@ -28,7 +28,7 @@ class GripRepoStateUnitTestBase(UnitTestObject):
     def test_it(self) -> None:
         if self.state_toml is not None:
             files = {"state.toml":self.state_toml}
-            base = GripBaseTest(files=files)
+            base = GripBaseTest(log=self._logger, files=files)
             grs = StateFile(base)
             if self.exception_expected is not None:
                 self.assertRaises(self.exception_expected, grs.read_toml_file, Path("state.toml"))
