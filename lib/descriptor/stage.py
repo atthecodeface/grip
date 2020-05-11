@@ -218,6 +218,7 @@ class Descriptor(object):
         if self.repo is not None:
             repo_name = self.repo.name
             pass
+        if not check_dependencies: return
         for r in self.requires:
             r.validate(grip_config, reason="Repo stage '%s.%s' requires of '%s'"%(repo_name, self.name, r.full_name()), error_handler=error_handler)
             pass

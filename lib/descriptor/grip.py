@@ -262,7 +262,8 @@ class Descriptor(object):
             pass
         pass
     #f validate
-    def validate(self, error_handler:ErrorHandler=None) -> None:
+    def validate(self, check_stage_dependencies:bool, error_handler:ErrorHandler=None) -> None:
+        assert (self.selected_config is not None) or (not check_stage_dependencies)
         if self.name is None:
             raise RepoDescError("Unnamed repo descriptors are not permitted - the .grip/grip.toml file should have a toplevel 'name' field")
         if self.re_valid_name.match(self.name) is None:
@@ -274,7 +275,7 @@ class Descriptor(object):
             raise RepoDescError("workflow must be defined")
         self.workflow = self.validate_workflow(self.values.workflow, "grip repo description")
         for c in self.iter_configs():
-            c.validate(error_handler=error_handler)
+            c.validate(check_stage_dependencies=check_stage_dependencies, error_handler=error_handler)
             pass
         if self.logging is None: self.logging=False
         pass

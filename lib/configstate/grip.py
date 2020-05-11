@@ -62,7 +62,7 @@ class GripConfigStateInitial(GripConfigStateBase):
         self.base.add_log_string("First pass reading '%s'"%str(self.grip_toml_path))
         self.initial_repo_desc = GripDescriptor(base=self.base)
         self.initial_repo_desc.read_toml_file(self.grip_toml_path, subrepo_descs=[])
-        self.initial_repo_desc.validate()
+        self.initial_repo_desc.validate(check_stage_dependencies=False) # Don't check stage dependencies as they include subrepo files
         self.initial_repo_desc.resolve()
         self.initial_repo_desc.resolve_git_urls(self.base_url)
         if self.initial_repo_desc.is_logging_enabled():
@@ -180,10 +180,10 @@ class GripConfigStateConfigured(GripConfigStateBase):
         self.full_repo_desc.read_toml_file(self.grip_toml_path, subrepo_descs=self.initial_subrepo_descs, error_handler=error_handler)
         self.select_configuration(self.config_name)
         self.base.add_log_string("Validate full_repo_desc and selected configuration")
-        self.full_repo_desc.validate(error_handler=error_handler)
         self.base.add_log_string("Resolve full_repo_desc and selected configuration")
         self.full_repo_desc.resolve(error_handler=error_handler)
         self.full_repo_desc.resolve_git_urls(self.base_url)
+        self.full_repo_desc.validate(check_stage_dependencies=True, error_handler=error_handler)
         if self.full_repo_desc.is_logging_enabled():
             self.base.log.set_tidy(self.base.log_to_logfile)
             pass

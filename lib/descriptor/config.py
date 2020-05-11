@@ -210,12 +210,12 @@ class Descriptor(object):
             pass
         pass
     #f validate
-    def validate(self, error_handler:ErrorHandler=None) -> None:
+    def validate(self, check_stage_dependencies:bool, error_handler:ErrorHandler=None) -> None:
         for r in self.iter_repos():
-            r.validate(error_handler=error_handler)
+            r.validate(check_stage_dependencies=check_stage_dependencies, error_handler=error_handler)
             pass
         for sn,s in self.stages.items():
-            s.validate(self,error_handler=error_handler)
+            s.validate(self,error_handler=error_handler, check_dependencies=check_stage_dependencies)
             pass
         pass
     #f has_stage - used by Stage to validate for a repo

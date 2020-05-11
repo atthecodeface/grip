@@ -43,7 +43,8 @@ class TestBase(object):
     config_name : Union [None, bool, str] = False
     grd_assert  : Asserts = {}
     cfg_assert  : Asserts = {}
-    exception_expected : Optional[Type[Exception]]= None
+    initial_exception_expected : Optional[Type[Exception]]= None
+    configured_exception_expected : Optional[Type[Exception]]= None
 #c TestSet
 class TestSet(UnitTestObject, Loggable):
     #f setUpClass - invoked for all tests to use
@@ -86,9 +87,9 @@ class TestSet(UnitTestObject, Loggable):
         self._logger.add_log_string("Toml %s"%self.config_toml)
         self.base  = GripBaseTest(log=self._logger, files=files)
         self.grip_initial = GripRepositoryInitial(base=self.base)
-        if self.test.exception_expected is not None:
-            self._logger.add_log_string("Checking exception is raised by reading Toml")
-            self.assertRaises(self.test.exception_expected, self.do_read_toml)
+        if self.test.initial_exception_expected is not None:
+            self._logger.add_log_string("Checking initial exception is raised by reading Toml")
+            self.assertRaises(self.test.initial_exception_expected, self.do_read_toml)
             return
         else:
             self._logger.add_log_string("Reading Toml")
@@ -114,11 +115,17 @@ class TestSet(UnitTestObject, Loggable):
                 pass
             if config_name is not None:
                 self.grip_configured = GripRepositoryConfigured(self.grip_initial)
-                self.grip_configured.read_desc()
-                self.debug_repo_desc(self.grip_configured.full_repo_desc)
-                cfg = self.grip_configured.config_desc
-                self._logger.add_log_string("Checking resultant cfg against descriptor")
-                self._test_obj_asserts(cfg, self.test.cfg_assert, "config_desc")
+                if self.test.configured_exception_expected is not None:
+                    self._logger.add_log_string("Checking configured exception is raised by reading Toml")
+                    self.assertRaises(self.test.configured_exception_expected, self.grip_configured.read_desc)
+                    return
+                else:
+                    self.grip_configured.read_desc()
+                    self.debug_repo_desc(self.grip_configured.full_repo_desc)
+                    cfg = self.grip_configured.config_desc
+                    self._logger.add_log_string("Checking resultant cfg against descriptor")
+                    self._test_obj_asserts(cfg, self.test.cfg_assert, "config_desc")
+                    pass
                 pass
             pass
         pass
@@ -159,7 +166,7 @@ class TestUnconfigured(TestSet):
         pass
     class BadDefaultConfig(Test):
         class ConfigToml(DefaultConfigToml): default_config = "<not a defined config>"
-        exception_expected = GripTomlError
+        initial_exception_expected = GripTomlError
         pass
     class WorkflowSingle(Test):
         class ConfigToml(DefaultConfigToml): workflow="single"
@@ -169,13 +176,13 @@ class TestUnconfigured(TestSet):
         pass
     class BadWorkflow(Test):
         class ConfigToml(DefaultConfigToml): workflow="unknown_workflow"
-        exception_expected = RepoDescError
+        initial_exception_expected = RepoDescError
         pass
     class RepoUnparsedKey(Test):
         class ConfigToml(DefaultConfigToml):
             this_is_a_bad_key="a"
             pass
-        exception_expected = TomlError
+        initial_exception_expected = TomlError
         pass
     class RepoUrl(Test):
         class ConfigToml(DefaultConfigToml):
@@ -200,7 +207,7 @@ class TestUnconfigured(TestSet):
             base_repos=["tom"]
             repo={"fred":{"url":'a',"path":'b'}}
             pass
-        exception_expected = RepoDescError
+        initial_exception_expected = RepoDescError
         pass
     pass
 
@@ -271,6 +278,10 @@ class SubrepoTomlJoe(Toml):
     build_sim = {"exec":"build_sim joe"}
     run_sim = {"exec":"run_sim joe", "action":"yes"}
 
+class SubrepoTomlJoeNoStages(Toml):
+    doc="subrepo joe doc"
+    env = {"SRC":"@GRIP_REPO_PATH@"}
+
 class TestConfiguredSubrepos(TestSet):
     class Test(TestBase):
         class ConfigToml(Toml):
@@ -280,12 +291,30 @@ class TestConfiguredSubrepos(TestSet):
             configs=["x","y"]
             base_repos=["fred"]
             repo:Dict[str,Any]={}
-            repo={"fred":{"url":'ssh://me@there/path/to/thing.git'},
-                  "jim":{"url":'some/path/to/jim.git',"workflow":"single"},
-                  "joe":{"url":"git://sourceware.org/git/binutils-gdb.git","workflow":"readonly","path":"binutils"},
-                  }
-            config = {"x":{"repos":["jim"]},
-                      "y":{"repos":["joe"], "fred":{"path":"nothing"}},
+            repo={
+                "fred": {
+                    "url":'ssh://me@there/path/to/thing.git',
+                    "build":{"exec":"build_fred"},
+                },
+                "jim":{"url":'some/path/to/jim.git',"workflow":"single"},
+                "joe":{"url":"git://sourceware.org/git/binutils-gdb.git","workflow":"readonly","path":"binutils"},
+            }
+            config = {
+                "x": {
+                    "repos":["jim"],
+                    "stage":{"all":{"doc":"doc of stage all in cfg x",
+                                    "exec":"some_exec for x",
+                                    "requires":["fred.build"]}},
+                    "env":{"A":"v"},
+                },
+                "y": {
+                    "repos":["joe"],
+                    "fred":{"path":"nothing"},
+                    "stage":{"all":{"doc":"doc of stage all in cfg y",
+                                    "exec":"some_exec for y",
+                                    "requires":["joe.build_sim"]}},
+                    "env":{"A":"v"},
+                },
             }
             pass
         config_name : Union [None, bool, str] = None
@@ -296,9 +325,18 @@ class TestConfiguredSubrepos(TestSet):
         config_name = "y"
         cfg_assert = {"repos":{"joe":{"_path":"binutils"}}}
         pass
+    class SubrepoConfigX(Test):
+        config_name = "x"
+        cfg_assert = {"repos":{"fred":{"_path":"thing"}}}
+        pass
     class SubrepoJoeEnv(Test):
         config_name = "y"
+        pass
+    class SubrepoJoeEnvBadDependencies(Test):
+        subrepos : SubrepoTomls = {"binutils":SubrepoTomlJoeNoStages}
+        config_name = "y"
         cfg_assert = {"repos":{"joe":{"doc":"subrepo joe doc"}}}
+        configured_exception_expected = GripTomlError
         pass
 
 #c TestStages

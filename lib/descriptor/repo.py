@@ -193,7 +193,7 @@ class DescriptorInConfig(DescriptorBase):
         pass
         pass
     #f validate
-    def validate(self, error_handler:ErrorHandler=None) -> None:
+    def validate(self, check_stage_dependencies:bool, error_handler:ErrorHandler=None) -> None:
         if self.values.workflow is None:
             self.workflow = self.grip_repo_desc.workflow
             pass
@@ -201,7 +201,7 @@ class DescriptorInConfig(DescriptorBase):
             self.workflow = self.grip_repo_desc.validate_workflow(self.values.workflow, self.name)
             pass
         for (n,s) in self.stages.items():
-            s.validate(self.grip_config, error_handler=error_handler)
+            s.validate(self.grip_config, check_dependencies=check_stage_dependencies, error_handler=error_handler)
             pass
         pass
     #f get_doc
