@@ -129,15 +129,23 @@ class Dependency:
 class DescriptorValues(object):
     wd   = None # Working directory to execute <exec> in (relative to repo desc path)
     exec = None # Shell script to execute to perform the stage
-    env  : Union[TomlDictValues, None] = None # Environment to be exported in .grip/env
+    env  : TomlDictValues
     doc = None
     action = False
     requires : List[str]= []
     satisfies = None
+    #f __init__
+    def __init__(self, values:Optional[TomlDictValues]):
+        if values is None:
+            self.env   = TomlDictValues(EnvTomlDict)
+            return
+        values.Set_obj_properties(self, values.Get_fixed_attrs())
+        if values.IsNone("env"):   self.env   = TomlDictValues(EnvTomlDict)
+        pass
     #f clone  = clone to get required values from the other
     @classmethod
     def clone(cls, other:'DescriptorValues') -> 'DescriptorValues':
-        c = cls()
+        c = cls(values=None)
         c.wd = other.wd
         c.env = other.env
         c.exec = other.exec
@@ -173,7 +181,7 @@ class Descriptor(object):
             self.values = clone.values.clone(clone.values)
             pass
         else:
-            self.values = DescriptorValues()
+            self.values = DescriptorValues(values)
             pass
         if values is not None:
             values.Set_obj_properties(self.values, values.Get_fixed_attrs())
@@ -199,8 +207,8 @@ class Descriptor(object):
         self.env = GripEnv(name="stage %s"%self.name, parent=env)
         self.env.build_from_values(self.values.env)
         self.env.resolve(error_handler=error_handler)
-        self.wd   = env.substitute(self.values.wd,   error_handler=error_handler)
-        self.exec = env.substitute(self.values.exec, error_handler=error_handler)
+        self.wd   = self.env.substitute(self.values.wd,   error_handler=error_handler)
+        self.exec = self.env.substitute(self.values.exec, error_handler=error_handler)
         self.doc = self.values.doc
         pass
     #f validate - Validate the within a particular configuration

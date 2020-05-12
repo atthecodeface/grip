@@ -278,6 +278,19 @@ class SubrepoTomlJoe(Toml):
     build_sim = {"exec":"build_sim joe"}
     run_sim = {"exec":"run_sim joe", "action":"yes"}
 
+class SubrepoTomlJoeEnv(Toml):
+    doc="subrepo joe doc"
+    env = {"SRC":"joe_src"}
+    clean_sim = {"exec":"clean_sim joe"}
+    build_sim = {"exec":"build_sim joe"}
+    run_sim = {
+        "env":{
+            "RUN_SRC":"@SRC@/run",
+            "OTHER_STUFF":"other_stuff @RUN_SRC@",
+            },
+        "exec":"@RUN_SRC@ joe", "action":"yes"
+    }
+
 class SubrepoTomlJoeNoStages(Toml):
     doc="subrepo joe doc"
     env = {"SRC":"@GRIP_REPO_PATH@"}
@@ -329,8 +342,10 @@ class TestConfiguredSubrepos(TestSet):
         config_name = "x"
         cfg_assert = {"repos":{"fred":{"_path":"thing"}}}
         pass
-    class SubrepoJoeEnv(Test):
+    class SubrepoJoeEnv1(Test):
+        subrepos : SubrepoTomls = {"binutils":SubrepoTomlJoeEnv}
         config_name = "y"
+        cfg_assert = {"repos":{"joe":{"stages":{"run_sim":{"exec":"joe_src/run joe"}}}}}
         pass
     class SubrepoJoeEnvBadDependencies(Test):
         subrepos : SubrepoTomls = {"binutils":SubrepoTomlJoeNoStages}

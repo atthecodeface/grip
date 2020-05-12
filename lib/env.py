@@ -63,8 +63,8 @@ class GripEnv:
         """
         if values is None: return
         for k in values.Get_other_attrs():
-             self.env[k] = values.Get(k)
-             pass
+            self.env[k] = values.Get(k)
+            pass
         pass
     #f resolve - resolve self.env looking for @KEY@ in each
     def resolve(self, error_handler:ErrorHandler=None) -> None:
@@ -135,8 +135,8 @@ class GripEnv:
         e = GripEnvValueError(self,k,"Configuration or environment value not specified").invoke(error_handler)
         assert ((e is None) or (type(e)==str))
         return cast(Optional[str],e)
-    #f substitute - substitute environment contents as required in a string, return None if unknown variable
-    def substitute(self, s:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
+    #f _substitute - substitute environment contents as required in a string, return None if unknown variable
+    def _substitute(self, s:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
         """
         Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
         Find any @@ and replace
@@ -150,7 +150,7 @@ class GripEnv:
         m = self.name_match_re.match(s,n+1)
         if m is None:
             acc = acc + "@"
-            return self.substitute(s[n+1:],acc,finalize=finalize,error_handler=error_handler)
+            return self._substitute(s[n+1:],acc,finalize=finalize,error_handler=error_handler)
         k = m.group('name')
         if len(k)==0:
             v="@"*2
@@ -162,7 +162,22 @@ class GripEnv:
             v = key_value
             pass
         acc = acc + v
-        return self.substitute(m.group('rest'), acc=acc, finalize=finalize, error_handler=error_handler)
+        return self._substitute(m.group('rest'), acc=acc, finalize=finalize, error_handler=error_handler)
+    #f substitute - substitute environment contents as required in a string, return None if unknown variable
+    def substitute(self, s:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
+        """
+        Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
+        Find any @@ and replace
+
+        if not finalizing, then leave @@ as @@, and don't raise exceptions as another pass should do it
+        """
+        try:
+            opt_result = self._substitute(s=s, acc="", finalize=finalize, error_handler=error_handler)
+            pass
+        except:
+            # self.show("failed to substitute in '%s'"%str(s))
+            raise
+        return opt_result
     #f as_dict - generate key->value pair, including parent if required
     def as_dict(self, include_parent:bool=False) -> EnvDict:
         """

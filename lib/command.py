@@ -191,7 +191,6 @@ class GripCommandBase(Hookable):
                 pass
             pass
         except GripException as e:
-            raise
             self.tidy_logs()
             print("%s: %s" % (e.grip_type, str(e)), file=sys.stderr)
             if (self.options.get("show_log",False)): self.show_logs(sys.stderr)
