@@ -21,9 +21,10 @@ class ParsedCommand(object):
     """
     In essence this is a typed namespace for a parsed command, used in execute
     """
-    def __init__(self, command:'GripCommandBase', args:List[str]):
+    def __init__(self, command:'GripCommandBase', subcommand:str, subcommand_args:List[str]):
         self.command = command
-        self.args = args
+        self.subcommand = subcommand
+        self.subcommand_args = subcommand_args
         pass
     pass
 
@@ -34,18 +35,20 @@ class GripCommandBase(Hookable):
 
     The docstring (this bit) is used for the help
     """
-    #v Class properties
+    #t Class property types
     names : List[str] # Type['GripCommandBase']]= []
     base_options : Dict[Tuple[str, ...], Dict[str, object]]
+    #v Base options
     base_options = {("-h", "--help")     :{"action":"store_true", "dest":"help",         "default":False, "help":"show the list of commands and options", },
                     ("-v", "--verbose")  :{"action":"store_true", "dest":"verbose",      "default":False},
                     ("--show-log",)      :{"action":"store_true", "dest":"show_log",     "default":False},
                     ("--debug-config",)  :{"action":"store_true", "dest":"debug_config", "default":False, "help":"dump the complete configuration to the screen once it has been read"},
                     ("--grip-path",)     :{                       "dest":"grip_path",    "default":None, "help":"path to somewhere with the grip repository (default is working directory)"},
                     ("-Q", "--quiet")    :{"action":"store_true", "dest":"quiet",        "default":False},
-                    }
+                    ("command",):      {"default":None, "help":'command to perform'},
+    }
     command_options : ParserOptions = {}
-    #t Instance types
+    #t Instance property types
     prog       : str
     invocation : str
     parser     : argparse.ArgumentParser
@@ -73,18 +76,20 @@ class GripCommandBase(Hookable):
     def __init__(self, command_name:str, parent:Optional['GripCommandBase']=None, args:List[str]=[]):
         if parent is None: # Called from toplevel grip
             self.options = Options()
-            self.parser = argparse.ArgumentParser(prog=command_name, add_help=False) # add_help=False as parent has -h
-            self.parser_add_options(self.base_options)
+            self.toplevel_parser = argparse.ArgumentParser(prog=command_name, add_help=False)
+            self.parser = argparse.ArgumentParser(prog=command_name, parents=[self.toplevel_parser], add_help=False) # add_help=False as we have an explicit help
             self.prog = os.path.basename(command_name)
             self.loggers = []
             pass
         else:
             self.options = parent.options
             parser_prog = "%s %s"%(parent.prog, command_name)
-            self.parser = argparse.ArgumentParser(prog=parser_prog, parents=[parent.parser], add_help=False) # add_help=False as parent has -h
+            self.parser = argparse.ArgumentParser(prog=parser_prog, parents=[parent.toplevel_parser], add_help=False) # add_help=False as parent has -h
             self.prog = parser_prog
             self.loggers = parent.loggers
             pass
+        self.parser_add_options(self.base_options)
+        self.parser_add_options(self.command_options)
         self.invocation = self.prog+(" ".join(args))
         pass
 
@@ -114,11 +119,10 @@ class GripCommandBase(Hookable):
         # cmd_parser = argparse.ArgumentParser(prog=self.prog, parents=[self.parser], add_help=False)
         # self.parser_add_options(cmd_parser, self.command_options)
         # options = cmd_parser.parse_args(args, namespace=options)
-        self.parser_add_options(self.command_options)
-        self.parser.parse_args(args, namespace=self.options)
+        self.parser.parse_args(args=args, namespace=self.options)
         self.options._validate()
         self.invoke_hooks("command_options", command=self)
-        return ParsedCommand(self, self.options.get("args",default=[]))
+        return ParsedCommand(self, subcommand=self.options.command, subcommand_args=self.options.get("command_args",default=[]))
 
     #f get_grip_repo
     def get_grip_repo(self, log:Optional[Log]=None, path:Optional[Path]=None, **kwargs:Any) -> None:
@@ -217,7 +221,7 @@ class GripCommand(GripCommandBase):
 
     """
     names : List[str] = []
-    command_options = {("args",): {"nargs":argparse.REMAINDER, "help":'command to perform'},
+    command_options = {("command_args",): {"nargs":argparse.REMAINDER, "default":[], "help":'arguments for command to perform'},
                     }
 
 #a Help

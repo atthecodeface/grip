@@ -47,7 +47,9 @@ class Options(object):
         return self._verbose_fn
     #f dump - print to screen
     def dump(self) -> None:
+        print("*"*80)
         for k in dir(self):
+            if k[0]=='_': continue
             print(k,self.get(k))
             pass
         pass

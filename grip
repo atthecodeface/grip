@@ -54,11 +54,12 @@ def main(prog:str, globalargs:List[str]) -> None:
     cmd = lib.command.GripCommand(command_name=prog, parent=None, args=globalargs) # args for recording the invocation
     parsed_cmd = cmd.parse_command(args=globalargs)
 
-    args = parsed_cmd.args
-    if len(args)==0: args=["help"]
+    if parsed_cmd.subcommand is None:
+        cmd.invoke_subcommand("help",[])
+        return
 
     # Invoke command with options
-    cmd.invoke_subcommand(args[0], args[1:])
+    cmd.invoke_subcommand(parsed_cmd.subcommand, globalargs) # parsed_cmd.subcommand_args)
 
     # Done
     pass
