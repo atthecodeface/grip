@@ -57,7 +57,7 @@ class Toplevel(GripBase):
     def clone(cls, repo_url:str, dest:Optional[Path], branch:Optional[str], options:Optional[Options]=None, log:Optional[Log]=None, invocation:str="")-> 'Toplevel':
         if options is None: options=Options()
         if log is None: log = Log()
-        git_repo = GitRepo.clone(repo_url, new_branch_name="WIP_GRIP", branch=branch, dest=dest, options=options, log=log)
+        git_repo = GitRepo.clone(repo_url, new_branch_name="", branch=branch, dest=dest, options=options, log=log)
         return cls(path=git_repo.path(), git_repo=git_repo, options=options, log=log, invocation=invocation, ensure_configured=False)
     #f path - get a path relative to the repository
     def path(self, path:Optional[Path]=None) -> Path:

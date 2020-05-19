@@ -211,22 +211,24 @@ class Repository(object):
             global_git_command(log=log, cwd=dest, cmd="branch --delete %s"%branch_upstream)
             pass
         git_cmd = global_git_command(log=log, cwd=dest, cmd="branch --move %s"%branch_upstream)
-        if git_cmd.rc()==0:
-            # If the branch move failed then just create the branch at this head
-            global_git_command(log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
-            pass
-        if changeset is None:
-            global_git_command(log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
-            pass
-        else:
-            git_cmd = global_git_command(log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
-            if git_cmd.rc()!=0: raise Exception("Failed to point branch %s at required changeset %s - maybe depth is not large enough"%(new_branch_name, changeset))
-            pass
-        git_cmd = global_git_command(log=log,
-                                        cwd = dest,
-                                        cmd = "checkout %s" % new_branch_name)
-        if git_cmd.rc()!=0:
+        if new_branch_name!="":
+            if git_cmd.rc()==0:
+                # If the branch move failed then just create the branch at this head
+                global_git_command(log=log, cwd=dest, cmd="branch %s HEAD"%branch_upstream)
+                pass
+            if changeset is None:
+                global_git_command(log=log, cwd=dest, cmd="branch %s HEAD"%new_branch_name)
+                pass
+            else:
+                git_cmd = global_git_command(log=log, cwd=dest, cmd="branch %s %s"%(new_branch_name, changeset))
+                if git_cmd.rc()!=0: raise Exception("Failed to point branch %s at required changeset %s - maybe depth is not large enough"%(new_branch_name, changeset))
+                pass
+            git_cmd = global_git_command(log=log,
+                                            cwd = dest,
+                                            cmd = "checkout %s" % new_branch_name)
+            if git_cmd.rc()!=0:
                 raise Exception("Failed to checkout required changeset - maybe depth is not large enough")
+            pass
         return cls(path=Path(dest), git_url=repo_url, log=log, options=options)
     #f get_upstream - get Remote corresponding to the upstream
     def get_upstream(self) -> Optional[Remote]:

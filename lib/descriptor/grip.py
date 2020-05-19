@@ -357,9 +357,7 @@ class Descriptor(object):
         r.append(self.get_doc_string())
         if include_configs:
             for (n,c) in self.configs.items():
-                r.append(("********************************************************************************"))
-                r.append(("reinsntate configration get doc string in description/grip.py"))
-                #r.append(("Configuration %s"%n,c.get_doc_string()))
+                r.append(("Configuration %s"%n,[c.get_doc_string()]))
                 pass
             pass
         return r
