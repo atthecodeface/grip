@@ -122,7 +122,8 @@ class GripCommandBase(Hookable):
         self.parser.parse_args(args=args, namespace=self.options)
         self.options._validate()
         self.invoke_hooks("command_options", command=self)
-        return ParsedCommand(self, subcommand=self.options.command, subcommand_args=self.options.get("command_args",default=[]))
+        subcommand = self.options.command # type: ignore
+        return ParsedCommand(self, subcommand=subcommand, subcommand_args=self.options.get("command_args",default=[]))
 
     #f get_grip_repo
     def get_grip_repo(self, log:Optional[Log]=None, path:Optional[Path]=None, **kwargs:Any) -> None:
@@ -236,8 +237,8 @@ class Help(GripCommandBase):
                     }
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
         command : Optional[Type[GripCommandBase]] = self.__class__
-        if len(cmd.args)>0:
-            command_name = cmd.args[0]
+        if len(cmd.subcommand_args)>0:
+            command_name = cmd.subcommand_args[0]
             command = GripCommandBase.command_of_name(command_name)
             pass
         if command is None:
