@@ -18,7 +18,11 @@ class D3Toml(Toml):
     doc="subrepo d3"
     env = {"SRC":"@GRIP_REPO_PATH@", "OVERRIDE_ME":"bad value"}
     clean_sim = {"wd":"@SRC@", "exec":"clean_sim d3"}
-    build_sim = {"exec":"build_sim d3"}
+    show_env = {
+        "env":{"SRC_ROOT":"@GRIP_REPO_PATH@",
+               "BUILD_ROOT":"@BUILD_DIR@",
+               "MAKE_OPTIONS":"@GRIP_REPO_PATH@/Makefile D3_SRC_ROOT=@SRC_ROOT@ BUILD_ROOT=@BUILD_DIR@"},
+        "exec":"echo BUILD_DIR=@BUILD_DIR@ D3_SRC_ROOT=@SRC_ROOT@ BUILD_ROOT=@BUILD_ROOT@ MAKE_OPTIONS=@MAKE_OPTIONS@ D3_SRC_ROOT=$${SRC_ROOT} BUILD_ROOT=$${BUILD_ROOT} MAKE_OPTIONS=$${MAKE_OPTIONS}"}
     run_sim = {"exec":"run_sim d3", "action":"yes"}
     pass
 
@@ -26,6 +30,7 @@ class D4Toml(Toml):
     doc="subrepo d4"
     env = {"SRC":"@GRIP_REPO_PATH@"}
     circle = {"env":{"D4_THING1":"@D4_THING2@", "D4_THING2":"@D4_THING1@"}}
+    show_env = {"exec":"echo GRIP_ROOT_PATH=@GRIP_ROOT_PATH@ GRIP_ROOT_PATH=${GRIP_ROOT_PATH} D4_SRC_ROOT=@SRC@ NOT_D4_SRC_ROOT=${SRC} NOT_GRIP_ROOT_PATH=$${GRIP_ROOT_PATH}", }
     pass
 
 class ExampleConfig1Toml(Toml):
@@ -58,7 +63,7 @@ class ExampleToml(BaseGripToml):
     doc             = "Use of local environment for repo path"
     configs         = ["cfg0","cfg1"]
     base_repos      = ["d1"]
-    stages          = ["install"]
+    stages          = ["show_env"]
     workflow        = "readonly"
     env             = {"D2ENV":"d2"}
     logging         = "True"
@@ -84,7 +89,11 @@ class GripTomlEnv1(BaseGripToml):
 class GripTomlEnvFull(BaseGripToml):
     name            = "grip_toml_env_1"
     configs         = ["cfg0", "cfg1", "cfg2", "cfg3"]
-    env             = {"FS_PATH":"@FS_PATH@", "THING1":"@FS_PATH@", "THING2":"@THING1@"}
+    stages          = ["show_env"]
+    env             = {"FS_PATH":"@FS_PATH@",
+                       "BUILD_DIR":"@GRIP_ROOT_PATH@/build",
+                       "THING1":"@FS_PATH@",
+                       "THING2":"@THING1@",}
     config = {"cfg1":ExampleConfig1Toml(),
               "cfg2":ExampleConfig2Toml(),
               "cfg3":ExampleConfig3Toml(),
@@ -322,6 +331,40 @@ class BasicTest(TestCase):
         self.assertEqual(doc_cmd.rc(),0,"Grip doc should not have an error for undefined environment variables on an unconfigured repo")
         self.assertEqual(doc_cmd.stderr().strip(),"","Grip doc should have no stderr output")
 
+        fs.cleanup()
+        pass
+    #f test_grip_environment_show_env
+    def test_grip_environment_show_env(self) -> None:
+        fs = FileSystem(log=self._logger)
+        g = GripRepository(name="g",fs=fs,log=self._logger)
+        g.git_clone(clone=self.cls_grip_env_full.bare().abspath)
+        env = {"FS_PATH":str(self.cls_fs.path), "D4_THING1":"thing1"}
+        cfg_cmd = g.grip_command_full_result("configure cfg3", env=env)
+        self.assertEqual(cfg_cmd.rc(),0,"Grip configure should complete successfully if environment is provided (stderr %s)"%(cfg_cmd.stderr()))
+
+        # That should have written out the environment - but not for the local circles
+        doc_cmd = g.grip_command_full_result("make show_env", env=env)
+        self.assertEqual(doc_cmd.stderr().strip(),"","Grip make show env should have no error output (%s)"%doc_cmd.stderr())
+        self.assertEqual(doc_cmd.rc(),0,"Grip make show env should not have an error")
+        env_vars = doc_cmd.stdout().strip().split()
+        # print(doc_cmd.stdout())
+        make_env_vars = {}
+        make_env_vars["BUILD_DIR"]    = "%s/build"%(str(g.abspath))
+        make_env_vars["D3_SRC_ROOT"]  = "%s/d3"%(str(g.abspath))
+        make_env_vars["D4_SRC_ROOT"]  = "%s/d4"%(str(g.abspath))
+        make_env_vars["MAKE_OPTIONS"] = "%s/d3/Makefile"%(str(g.abspath))
+        make_env_vars["GRIP_ROOT_PATH"] = "%s"%(str(g.abspath))
+        count = 0
+        for ev in env_vars:
+            nv = ev.split("=")
+            if len(nv)<2: continue
+            (n,v)=nv
+            if n in make_env_vars:
+                self.assertEqual(v,make_env_vars[n],"Output of make show_env mismatched for '%s'"%n)
+                count += 1
+                pass
+            pass
+        self.assertEqual(count,9,"Output of make show_env had incorrect known values")
         fs.cleanup()
         pass
     #f test_grip_interrogate
