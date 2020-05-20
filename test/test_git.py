@@ -11,7 +11,6 @@ from .test_lib.filesystem import FileSystem, FileContent
 from .test_lib.loggable import TestLog
 from .test_lib.unittest import TestCase
 from .test_lib.git import Repository as GitRepository
-from .test_lib.grip import Repository as GripRepository
 from .test_lib.toml_file import Toml
 
 from typing import List, Optional, Any, ClassVar, Dict

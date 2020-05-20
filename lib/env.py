@@ -4,6 +4,7 @@ from typing import Optional, Dict, List, Tuple, cast
 from .tomldict import TomlDict, TomlDictValues, TomlDictParser
 # Specifically this imports type ErrorHandler (plus all exceptions)
 from .exceptions import *
+from .verbose import Verbose
 from .types import MakefileStrings, EnvDict
 
 #a Exceptions
@@ -32,16 +33,30 @@ class EnvTomlDict(TomlDict):
 
 #c GripEnv
 class GripEnv:
+    #t instance property types
+    verbose : Verbose
+    root    : 'GripEnv'
+    parent  : Optional['GripEnv']
+    env     : EnvDict
+    
     #v regular expressions
     name_match_re_string = r"""(?P<name>([a-zA-Z_][a-zA-Z_0-9]*))@(?P<rest>.*)$"""
     name_match_re = re.compile(name_match_re_string)
-    env : EnvDict
     #f __init__
-    def __init__(self, parent:Optional['GripEnv']=None, name:str="<unnamed env>", default_values:EnvDict={}):
+    def __init__(self, parent:Optional['GripEnv']=None, name:str="<unnamed env>", default_values:EnvDict={}, opt_verbose:Optional[Verbose]=None):
         self.name = name
         self.parent = parent
         self.env = {}
         self.add_values(default_values)
+        self.root = self.get_root()
+        if opt_verbose is None:
+            assert self!=self.root
+            assert parent != None
+            self.verbose = self.root.verbose
+            pass
+        else:
+            self.verbose = opt_verbose
+            pass
         pass
     #f get_root - find root environment by tracing parents
     def get_root(self) -> 'GripEnv':
@@ -175,7 +190,7 @@ class GripEnv:
             opt_result = self._substitute(s=s, acc="", finalize=finalize, error_handler=error_handler)
             pass
         except:
-            # self.show("failed to substitute in '%s'"%str(s))
+            self.verbose.warning("Envrionment failed to substitute in '%s'"%str(s))
             raise
         return opt_result
     #f as_dict - generate key->value pair, including parent if required

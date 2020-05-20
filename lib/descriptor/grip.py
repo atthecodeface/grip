@@ -131,7 +131,7 @@ class Descriptor(object):
         default_env["GRIP_ROOT_URL"]  = self.git_repo.get_git_url_string()
         default_env["GRIP_ROOT_PATH"] = str(git_repo_path)
         default_env["GRIP_ROOT_DIR"]  = git_repo_path.name
-        self.env = GripEnv(name='grip.toml', default_values=default_env)
+        self.env = GripEnv(name='grip.toml', default_values=default_env, opt_verbose=self.base.verbose)
         pass
     #f toml_loads
     def toml_loads(self, filename:str, s:str) -> RawTomlDict:

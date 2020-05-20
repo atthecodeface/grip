@@ -7,17 +7,21 @@ from .test_lib.loggable import TestLog
 from .test_lib.unittest import TestCase
 from .test_lib.git import Repository as GitRepository
 from .test_lib.grip import Repository as GripRepository
+from .test_lib.grip import GripToml
 from .test_lib.toml_file import Toml
 
 from typing import List, Optional, Any, ClassVar, Dict
 
+#a Grip repositories for tests
 class ExampleConfig1Toml(Toml):
     repos = ["d2"]
     d2 = {"install": {"requires":[], "wd":"", "exec":"do_exec"}}
     pass
-class ExampleToml(Toml):
+
+class ExampleToml(GripToml):
     name            = "test_grip"
     default_config  = "cfg0"
+    doc             = "Use of local environment for repo path"
     configs         = ["cfg0","cfg1"]
     base_repos      = ["d1"]
     stages          = ["install"]
@@ -33,12 +37,30 @@ class ExampleToml(Toml):
         Toml.__init__(self, **kwargs)
         pass
     pass
-class ExampleRepository(GripRepository):
+
+class GripTomlEnv1(Toml):
+    name            = "grip_toml_env_1"
+    doc             = "Use of global environment for repo path"
+    default_config  = "cfg0"
+    configs         = ["cfg0","cfg1"]
+    base_repos      = ["d1"]
+    stages          = ["install"]
+    workflow        = "readonly"
+    env             = {"D2ENV":"@D2_ENV_PATH@"}
+    logging         = "True"
+    config : Dict[str,Any] = {}
+    repo : Dict[str,Any] = {}
     def __init__(self, fs:FileSystem, **kwargs:Any):
-        self.grip_toml = ExampleToml(fs)._as_string()
-        # print(self.grip_toml)
-        GripRepository.__init__(self, fs=fs, **kwargs)
+        self.config["cfg1"] = ExampleConfig1Toml()
+        self.repo["d1"] = { "url":"%s/d_1.git" % fs.path, "branch":"master", "path":"d1" }
+        self.repo["d2"] = { "url":"%s/d_2.git" % fs.path, "branch":"master", "path":"@D2ENV@" }
+        Toml.__init__(self, **kwargs)
         pass
+    pass
+
+class ExampleRepository(GripRepository):
+    grip_toml_class = ExampleToml
+    pass
 
 #a Test classes
 #c Basic grip test case

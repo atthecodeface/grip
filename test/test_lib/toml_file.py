@@ -1,4 +1,5 @@
 from typing import Dict, Mapping, Optional, List, Any, Tuple, cast
+from .filesystem import FileContent
 
 class Toml:
     def __init__(self, **kwargs:Any):

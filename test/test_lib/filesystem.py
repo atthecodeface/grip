@@ -11,6 +11,8 @@ from .loggable import TestLog
 
 from typing import List, Callable, Optional, Any, Dict
 
+#a Useful functions
+#f md5sum
 def md5sum(path:Path)->str:
     hash = md5()
     with path.open("rb") as f:
@@ -22,7 +24,9 @@ def md5sum(path:Path)->str:
         pass
     return hash.hexdigest()
 
-class FileContent:
+#a File content classes
+#c FileContent - content given a string
+class FileContent(object):
     init_str : str
     def __init__(self, init_str:str=""):
         self.init_str = init_str
@@ -30,10 +34,13 @@ class FileContent:
     def content(self) -> str:
         return self.init_str
     pass
+
+#c EmptyContent
 class EmptyContent(FileContent):
     pass
 
-#c 'file system' class
+#a File system
+#c FileSystem class
 class FileSystem(object):
     """
     A class for tests to use as a filesystem - include methods such as 'make_dir', 'create_file', and 'open'
