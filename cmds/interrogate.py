@@ -69,16 +69,25 @@ def show_documentation(doc:Documentation, indent:int=0) -> None:
 class doc(GripCommandBase):
     """
     Prints the documentation
+
+    If the repository has a configuration warning, such as from
+    an undefined environment variable, then the return code will be 1
+
+    With no warnings or errors the return code will be 0
     """
     names = ["doc"]
     # command_options = {}
     def execute(self, cmd:ParsedCommand) -> Optional[int]:
+        warnings = []
         def f(e:Exception) -> Tuple[str]:
-            print("Warning: %s"%str(e))
+            warnings.append(str(e))
             ge = cast(lib.env.GripEnvValueError, e)
             ge.grip_env.get_root().add_values({ge.key:""})
             return ("",)
         self.get_grip_repo(ensure_configured=False, error_handler=lib.env.GripEnvValueError.error_handler(f))
+        for w in warnings:
+            self.grip_repo.verbose.warning(w)
+            pass
         grip_repo_doc = self.grip_repo.get_doc()
         if self.grip_repo.is_configured():
             print("This is a configured grip repository, with a name of '%s', using configuration '%s'"%(self.grip_repo.get_name(), self.grip_repo.get_config_name()))
@@ -88,6 +97,8 @@ class doc(GripCommandBase):
             print("It supports the following configurations: %s"%(" ".join(self.grip_repo.get_configurations())))
             pass
         show_documentation(grip_repo_doc)
+        if len(warnings)>0:
+            return 1
         return 0
     pass
 

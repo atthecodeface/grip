@@ -79,7 +79,7 @@ class Toplevel(GripBase):
         self.invocation = time.strftime("%Y_%m_%d_%H_%M_%S") + ": " + invocation
         self.log.add_entry_string(self.invocation)
         self.initial_config_state = GripConfigStateInitial(self)
-        self.initial_config_state.read_desc_state()
+        self.initial_config_state.read_desc_state(error_handler=error_handler)
         self._is_configured = False
         if self.initial_config_state.has_config_file():
             self.initial_config_state.select_current_configuration()
@@ -180,6 +180,8 @@ class Toplevel(GripBase):
         self.check_clone_permitted()
         self.add_log_string("...cloning subrepos for repo %s"%(str(self.git_repo.path)))
         self.clone_subrepos()
+        self.write_state()
+        self.write_config()
         self.add_log_string("...rereading config and state for repo %s"%(str(self.git_repo.path)))
         self.configured_config_state.read_desc()
         self.add_log_string("...updating configuration for repo %s"%(str(self.git_repo.path)))
@@ -367,6 +369,7 @@ class Toplevel(GripBase):
         """
         Write shell environment file
         """
+        self.configured_config_state.write_environment()
         with open(self.grip_path(self.grip_env_filename), "w") as f:
             for (k,v) in self.grip_env_iter():
                 print('%s="%s" ; export %s'%(k,v,k), file=f)

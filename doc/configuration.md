@@ -108,7 +108,25 @@ The grip global environment has some implicit variables:
 * GRIP_ROOT_URL  - the upstream URL that the grip repository was
   fetched from
 
-The global environment is part of the environment exported in .grip/local.env.sh.
+The global environment must resolve completely for a grip repository
+to be configured.
+
+The global environment is part of the environment exported in
+.grip/local.env.sh; these values are also imported when grip commands
+are executed on a configured repository, subservient to any actual
+environment variables from the invoking shell.
+
+Because the global environment is explicitly exported for a grip shell
+and for any grip make stages, it is sensible to use (for example):
+
+```
+[env]
+INSTALL_DIR = @INSTALL_DIR@
+```
+
+This will preserve the environment value of INSTALL_DIR at
+configuration time and use that (as a default) in future grip make and
+grip shell invocations.
 
 # Grip configuration descriptions
 
@@ -158,7 +176,16 @@ provided by the global section of the grip configuration file. It is an environm
 below) and provides values that may be overridden in
 repository descriptions.
 
-The environment is part of the environment exported in .grip/local.env.sh.
+A configuration environment must resolve completely for an unconfigured grip repository
+to be configured using that configuration.
+
+A configuration environment must resolve completely if it is the
+configuration of a configured grip repository.
+
+The configuration environment is part of the environment exported in
+.grip/local.env.sh; these values are also imported when grip commands
+are executed on a configured repository, subservient to any actual
+environment variables from the invoking shell.
 
 ## repository descriptions - <repo_name> -> git repository description
 
@@ -204,8 +231,12 @@ will be substituted with the environment variable value.
 This specifies the path (relative to the grip root directory) in which
 to clone the git repository.
 
-path strings may contain environment variables using %<name>% and they
+path strings may contain environment variables using @<name>@ from any
+of the parent configuration or global grip configuration environment, and they
 will be substituted with the environment variable value.
+
+Path strings *cannot* contain environment variables specified in the
+respository's environment.
 
 ## doc - string
 
@@ -231,6 +262,10 @@ The grip repository-local environment has some implicit variables:
 
 * GRIP_REPO_PATH  - the absolute path of the git repository - this
   will be a subdirectory of GRIP_ROOT_PATH
+
+The environment is used to resolve values in any of the stages
+required by the repository. It is *not* used to resolve the URL,
+branch or path of the repository.
 
 The environment is part of the environment exported in .grip/local.env.sh.
 
@@ -275,8 +310,9 @@ environment files should be named appropriately.
 
 The environment is part of the environment exported in .grip/local.env.sh.
 
-## env
-
+The environment is used to resolve provide an environment for the
+execution of the stage commands, and to resolve the working directory
+and exec values.
 
 # Example git repository description
 

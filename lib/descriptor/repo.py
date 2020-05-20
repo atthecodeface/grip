@@ -191,7 +191,6 @@ class DescriptorInConfig(DescriptorBase):
                 pass
             pass
         pass
-        pass
     #f validate
     def validate(self, check_stage_dependencies:bool, error_handler:ErrorHandler=None) -> None:
         if self.values.workflow is None:
@@ -227,14 +226,17 @@ class DescriptorInConfig(DescriptorBase):
             pass
         return r
     #f resolve
-    def resolve(self, env:GripEnv, error_handler:ErrorHandler=None) -> None:
+    def resolve(self, env:GripEnv, resolve_fully:bool=True, error_handler:ErrorHandler=None) -> None:
         """
         Resolve the strings in the repo description and its stages, using the repo configuration's environment
+
+        If resolve_fully is True then all the environment must resolve
+        If resolve_fully is False then the URL, path and branch must resolve
         """
         self.grip_repo_desc.base.add_log_string("Resolve repo '%s' in config '%s'"%(self.name, self.grip_config.name))
         self.env = GripEnv(name="repo %s"%self.name, parent=env)
         self.env.build_from_values(self.values.env)
-        url     = self.env.substitute(self.values.url,      error_handler=error_handler)
+        url     = self.env.substitute(self.values.url, finalize=True, error_handler=error_handler)
         if url is None:
             raise GripTomlError("for repo '%s' has unknown url '%s'"%(self.name, self.values.url))
         self.url = url
@@ -244,10 +246,10 @@ class DescriptorInConfig(DescriptorBase):
         except:
             raise GripTomlError("for repo '%s' could not parse git url '%s'"%(self.name, self.url))
 
-        self.branch  = self.env.substitute(self.values.branch,   error_handler=error_handler)
+        self.branch  = self.env.substitute(self.values.branch, finalize=True, error_handler=error_handler)
         self._path = Path(self.git_url.repo_name)
         if self.values.path is not None:
-            self._path = Path(self.values.path)
+            self._path = Path(self.env.substitute(self.values.path, finalize=True, error_handler=error_handler))
             pass
 
         if self.values.shallow is None:
@@ -260,9 +262,11 @@ class DescriptorInConfig(DescriptorBase):
         self.doc     = self.values.doc
 
         self.env.add_values({"GRIP_REPO_PATH":"@GRIP_ROOT_PATH@/"+str(self._path)})
-        self.env.resolve(error_handler=error_handler)
-        for (n,s) in self.stages.items():
-            s.resolve(self.env, error_handler=error_handler)
+        if resolve_fully:
+            self.env.resolve(error_handler=error_handler)
+            for (n,s) in self.stages.items():
+                s.resolve(self.env, error_handler=error_handler)
+                pass
             pass
         # print("Resolve %s:%s:%s:%s"%(self,self.name,self.url,self.git_url))
         self._is_resolved = True

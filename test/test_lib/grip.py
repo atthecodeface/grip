@@ -53,13 +53,17 @@ class Repository(GitRepository):
         self.create_file(Path(".grip/grip.toml"), content=self.grip_toml_content())
         self.git_command(cmd="add .grip/grip.toml")
         pass
-    #f grip_command
-    def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
+    #f grip_command_full_result
+    def grip_command_full_result(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> OSCommand:
         cmd = "%s --show-log --verbose %s"%(grip_exec, cmd)
         cwd = self.abspath
         if wd is not None: cwd = Path.joinpath(self.abspath, Path(wd))
         self.add_log_string("Test running grip command in wd '%s' of '%s'"%(str(cwd), cmd))
         os_cmd = OSCommand(cmd=cmd, cwd=str(cwd), log=self.logger(), **kwargs).run()
+        return os_cmd
+    #f grip_command
+    def grip_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
+        os_cmd = self.grip_command_full_result(cmd=cmd, wd=wd, **kwargs)
         if os_cmd.rc()!=0: raise Exception("Command Rc non-zero for: %s"%(str(os_cmd)))
         return os_cmd.stdout()
     pass

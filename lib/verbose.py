@@ -1,7 +1,7 @@
 #a Imports
 import sys
 import io
-from typing import Type, IO
+from typing import Type, Tuple, IO
 
 # def info(options, msg):
 #    if options is None:return
@@ -30,6 +30,7 @@ class Verbose:
     level_warning = 3
     level_error = 4
     level_fatal = 5
+    stderr_level = level_warning
     colors = {level_verbose :TermColors.plain,
               level_info    :TermColors.green,
               level_message :TermColors.cyan,
@@ -37,9 +38,9 @@ class Verbose:
               level_error   :TermColors.red,
               level_fatal   :(TermColors.bold + TermColors.red),
               }
-    def __init__(self, level:int=1, file:IO[str]=sys.stdout, use_color:int=True):
+    def __init__(self, level:int=1, files:Tuple[IO[str],IO[str]]=(sys.stdout,sys.stderr), use_color:int=True):
         self.level = level
-        self.file = file
+        self.files = files
         self.use_color = use_color
         pass
     def set_level(self, level:int) -> None:
@@ -48,7 +49,9 @@ class Verbose:
     def write(self, level:int, s:str) -> None:
         if self.level>level: return
         if self.use_color: s = self.colors[level] + s + TermColors.plain
-        print(s, file=self.file)
+        file = self.files[0]
+        if level>=self.stderr_level: file=self.files[1]
+        print(s, file=file)
         return
     def is_verbose(self) -> bool: return self.level<=self.level_verbose
     def verbose(self, s:str) -> None:

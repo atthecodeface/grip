@@ -18,6 +18,7 @@ class GripBase:
     grip_toml_filename   = "grip.toml"
     state_toml_filename  = "state.toml"
     config_toml_filename = "local.config.toml"
+    env_toml_filename    = "local.env.toml"
     grip_env_filename    = "local.env.sh"
     grip_log_filename    = "local.log"
     makefile_stamps_dirname = "local.makefile_stamps"

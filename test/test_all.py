@@ -15,7 +15,9 @@ def add_test_suite(module_name:str)->None:
     if not hasattr(m,"test_suite"):
         raise Exception("Failed to import test_suite from %s - it did not have at test_suite attribute"%module_name)
     for t in m.test_suite :
-        globals()[t.__name__]=t
+        name = "%s.%s"%(module_name,t.__name__)
+        name = name.replace(".","__")
+        globals()[name]=t
         pass
     pass
 

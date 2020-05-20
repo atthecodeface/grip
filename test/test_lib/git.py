@@ -14,6 +14,7 @@ from lib.os_command  import OSCommand
 
 from .filesystem  import FileSystem, FileContent, EmptyContent
 from .loggable    import TestLog, Loggable
+from .toml_file   import Toml
 
 from typing import List, Callable, Optional, Any, ClassVar, cast
 
@@ -67,6 +68,14 @@ class Repository(Loggable):
         self.fs.create_file(path=Path(self.name).joinpath(Path("Readme.txt")), content=file_content)
         self.git_command(cmd="add Readme.txt")
         pass
+    #f add_toml
+    @staticmethod
+    def add_toml(toml:Toml, filename:str) -> RepoBuildContentFn:
+        def add_file(self:'Repository', content:Optional[FileContent]=None, toml:Toml=toml, filename:str=filename) -> None:
+            self.fs.create_file(path=Path(self.name).joinpath(Path(filename)), content=FileContent(toml._as_string()))
+            self.git_command(cmd="add %s"%filename)
+            pass
+        return add_file
     #f bare_clone
     def bare_clone(self) -> 'Repository':
         self.add_log_string("Bare clone of %s of path %s"%(self.name, str(self.abspath)))
@@ -89,6 +98,12 @@ class Repository(Loggable):
         self.add_log_string("Appending to file %s"%str(path))
         self.fs.append_to_file(path, content=content)
         pass
+    #f os_command
+    def os_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> OSCommand:
+        cwd = self.abspath
+        if wd is not None: cwd = Path.joinpath(self.abspath, Path(wd))
+        self.add_log_string("Test running OS command in wd '%s' of '%s'"%(str(cwd), cmd))
+        return OSCommand(cmd=cmd, cwd=str(cwd), log=self.logger(), **kwargs).run()
     #f git_command
     def git_command(self, cmd:str, wd:Optional[str]=None, **kwargs:Any) -> str:
         cwd = self.abspath

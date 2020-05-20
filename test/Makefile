@@ -12,6 +12,8 @@ all: check_types test_all
 test_lib:
 	${TESTS_ENV} ${TESTS_DIR}/test_lib.py
 
+# Note on Python3.6:
+# use __test_grip__BasicTest.test_grip_environment for .test.test_grip.BasicTest.test_grip_environment
 
 .PHONY:test_all
 test_all:

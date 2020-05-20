@@ -222,16 +222,23 @@ class Descriptor(object):
     def has_stage(self, stage_name:str) -> bool:
         return stage_name in self.stages
     #f resolve
-    def resolve(self, error_handler:ErrorHandler=None) -> None:
+    def resolve(self, resolve_fully:bool=True, error_handler:ErrorHandler=None) -> None:
         """
         Run through repo descriptions and replace grip environment as required
+
+        If resolve_fully is True then the configuration must have a fully resolved environment
+        If resolve_fully is False then this is a pre-configuration repo; the configuration must
+        resolve sufficiently for a clone. This requires the configuration's environment to resolve,
+        and any repo path, url and branch
         """
         self.env.resolve(error_handler=error_handler)
         for r in self.iter_repos():
-            r.resolve(self.env, error_handler=error_handler)
+            r.resolve(self.env, resolve_fully=resolve_fully, error_handler=error_handler)
             pass
-        for (n,s) in self.stages.items():
-            s.resolve(self.env, error_handler=error_handler)
+        if resolve_fully:
+            for (n,s) in self.stages.items():
+                s.resolve(self.env, error_handler=error_handler)
+                pass
             pass
         pass
     #f get_env_dict

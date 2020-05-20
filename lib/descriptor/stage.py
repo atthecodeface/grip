@@ -207,8 +207,8 @@ class Descriptor(object):
         self.env = GripEnv(name="stage %s"%self.name, parent=env)
         self.env.build_from_values(self.values.env)
         self.env.resolve(error_handler=error_handler)
-        self.wd   = self.env.substitute(self.values.wd,   error_handler=error_handler)
-        self.exec = self.env.substitute(self.values.exec, error_handler=error_handler)
+        self.wd   = self.env.substitute(self.values.wd,   finalize=True, error_handler=error_handler)
+        self.exec = self.env.substitute(self.values.exec, finalize=True, error_handler=error_handler)
         self.doc = self.values.doc
         pass
     #f validate - Validate the within a particular configuration

@@ -127,19 +127,52 @@ class Descriptor(object):
         self.base     = base
         self.git_repo = base.get_git_repo()
         git_repo_path = self.git_repo.path()
-        default_env = {}
-        default_env["GRIP_ROOT_URL"]  = self.git_repo.get_git_url_string()
-        default_env["GRIP_ROOT_PATH"] = str(git_repo_path)
-        default_env["GRIP_ROOT_DIR"]  = git_repo_path.name
-        self.env = GripEnv(name='grip.toml', default_values=default_env, opt_verbose=self.base.verbose)
+        env_dict = {}
+        env_dict["GRIP_ROOT_URL"]  = self.git_repo.get_git_url_string()
+        env_dict["GRIP_ROOT_PATH"] = str(git_repo_path)
+        env_dict["GRIP_ROOT_DIR"]  = git_repo_path.name
+        self.env = GripEnv(name='grip.toml', default_values=env_dict, opt_verbose=self.base.verbose)
+        pass
+    #f read_environment
+    def read_environment(self, env_toml_path:Path) -> None:
+        """
+        This is invoked after the grip.toml files have been read and built,
+        so the self.env probably already has that from the grip.toml
+
+        The environment from configuration time (if any) can be read and
+        can be used to resolve the grip.toml file, but with the OS environment
+        taking precedence if required
+        """
+        try:
+            with self.base.open(env_toml_path) as f:
+                toml_string = f.read()
+                pass
+            pass
+        except FileNotFoundError:
+            toml_string=""
+            pass
+        git_repo_path = self.git_repo.path()
+        raw_toml_dict = self.toml_loads(filename=str(env_toml_path), toml_string=toml_string)
+        env_dict = {}
+        for (k,v) in raw_toml_dict.items():
+            env_dict[k] = v
+            pass
+        root_env = GripEnv(name='local.env.toml', default_values=env_dict, opt_verbose=self.base.verbose)
+        self.env.set_parent(root_env)
+        pass
+    #f write_environment
+    def write_environment(self, env_toml_path:Path) -> None:
+        assert self.selected_config is not None
+        toml_dict = self.selected_config.env.as_dict(include_parent = True)
+        self.base.toml_save(env_toml_path, toml_dict)
         pass
     #f toml_loads
-    def toml_loads(self, filename:str, s:str) -> RawTomlDict:
+    def toml_loads(self, filename:str, toml_string:str) -> RawTomlDict:
         """
         A wrapper around toml.loads to provide a suitable error on an exception
         """
         try:
-            r = toml.loads(s)
+            r = toml.loads(toml_string)
             pass
         except toml.decoder.TomlDecodeError as e: # type:ignore
             raise(ConfigurationError("Toml file '%s' failed to read: %s"%(filename, str(e))))
@@ -290,12 +323,19 @@ class Descriptor(object):
             pass
         pass
     #f resolve
-    def resolve(self, error_handler:ErrorHandler=None) -> None:
+    def resolve(self, config_name:Optional[str], error_handler:ErrorHandler=None) -> None:
         """
         Resolve any values using grip environment variables to config or default values
         """
         for c in self.iter_configs():
-            c.resolve(error_handler=error_handler)
+            if config_name is None:
+                c.resolve(resolve_fully=False, error_handler=error_handler)
+                pass
+            else:
+                if c.get_name()==config_name:
+                    c.resolve(resolve_fully=True, error_handler=error_handler)
+                    pass
+                pass
             pass
         pass
     #f validate_workflow - map from workflow name to workflow class

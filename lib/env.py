@@ -35,7 +35,6 @@ class EnvTomlDict(TomlDict):
 class GripEnv:
     #t instance property types
     verbose : Verbose
-    root    : 'GripEnv'
     parent  : Optional['GripEnv']
     env     : EnvDict
     
@@ -48,15 +47,22 @@ class GripEnv:
         self.parent = parent
         self.env = {}
         self.add_values(default_values)
-        self.root = self.get_root()
+        root = self.get_root()
         if opt_verbose is None:
-            assert self!=self.root
+            assert self!=root
             assert parent != None
-            self.verbose = self.root.verbose
+            self.verbose = root.verbose
             pass
         else:
             self.verbose = opt_verbose
             pass
+        pass
+    #f set_parent
+    def set_parent(self, parent:'GripEnv') -> None:
+        """
+        Use to insert a lower priority dictionary between this environment and its parent
+        """
+        self.parent = parent
         pass
     #f get_root - find root environment by tracing parents
     def get_root(self) -> 'GripEnv':
@@ -93,7 +99,9 @@ class GripEnv:
             work_done = False
             while len(unresolved_env)>0:
                 k = unresolved_env.pop(0)
-                v = self.substitute(self.env[k], finalize=False, error_handler=error_handler)
+                # for circular dependencies we will eventually get self.env[k] to contain @k@
+                # This will not error though
+                v = self.substitute(self.env[k], on_behalf_of=k, finalize=False, error_handler=error_handler)
                 if v is None:
                     not_done_yet.append(k)
                     pass
@@ -106,16 +114,20 @@ class GripEnv:
                     work_done = True
                     pass
                 pass
+            # Keep the list going ...
+            unresolved_env = not_done_yet
+            # ... but if no work was done, then we are stuck
             if not work_done:
                 k = not_done_yet[0]
-                v = self.substitute(k, self.env[k], finalize=True, error_handler=error_handler)
+                v = self.substitute(self.env[k], on_behalf_of=k, finalize=False, error_handler=error_handler)
+                # raise("Circular environment dependency (value '%s')"%(self.env[k]))
                 GripEnvValueError(self,k,"Circular environment dependency (value '%s')"%(self.env[k])).invoke(error_handler)
                 break
             pass
         # Capture the environment keys to resolve - self.env itself may change in our loop if error handlers add values
         env_to_resolve = list(self.env.keys())
         for k in env_to_resolve:
-            e = self.substitute(self.env[k], finalize=True, error_handler=error_handler)
+            e = self.substitute(self.env[k], on_behalf_of=k, finalize=True, error_handler=error_handler)
             if e is not None: self.env[k] = e
             pass
         pass
@@ -130,7 +142,7 @@ class GripEnv:
             pass
         return r+self.name
     #f value_of_key - get value of key, from parents if not local, using environment if required
-    def value_of_key(self, k : str, raise_exception:bool =True, environment_overrides:bool =True, error_handler:ErrorHandler=None) -> Optional[str]:
+    def value_of_key(self, k : str, ignore_local:bool=False, raise_exception:bool =True, environment_overrides:bool =True, error_handler:ErrorHandler=None) -> Optional[str]:
         """
         Find value of a key within the environment
         If environment_overrides is True then first look in os.environ
@@ -141,17 +153,19 @@ class GripEnv:
         if environment_overrides and (k in os.environ):
             return os.environ[k]
         r = None
-        if k in self.env: r=self.env[k]
+        if not ignore_local:
+            if k in self.env: r=self.env[k]
+            pass
         if (r is None) and (self.parent is not None):
-            r = self.parent.value_of_key(k, raise_exception=False, environment_overrides=environment_overrides)
+            r = self.parent.value_of_key(k, ignore_local=False, raise_exception=False, environment_overrides=False)
             pass
         if r is not None: return r
         if not raise_exception: return None
-        e = GripEnvValueError(self,k,"Configuration or environment value not specified").invoke(error_handler)
+        e = GripEnvValueError(self,k,"Configuration or environment value not specified, or circular dependency").invoke(error_handler)
         assert ((e is None) or (type(e)==str))
         return cast(Optional[str],e)
     #f _substitute - substitute environment contents as required in a string, return None if unknown variable
-    def _substitute(self, s:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
+    def _substitute(self, s:Optional[str], on_behalf_of:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
         """
         Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
         Find any @@ and replace
@@ -165,21 +179,22 @@ class GripEnv:
         m = self.name_match_re.match(s,n+1)
         if m is None:
             acc = acc + "@"
-            return self._substitute(s[n+1:],acc,finalize=finalize,error_handler=error_handler)
+            return self._substitute(s[n+1:],on_behalf_of=on_behalf_of,acc=acc,finalize=finalize,error_handler=error_handler)
         k = m.group('name')
         if len(k)==0:
             v="@"*2
             if finalize: v="@"
             pass
         else:
-            key_value = self.value_of_key(k, raise_exception=finalize, error_handler=error_handler)
+            ignore_local = (k==on_behalf_of)
+            key_value = self.value_of_key(k, ignore_local=ignore_local, raise_exception=finalize, error_handler=error_handler)
             if key_value is None: return None
             v = key_value
             pass
         acc = acc + v
-        return self._substitute(m.group('rest'), acc=acc, finalize=finalize, error_handler=error_handler)
+        return self._substitute(m.group('rest'), on_behalf_of=on_behalf_of, acc=acc, finalize=finalize, error_handler=error_handler)
     #f substitute - substitute environment contents as required in a string, return None if unknown variable
-    def substitute(self, s:Optional[str], acc:str="", finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
+    def substitute(self, s:Optional[str], on_behalf_of:Optional[str]=None, finalize:bool=True, error_handler:ErrorHandler=None) -> Optional[str]:
         """
         Find any @ENV_VARIABLE@ and replace - check ENV_VARIABLE exists, raise exception if it does not
         Find any @@ and replace
@@ -187,10 +202,11 @@ class GripEnv:
         if not finalizing, then leave @@ as @@, and don't raise exceptions as another pass should do it
         """
         try:
-            opt_result = self._substitute(s=s, acc="", finalize=finalize, error_handler=error_handler)
+            opt_result = self._substitute(s=s, on_behalf_of=on_behalf_of, acc="", finalize=finalize, error_handler=error_handler)
             pass
         except:
-            self.verbose.warning("Envrionment failed to substitute in '%s'"%str(s))
+            assert finalize
+            self.verbose.warning("Envrionment failed to substitute in '%s' for %s"%(str(s), on_behalf_of))
             raise
         return opt_result
     #f as_dict - generate key->value pair, including parent if required
