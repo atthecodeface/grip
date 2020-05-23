@@ -305,7 +305,7 @@ class Repository(object):
         return git_cmd.rc()==0
     #f get_file_from_cs
     def get_file_from_cs(self, path:Path, cs:str) -> str:
-        path_and_cs = str(path)
+        path_and_cs = str(path.relative_to(self._path))
         if cs!="": path_and_cs = cs+":"+path_and_cs
         git_cmd = self.git_os_command(cmd="show %s"%path_and_cs)
         if git_cmd.rc()!=0:
