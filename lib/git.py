@@ -303,6 +303,14 @@ class Repository(object):
         if branch_name is None: branch_name="HEAD"
         git_cmd = self.git_os_command(cmd="rev-parse --verify --quiet %s^{commit}"%branch_name)
         return git_cmd.rc()==0
+    #f get_file_from_cs
+    def get_file_from_cs(self, path:Path, cs:str) -> str:
+        path_and_cs = str(path)
+        if cs!="": path_and_cs = cs+":"+path_and_cs
+        git_cmd = self.git_os_command(cmd="show %s"%path_and_cs)
+        if git_cmd.rc()!=0:
+            raise Exception("Failed to get file '%s' from cs '%s'"%(str(path), cs))
+        return git_cmd.stdout()
     #f is_modified
     def is_modified(self) -> Optional[GitReason]:
         """
@@ -333,6 +341,15 @@ class Repository(object):
         Used, for example, to make upstream point to a newly fetched head
         """
         return self.git_command(cmd="branch -f '%s' '%s'"%(branch_name, ref)).strip()
+    #f get_common_ancestor
+    def get_common_ancestor(self, cs1:str, cs2:str) -> str:
+        """
+        Get the most recent common ancestor of two branches
+        """
+        git_cmd = self.git_os_command(cmd="merge-base '%s' '%s'"%(cs1, cs2))
+        if git_cmd.rc()!=0:
+            raise Exception("Failed to get common ancestor of '%s' and '%s'"%(cs1, cs2))
+        return git_cmd.stdout().strip()
     #f get_cs_history
     def get_cs_history(self, branch_name:str="") -> List[str]:
         """

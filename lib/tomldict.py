@@ -235,6 +235,9 @@ class TomlDictParser(object):
 
 
 #a Toplevel functions
+def toml_of_string(s:str) -> RawTomlDict:
+    return toml.loads(s)
+
 def toml_load(f:IO[str]) -> RawTomlDict:
     return toml.load(f)
 

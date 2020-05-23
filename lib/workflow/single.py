@@ -38,19 +38,56 @@ class Single(Workflow):
         repo_string = self.get_repo_workflow_string()
         reason = self.git_repo.is_modified()
         if reason is None:
-            (cs, cs_upstream, cmp) = self.how_git_repo_upstreamed()
+            cmp = self.how_git_repo_upstreamed()
             if cmp==0:
-                self.verbose.info("%s matches 'upstream' (%s)"%(repo_string, cs))
+                self.verbose.info("%s matches 'upstream' (%s)"%(repo_string, self.git_repo_cs))
                 pass
             elif cmp>0:
-                self.verbose.message("%s is unmodified (%s) but a descendant of 'upstream' (%s) - so pushable"%(repo_string, cs, cs_upstream))
+                self.verbose.message("%s is unmodified (%s) but a descendant of 'upstream' (%s) - so pushable"%(repo_string, self.git_repo_cs, self.git_upstream_cs))
                 pass
             else:
-                self.verbose.warning("%s is unmodified (%s) but an ancestor of 'upstream' (%s) - so needs a merge"%(repo_string, cs, cs_upstream))
+                self.verbose.warning("%s is unmodified (%s) 'upstream' (%s) is newer - so needs a merge"%(repo_string, self.git_repo_cs, self.git_upstream_cs))
                 pass
             return True
         self.verbose.message("%s has %s"%(repo_string, reason.get_reason()))
         if not self.verbose.is_verbose(): return True
+        print(self.git_repo.status())
+        return True
+    #f status_as_grip
+    def status_as_grip(self) -> bool:
+        """
+        For all subrepos that have not changed in upstream grip config since our checkout
+          If we have new ones then we should accept them if they are upstreamed
+          If they are *ancestors* of that in grip config, then we have rewound
+            but because upstream has not budge in this respect, this was deliberate
+          
+        """
+        repo_string = self.get_repo_workflow_string()
+        okay = True
+        for sr in self.repo.iter_subrepos():
+            srw = sr.workflow
+            srw.get_git_repo_cs()
+            if srw.grip_config_upstream_cs == srw.grip_config_common_cs:
+                # Upstream CS is no changed since our checkout
+                if srw.git_repo_cs == srw.grip_config_common_cs:
+                    # No changes between our repo and the config - nothing to report
+                    pass
+                elif srw.git_repo_cs == srw.git_upstream_cs:
+                    # Our CS is upstream tip but differs from checkout which is same as upstream condfig
+                    self.verbose.info("%s grip subrepo %s CS changed to %s (which matches 'upstream')"%(repo_string, sr.get_name(), srw.git_repo_cs))
+                    pass
+                elif srw.git_repo_cs == srw.git_common_cs:
+                    # Our CS is OLDER than upstream tip
+                    self.verbose.info("%s grip subrepo %s wants to change to CS %s which is okay - but note 'upstream' is newer %s)"%(repo_string, sr.get_name(), srw.git_repo_cs, srw.git_upstream_cs))
+                    pass
+                else:
+                    # Our CS is NEWER than upstream tip - requires subrepo push
+                    self.verbose.message("%s grip subrepo %s wants to change to CS %s but 'upstream' is older %s)"%(repo_string, sr.get_name(), srw.git_repo_cs, srw.git_upstream_cs))
+                    pass
+                pass
+            else:
+                # Upstream config CS has changed from out last checkout
+                pass
         print(self.git_repo.status())
         return True
     #f merge
@@ -62,6 +99,12 @@ class Single(Workflow):
         if reason is not None:
             raise WorkflowError("%s failed to merge (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
         return True
+    #f update
+    def update(self, force:bool=False, **kwargs:Any) -> bool:
+        reason = self.git_repo.rebase(other_branch=self.grip_config_upstream_cs)
+        if reason is not None:
+            raise WorkflowError("%s failed to update (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
+        return True
     #f commit
     def commit(self) -> bool:
         reason = self.git_repo.is_modified()
@@ -70,7 +113,8 @@ class Single(Workflow):
             self.git_repo.commit()
             pass
         is_upstreamed = self.check_git_repo_is_upstreamed()
-        self.verbose.error("%s is not upstreamed - perhaps a grip merge is required."%(self.get_repo_workflow_string()))
+        if not is_upstreamed:
+            self.verbose.error("%s is not upstreamed - perhaps a grip merge is required."%(self.get_repo_workflow_string()))
         return is_upstreamed
     #f prepush
     def prepush(self) -> bool:

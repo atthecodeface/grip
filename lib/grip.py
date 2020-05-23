@@ -15,19 +15,12 @@ from .descriptor import StageDependency as StageDependency
 from .descriptor import RepositoryDescriptor
 from .descriptor import ConfigurationDescriptor
 from .descriptor import GripDescriptor as GripDescriptor
-from .configstate import ConfigFile as GripConfig
-from .configstate import StateFile as GripState
-from .configstate import StateFileConfig as GripStateConfig
 from .configstate import GripConfigStateInitial, GripConfigStateConfigured
-from .repo import Repository
+from .repo import Repository, GripRepository
 
 from .types import PrettyPrinter, Documentation, MakefileStrings, EnvDict
 
 #a Classes
-#a GripRepository - subclass of Repository
-class GripRepository(Repository):
-    pass
-
 #a Toplevel grip repository class - this describes/contains the whole thing
 #c Toplevel class
 class Toplevel(GripBase):
@@ -36,8 +29,6 @@ class Toplevel(GripBase):
     # repo_desc:   GripRepoDescriptor
     # repo_desc_config : Optional[ConfigurationDescriptor] - configured_config_state.config_desc
     # repo_config      : Optional[GripConfig]
-    # repo_state   : GripState
-    # config_state : GripStateConfig
     # grip_git_url : Optional[GitUrl]
     intial_config_state     : GripConfigStateInitial
     configured_config_state : GripConfigStateConfigured
@@ -405,6 +396,15 @@ class Toplevel(GripBase):
     def fetch(self) -> None:
         self.create_subrepos()
         self.repo_instance_tree.fetch()
+        pass
+    #f update
+    def update(self) -> None:
+        self.create_subrepos()
+        self.repo_instance_tree.update()
+        self.verbose.message("All subrepos updated")
+        self.update_state()
+        self.write_state()
+        self.verbose.message("Updated state")
         pass
     #f merge
     def merge(self) -> None:

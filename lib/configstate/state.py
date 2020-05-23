@@ -2,14 +2,14 @@
 from pathlib import Path
 from typing import Dict, Optional, Any
 from ..base       import GripBase
-from ..tomldict   import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser
+from ..tomldict   import RawTomlDict, TomlDict, TomlDictValues, TomlDictParser, toml_of_string
 from ..exceptions import *
 from ..descriptor import ConfigurationDescriptor as ConfigDescriptor
 
 from ..types import PrettyPrinter, Documentation, MakefileStrings
 
 #a Toml parser classes - description of a .grip/grip.toml file
-#c *..TomlDict subclasses to parse toml file contents
+#c *.TomlDict subclasses to parse toml file contents
 class GripStateTomlDict(TomlDict):
     """Dictionary of config name -> configuration state
         """
@@ -68,6 +68,12 @@ class GitRepoState(object):
             if self.branch is None: self.branch = r.branch
             pass
         pass
+
+    #f get_cs
+    def get_cs(self) -> str:
+        assert self.changeset is not None
+        return self.changeset
+
     #f update_state
     def update_state(self, changeset:Optional[str]=None) -> None:
         if changeset is not None: self.changeset = changeset
@@ -127,6 +133,11 @@ class GripConfig(object):
             toml_dict[n] = r.toml_dict()
             pass
         return toml_dict
+    #f get_repo_cs
+    def get_repo_cs(self, repo_name:str) -> str:
+        if repo_name not in self.repos: raise Exception("Bug - get  repo state for %s.%s which does not exist"%(self.name,repo_name))
+        return self.repos[repo_name].get_cs()
+
     #f get_repo_state
     def get_repo_state(self, repo_desc_config:Optional[ConfigDescriptor], repo_name:str, create_if_new:bool=True) -> Optional[GitRepoState]:
         """
@@ -167,6 +178,10 @@ class StateFile(object):
     def __init__(self, base:GripBase) -> None:
         self.base = base
         self.configs = {}
+        pass
+    #f read_toml_string
+    def read_toml_string(self, toml_string:str) -> None:
+        self.read_toml_dict( toml_of_string(toml_string) )
         pass
     #f read_toml_dict
     def read_toml_dict(self, toml_dict:RawTomlDict) -> None:

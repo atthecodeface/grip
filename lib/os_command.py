@@ -1,10 +1,10 @@
-from typing import List, Optional, Any
-
 #a Imports
 import sys, os, re
 import subprocess
 from typing import Type, Optional, Union, Dict, Any, Tuple
 from lib.log import Log
+
+from typing import List, Optional, Any
 
 #a OSCommand
 class OSCommand:
@@ -62,12 +62,18 @@ class OSCommand:
         pass
     #f run
     def run(self, input_data:Optional[str]=None) -> 'OSCommand':
+        cmd = "echo $PATH"
+        env = dict(os.environ)
+        if self.env is not None:
+            for (n,e) in self.env.items(): env[n]=e
+            pass
+
         if input_data is None: input_data=self.input_data
         if self.log: self.log.add_entry(self.log_start)
         self.process = subprocess.Popen(args=self.cmd,
                                         shell=True, # So that args is a string not a list
                                         cwd=self.cwd,
-                                        env=self.env,
+                                        env=env,
                                         stdin =subprocess.PIPE, # Create new stdin; we can
                                         stdout=subprocess.PIPE, # Create stdout to be captured
                                         stderr=subprocess.PIPE, # Create stderr to be captured
