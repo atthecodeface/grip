@@ -134,8 +134,10 @@ class GripConfig(object):
             pass
         return toml_dict
     #f get_repo_cs
-    def get_repo_cs(self, repo_name:str) -> str:
-        if repo_name not in self.repos: raise Exception("Bug - get  repo state for %s.%s which does not exist"%(self.name,repo_name))
+    def get_repo_cs(self, repo_name:str) -> Optional[str]:
+        if repo_name not in self.repos:
+            # This can happen if, for example, a repo has been added to grip that is not yet in upstream
+            return None
         return self.repos[repo_name].get_cs()
 
     #f get_repo_state

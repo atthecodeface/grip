@@ -73,6 +73,7 @@ class Repository(object):
     #f add_child
     def add_child(self, child : 'Repository') -> None:
         self.subrepos.append(child)
+        self.subrepos.sort(key=lambda r:r.get_name())
         pass
     #f iter_subrepos
     def iter_subrepos(self) -> Iterable['Repository']:
@@ -87,7 +88,7 @@ class Repository(object):
             pass
         pass
     #f set_grip_config_cs
-    def set_grip_config_cs(self, upstream_cs:str, common_cs:str) -> None:
+    def set_grip_config_cs(self, upstream_cs:Optional[str], common_cs:Optional[str]) -> None:
         self.workflow.set_grip_config_cs(upstream_cs=upstream_cs, common_cs=common_cs)
         pass
     #f set_subrepo_cs_set - only really needed for grip repositories
@@ -246,8 +247,10 @@ class GripRepository(Repository):
         cfg_upstream  = self.get_config_state(branch_upstream)
         cfg_common    = self.get_config_state(common_ancestor)
         for sr in self.iter_subrepos():
-            sr.set_grip_config_cs(upstream_cs = cfg_upstream.get_repo_cs(sr.name),
-                                  common_cs   = cfg_common.get_repo_cs(sr.name))
+            upstream_cs = cfg_upstream.get_repo_cs(sr.name)
+            common_cs = cfg_common.get_repo_cs(sr.name)
+            sr.set_grip_config_cs(upstream_cs = upstream_cs,
+                                  common_cs   = common_cs)
             pass
         pass
     #f All done

@@ -22,7 +22,7 @@ class Options(object):
     #f has - return true if we have an option
     def has(self, n:str) -> bool:
         return hasattr(self,n)
-    # get - get an option with a default, or raise exception
+    #f get - get an option with a default, or raise exception
     def get(self, n:str, default:Any=UnknownOption) -> Any:
         if self.has(n): return getattr(self,n)
         if default is UnknownOption: raise UnknownOption("Option %s unknown"%n)

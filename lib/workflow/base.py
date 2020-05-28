@@ -25,8 +25,8 @@ class Workflow(object):
     git_repo_cs : str
     git_upstream_cs : str
     git_common_cs : str
-    grip_config_upstream_cs : str
-    grip_config_common_cs : str
+    grip_config_upstream_cs : Optional[str] # If None, does not exist in upstream
+    grip_config_common_cs   : Optional[str] # If None, does not exist in common
 
     #f __init__
     def __init__(self, toplevel:'Toplevel', git_repo: GitRepository, repo:'Repository'):
@@ -39,7 +39,7 @@ class Workflow(object):
         pass
 
     #f set_grip_config_cs
-    def set_grip_config_cs(self, upstream_cs:str, common_cs:str) -> None:
+    def set_grip_config_cs(self, upstream_cs:Optional[str], common_cs:Optional[str]) -> None:
         self.grip_config_upstream_cs = upstream_cs
         self.grip_config_common_cs   = common_cs
         pass

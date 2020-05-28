@@ -160,17 +160,36 @@ class Toplevel(GripBase):
         raise Exception("Repo is not configured so has no config name")
     #f configure
     def configure(self, config_name:Optional[str]=None) -> None:
+        force_configure = self.options.get("force_configure", default=False)
         self.add_log_string("Configuring repo %s with config %s"%(str(self.git_repo.path),config_name))
         if self.is_configured():
-            raise UserError("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
+            if not force_configure:
+                raise UserError("Grip repository is already configured - cannot configure it again, a new clone of the grip repo must be used instead")
+            if (config_name is not None) and (config_name!=self.get_config_name()):
+                raise UserError("Grip repository is already configured with config '%s' and cannot be configured with a different config name '%s'"%(self.get_config_name(),config_name))
+            pass
         config_name = self.initial_config_state.select_configuration(config_name)
         assert config_name is not None
         self.configured_config_state = GripConfigStateConfigured(self.initial_config_state)
         self.add_log_string("...configuring toplevel for repo %s config %s"%(str(self.git_repo.path), config_name))
         self.configure_toplevel_repo()
-        self.check_clone_permitted()
+        if not force_configure:
+            self.check_clone_permitted()
+            pass
         self.add_log_string("...cloning subrepos for repo %s"%(str(self.git_repo.path)))
-        self.clone_subrepos()
+        errors = self.clone_subrepos()
+        if len(errors)>0:
+            if not force_configure:
+                for e in errors:
+                    self.verbose.error("Error from cloning subrepo: %s"%e)
+                    pass
+                raise ConfigurationError("Failed to clone required subrepos")
+            else:
+                for e in errors:
+                    self.verbose.warning("Failed to clone subrepo (but forcing configuration anyway): %s"%e)
+                    pass
+                pass
+            pass                
         self.write_state()
         self.write_config()
         self.add_log_string("...rereading config and state for repo %s"%(str(self.git_repo.path)))
@@ -202,11 +221,16 @@ class Toplevel(GripBase):
             pass
         except:
             raise ConfigurationError("Git repo is not at the head of a branch and so cannot be configured")
-        remote = self.git_repo.get_branch_remote_and_merge(branch)
-        if remote is None:
-            raise ConfigurationError("Git repo branch does not have a remote to merge with and so cannot be configured")
         has_upstream   = self.git_repo.has_cs(branch_name=branch_upstream)
         has_wip_branch = self.git_repo.has_cs(branch_name=self.branch_name)
+        if has_upstream:
+            remote = self.git_repo.get_branch_remote_and_merge(branch_upstream)
+            pass
+        else:
+            remote = self.git_repo.get_branch_remote_and_merge(branch)
+            pass
+        if remote is None:
+            raise ConfigurationError("Git repo branch does not have a remote to merge with and so cannot be configured")
         if has_upstream and has_wip_branch: return
         cs = self.git_repo.get_cs(branch_head)
         if not has_upstream:
@@ -216,6 +240,7 @@ class Toplevel(GripBase):
         if not has_wip_branch:
             self.verbose.message("Setting branches '%s' and '%s' to point at current head"%(branch_upstream, self.branch_name))
             self.git_repo.change_branch_ref(branch_name=self.branch_name, ref=cs)
+            self.git_repo.checkout_cs(changeset=self.branch_name)
             pass
         self.git_repo.set_upstream_of_branch(branch_name=branch_upstream, remote=remote)
         pass
@@ -243,8 +268,9 @@ class Toplevel(GripBase):
             pass
         pass
     #f clone_subrepos - git clone the subrepos to the correct changesets
-    def clone_subrepos(self, force_shallow:bool=False) -> None:
+    def clone_subrepos(self, force_shallow:bool=False) -> List[str]:
         assert self.branch_name is not None
+        errors = []
         # Clone all subrepos to the correct paths from url / branch at correct changeset
         # Use shallow if required
         for r in self.initial_config_state.iter_repos():
@@ -255,16 +281,21 @@ class Toplevel(GripBase):
             self.verbose.info("Cloning '%s' branch '%s' cs '%s' in to path '%s'"%(r.get_git_url_string(), r_state.branch, r_state.changeset, str(dest)))
             depth = None
             if r.is_shallow(): depth=1
-            GitRepo.clone(repo_url=r.get_git_url_string(),
-                          new_branch_name=self.branch_name,
-                          branch=r_state.branch,
-                          dest=dest,
-                          depth = depth,
-                          changeset = r_state.changeset,
-                          options = self.options,
-                          log = self.log )
+            try:
+                GitRepo.clone(repo_url=r.get_git_url_string(),
+                              new_branch_name=self.branch_name,
+                              branch=r_state.branch,
+                              dest=dest,
+                              depth = depth,
+                              changeset = r_state.changeset,
+                              options = self.options,
+                              log = self.log )
+                pass
+            except Exception as e:
+                errors.append(str(e))
+                pass
             pass
-        pass
+        return errors
     #f create_subrepos - create python objects that correspond to the checked-out subrepos
     def create_subrepos(self) -> None:
         self.repo_instance_tree = GripRepository(name="<toplevel>", grip_repo=self, git_repo=self.git_repo, parent=None, workflow=self.configured_config_state.full_repo_desc.workflow )

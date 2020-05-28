@@ -41,7 +41,8 @@ class configure(GripCommandBase):
     """
     names = ["configure"]
     command_options = {
-        ("configuration",):      {"nargs":"?", "help":"specify a configuration to check out - if not supplied, use default from grip.toml", "default":None},
+        ("--force",):         {"dest":"force_configure", "action":"store_true", "default":False, "help":"a configure grip repo may not safely be configured again; use this option to configure again, but only with the current configuration", "default":None},
+        ("configuration",):   {"nargs":"?", "help":"specify a configuration to check out - if not supplied, use default from grip.toml", "default":None},
     }
     class ConfigureOptions(Options):
         configuration : Optional[str]
