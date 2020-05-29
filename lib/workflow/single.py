@@ -101,9 +101,13 @@ class Single(Workflow):
         return True
     #f update
     def update(self, force:bool=False, **kwargs:Any) -> bool:
+        repo_string = self.get_repo_workflow_string()
+        if self.grip_config_upstream_cs is None:
+            self.verbose.info("%s has no upstream, so not updating"%(repo_string))
+            return True
         reason = self.git_repo.rebase(other_branch=self.grip_config_upstream_cs)
         if reason is not None:
-            raise WorkflowError("%s failed to update (%s)"%(self.get_repo_workflow_string(), reason.get_reason()))
+            raise WorkflowError("%s failed to update (%s)"%(repo_string, reason.get_reason()))
         return True
     #f commit
     def commit(self) -> bool:

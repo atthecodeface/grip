@@ -84,6 +84,9 @@ class ReadOnly(Workflow):
     #f update
     def update(self, **kwargs:Any) -> bool:
         repo_string = self.get_repo_workflow_string()
+        if self.grip_config_upstream_cs is None:
+            self.verbose.info("%s has no upstream, so not updating"%(repo_string))
+            return True
         self.get_git_repo_cs()
         if self.grip_config_upstream_cs==self.git_repo_cs:
             self.verbose.info("%s upstream is at grip config cs %s"%(repo_string, self.grip_config_upstream_cs))
