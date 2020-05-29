@@ -102,6 +102,7 @@ class Single(Workflow):
     #f update
     def update(self, force:bool=False, **kwargs:Any) -> bool:
         repo_string = self.get_repo_workflow_string()
+        self.get_git_repo_cs()
         if self.grip_config_upstream_cs is None:
             self.verbose.info("%s has no upstream, so not updating"%(repo_string))
             return True
@@ -111,6 +112,8 @@ class Single(Workflow):
         return True
     #f commit
     def commit(self) -> bool:
+        repo_string = self.get_repo_workflow_string()
+        self.get_git_repo_cs()
         reason = self.git_repo.is_modified()
         if reason is not None:
             self.verbose.message("%s is modified (%s) - attempting a commit"%(self.get_repo_workflow_string(), reason.get_reason()))
